@@ -277,8 +277,10 @@ if [[ -z "$NUM" ]]; then
     echo "$PROG: no number given and no PR found for the current branch in $REPO" >&2
     exit 1
   fi
-  # A branch resolves to a PR, so the type stops being an open question.
+  # A branch resolves to a PR, so the type stops being an open question —
+  # and an issue-only flag can be refused here, before the fetch.
   TYPE=pr TYPE_PINNED_BY="the current branch's PR"
+  refuse_type_flags pr "#$NUM, the current branch's PR, is a pull request"
   echo "note: no number given — using the current branch's PR #$NUM" >&2
 fi
 
@@ -531,7 +533,15 @@ fi
 if [[ "$TYPE" != auto && "$TYPE" != "$RTYPE" ]]; then
   TITLE=$(target_title "$TL_FILE")
   echo "$PROG: #$NUM is ${ARTICLE[$RTYPE]}, not ${ARTICLE[$TYPE]}${TITLE:+: \"$TITLE\"}" >&2
-  echo "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG ${(j: :)${(@q-)UNPINNED}}" >&2
+  # The suggested command has to work: a view flag the resolved type would
+  # refuse on the rerun is dropped from it too.
+  typeset -a HINT=("${(@)UNPINNED}")
+  if [[ "$RTYPE" == issue ]]; then
+    HINT=("${(@)HINT:#(--unresolved|--since-last-review|--since-last-review=*|--latest|--latest=*|--merges)}")
+  else
+    HINT=("${(@)HINT:#--events}")
+  fi
+  echo "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG ${(j: :)${(@q-)HINT}}" >&2
   exit 1
 fi
 
@@ -591,14 +601,13 @@ def html2md:
   | gsub("</li>"; "")
   | gsub("</(ul|ol|tr)>"; "\n")
   | gsub("<[^>]*>"; "")
-  | gsub("&nbsp;"; " ")
-  | gsub("&lt;"; "<") | gsub("&gt;"; ">")
-  | gsub("&quot;"; "\"") | gsub("&apos;"; "'\''")
-  | gsub("&mdash;"; "—") | gsub("&ndash;"; "–") | gsub("&hellip;"; "…") | gsub("&bull;"; "•")
-  | gsub("&ldquo;|&rdquo;"; "\"") | gsub("&lsquo;|&rsquo;"; "'\''")
-  | gsub("&#(?<d>[0-9]+);"; (.d | tonumber | codepoint))
-  | gsub("&#[xX](?<h>[0-9a-fA-F]+);"; (.h | hexnum | codepoint))
-  | gsub("&amp;"; "&")
+  # Every entity in one pass: a decoded `&` (from &#38; or &amp;) is never
+  # rescanned, so `&#38;amp;` stays the literal `&amp;` the author wrote.
+  | gsub("&(?<n>nbsp|lt|gt|quot|apos|mdash|ndash|hellip|bull|ldquo|rdquo|lsquo|rsquo|amp);|&#(?<d>[0-9]+);|&#[xX](?<h>[0-9a-fA-F]+);";
+         if .d != null then (.d | tonumber | codepoint)
+         elif .h != null then (.h | hexnum | codepoint)
+         else ({nbsp: " ", lt: "<", gt: ">", quot: "\"", apos: "'\''", mdash: "—", ndash: "–",
+                hellip: "…", bull: "•", ldquo: "\"", rdquo: "\"", lsquo: "'\''", rsquo: "'\''", amp: "&"}[.n]) end)
   | gsub("[ \\t]+\\n"; "\n") | gsub("\\n[ \\t]+"; "\n")
   | gsub("\\n{3,}"; "\n\n");
 def clean: (. // "") | strip_hc | gsub("\r"; "")

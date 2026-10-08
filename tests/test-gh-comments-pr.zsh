@@ -75,11 +75,14 @@
 #                 bot gate is applied first, so the hidden bot comment counts
 #                 once, as a bot, until --bots puts it back.
 #
-# Not every case is golden. Below the goldens, five sections assert exit
+# Not every case is golden. Below the goldens, six sections assert exit
 # codes and substrings instead, because their input is built at runtime:
 #
 #   oversized payload  generates a >1 MB timeline rather than committing one
 #   fixture shapes     the --slurpfile unwrap: array form, bare stream, garbage
+#   html entities      numeric entities decode (decimal and hex), dangerous
+#                      code points are replaced, and `&#38;amp;` is not
+#                      decoded twice
 #   lean timeline      --unresolved fetches a reduced timeline (no commits, no
 #                      issue-comment bodies). One case proves the render cannot
 #                      see the difference, another that the reduced query is
@@ -769,12 +772,18 @@ check_html_entities() {
   # to it so the htmlheavy gate still fires.
   jq -c '(.[0].data.repository.pullRequest.timelineItems.nodes[]
           | select(.__typename == "IssueComment" and (.body | test("<div")) and (.body | test("```") | not))
-          | .body) += "<p>dash&#8212;hex&#x2014;nul&#0;ctl&#x1;sur&#xD800;big&#1114112;tab&#9;end</p>"' \
+          | .body) += "<p>dash&#8212;hex&#x2014;nul&#0;ctl&#x1;sur&#xD800;big&#1114112;tab&#9;end lit&#38;amp;eral&#x26;amp;lt;</p>"' \
     "$fx/html-heavy.tl.json" > "$fixture"
   out=$(zsh "$script" --pr 9 --fixtures "$fixture" "$fx/html-heavy.th.json" 2>&1) || rc=$?
   (( rc == 0 )) || problems+=("exit $rc (want 0)")
   [[ "$out" == *"dash—hex—nul"* ]] || problems+=("decimal or hex entity not decoded")
-  [[ "$out" == *"nul"$'\uFFFD'"ctl"$'\uFFFD'"sur"$'\uFFFD'"big"$'\uFFFD'"tab"$'\t'"end"* ]] \
+  # One pass: the `&` that &#38; / &#x26; decode to must not then eat `amp;`.
+  [[ "$out" == *"lit&amp;eral&amp;lt;"* ]] \
+    || problems+=("a decoded & was rescanned: $(print -r -- "$out" | grep -o 'lit.*lt;' | head -1)")
+  # U+FFFD as its UTF-8 bytes: $'\uFFFD' is a "character not in range"
+  # error under a C locale (zsh 5.8), and the suite must not depend on LANG.
+  local r=$'\xEF\xBF\xBD'
+  [[ "$out" == *"nul${r}ctl${r}sur${r}big${r}tab"$'\t'"end"* ]] \
     || problems+=("a dangerous code point was not replaced: $(print -r -- "$out" | grep -o 'nul.*end')")
   nuls=$(print -r -- "$out" | tr -cd '\000' | wc -c)
   (( nuls == 0 )) || problems+=("$nuls NUL byte(s) in the output")
@@ -1197,6 +1206,19 @@ grep -q -- '^pr view -R acme/widget ' "$stublog" \
   || problems+=("the branch lookup was not pointed at -R: $(grep '^pr view' "$stublog")")
 gh_leaks
 report gh-no-number-uses-repo-flag "stubbed gh" $gh_rc "$gh_out"
+
+# gh-no-number-events-refused-before-fetch — the branch lookup settles the
+# type as PR, so an issue-only flag is refused there and no timeline is paid for.
+gh_reset
+print -r -- '7' > "$stubfx/branch-pr"
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --events 2>&1) || gh_rc=$?
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == "gh-comments: --events only applies to issues; #7, the current branch's PR, is a pull request" ]] \
+  || problems+=("output was: $gh_out")
+(( $(grep -c '^graphql:' "$stublog") == 0 )) || problems+=("fetched before refusing")
+gh_leaks
+report gh-no-number-events-refused-before-fetch "stubbed gh" $gh_rc "$gh_out"
 
 # gh-issue-number-rejected — the *other* half of that mistake, and the one
 # that changed shape when the union query landed. A number that names an

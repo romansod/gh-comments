@@ -307,6 +307,11 @@ refuse type-hint-names-command "rerun as: gh-comments 21 --fixtures $fx/issue-ba
   21 --pr --fixtures "$fx/issue-basic.tl.json"
 refuse type-hint-keeps-flags "rerun as: gh-comments 21 -R acme/widget --toc --fixtures $fx/issue-basic.tl.json" \
   21 -R acme/widget --pr --toc --fixtures "$fx/issue-basic.tl.json"
+# ...but not a flag the resolved type would refuse on the rerun.
+refuse type-hint-drops-wrong-type-flags "rerun as: gh-comments 21 --toc --fixtures $fx/issue-basic.tl.json" \
+  21 --pr --unresolved --latest=alice --toc --fixtures "$fx/issue-basic.tl.json"
+refuse type-hint-drops-events "rerun as: gh-comments 1001 --fixtures $prfx/basic.tl.json $prfx/basic.th.json" \
+  1001 --issue --events --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
 
 refuse flag-unresolved-on-issue "--unresolved only applies to pull requests; #21 is an issue" \
   21 --unresolved --fixtures "$fx/issue-basic.tl.json"
