@@ -271,7 +271,13 @@ if [[ -z "$REPO" ]]; then
     REPO="fixtures/fixtures"
   else
     REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
-      print -r -- "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
+      # With no number the way out is a number *and* -R: -R alone is
+      # refused above, so the hint has to ask for both.
+      if [[ -z "$NUM" ]]; then
+        print -r -- "$PROG: no number given and not in a GitHub repo — pass <number> -R <owner/name>" >&2
+      else
+        print -r -- "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
+      fi
       exit 1
     }
   fi

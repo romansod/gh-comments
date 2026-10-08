@@ -922,7 +922,10 @@ emit_log() { print -r -- "$1" >> "${GH_STUB_LOG:-/dev/null}" }
 
 case "$1 $2" in
   "repo view")
-    emit_log "repo view"; print -r -- acme/widget; exit 0 ;;
+    # GH_STUB_NO_REPO: the cwd is not a GitHub repo (gh exits 1).
+    emit_log "repo view"
+    [[ -n ${GH_STUB_NO_REPO:-} ]] && exit 1
+    print -r -- acme/widget; exit 0 ;;
   "pr view")
     # The branch's-PR hint in the not-found diagnosis and the no-number
     # lookup. Absent answer file means "no PR for this branch", which is a
@@ -1263,6 +1266,21 @@ gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --pr -R acme/widget --
 [[ ! -s "$stublog" ]] || problems+=("called gh before refusing: $(tr '\n' ' ' < "$stublog")")
 gh_leaks
 report gh-no-number-with-repo-flag-refused "stubbed gh" $gh_rc "$gh_out"
+
+# gh-no-repo-* — outside a GitHub repo the hint asks for what is missing:
+# -R when a number was given, a number and -R when none was, since -R on
+# its own is refused and would send the user from one refusal to the next.
+for spec in "number|gh-comments: not in a GitHub repo — pass -R <owner/name>|7" \
+            "no-number|gh-comments: no number given and not in a GitHub repo — pass <number> -R <owner/name>|"; do
+  gh_reset
+  gh_rc=0
+  gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_NO_REPO=1 zsh "$script" --pr ${=${spec##*|}} --toc 2>&1) || gh_rc=$?
+  (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+  [[ "$gh_out" == "${${spec#*|}%|*}" ]] || problems+=("output was: $gh_out")
+  (( $(grep -c '^pr view\|^graphql' "$stublog") == 0 )) || problems+=("went on after the repo failed")
+  gh_leaks
+  report "gh-no-repo-${spec%%|*}" "stubbed gh" $gh_rc "$gh_out"
+done
 
 # gh-notfound-no-hint-under-repo-flag — the branch's PR is in the cwd's
 # repo, so under -R it is no answer to "#N is not in <repo>": no hint, and
