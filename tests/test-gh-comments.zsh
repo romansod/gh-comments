@@ -51,6 +51,9 @@
 #   stubbed gh       call counts and query shape per resolved type — an issue
 #                    must not pay for the reviewThreads fetch
 #   argument validation  the flag parser's refusals
+#   missing tools    jq or gh absent from PATH is one sentence naming every
+#                    missing tool, refused before the branch lookup runs gh;
+#                    a --fixtures render needs only jq
 #
 # issue-basic's body carries an HTML comment on its own line: `clean` strips it
 # and then closes the gap it left, so the golden shows one paragraph break
@@ -528,41 +531,51 @@ argcase arg-since-empty          1 "--since needs <iso-date>" 21 --since=
 # Two answers to "which item do I slice from" cannot both be honoured.
 argcase arg-latest-with-slr      1 "--latest and --since-last-review are exclusive" 21 --latest --since-last-review
 
-# missing-* — a tool the script needs but PATH lacks is a sentence naming it,
-# not zsh's "command not found" with a line number. PATH is rebuilt from
-# scratch with only what the script and its stub-free paths need, so the
-# absence is real rather than a shadowing stub. gh is needed only to fetch,
-# so a --fixtures render must not demand it.
-missing_tool() {
-  local name=$1 want=$2 tmp t out; shift 2
-  local -i rc=0
-  tmp=$(mktemp -d) || {
-    t_fail "$name" "" "tests/test-gh-comments.zsh" "mktemp -d failed"
-    (( fails += 1 )); return 0
-  }
+# missing-* — a tool the script needs but PATH lacks is one sentence naming
+# every missing tool, not zsh's "command not found" with a line number. PATH
+# is rebuilt from scratch with only what the script needs besides the tool
+# under test, so the absence is real rather than a shadowing stub, and the
+# probes run `zsh -f`, so a ~/.zshenv that exports PATH cannot put the tool
+# back. gh is needed only to fetch: a --fixtures render must not demand it,
+# and the no-number branch lookup must be refused before it runs gh.
+typeset -g miss_dir=""
+miss_path() {  # miss_path <tool>... — a PATH holding the script's needs plus <tool>s
+  local t
+  miss_dir=$(mktemp -d) || return 1
   for t in zsh mktemp grep cat tail rm "$@"; do
-    ln -s "$(command -v $t)" "$tmp/$t" || problems+=("could not link $t")
+    ln -s "$(command -v $t)" "$miss_dir/$t" || return 1
   done
-  out=$(PATH=$tmp zsh "$script" 21 --fixtures "$fx/issue-basic.tl.json" 2>&1) || rc=$?
-  if [[ $want == rendered ]]; then
-    (( rc == 0 )) || problems+=("exit $rc (want 0)")
-    [[ "$out" == "issue #21 "* ]] || problems+=("a --fixtures render demanded a tool it does not use")
-  else
-    (( rc == 1 )) || problems+=("exit $rc (want 1)")
-    [[ "$out" == "gh-comments: $want" ]] || problems+=("output was: $out")
-  fi
-  # The fetch path needs gh; without --fixtures the refusal names it.
-  out=$(PATH=$tmp zsh "$script" 21 -R acme/widget 2>&1) || rc=$?
-  if [[ $want == rendered ]]; then
-    [[ "$out" == "gh-comments: gh (the GitHub CLI) is required and is not on PATH" ]] \
-      || problems+=("fetch without gh: $out")
-  fi
-  report "$name" "missing tools" $rc "$out"
-  rm -rf "$tmp"
   return 0
 }
-missing_tool missing-jq "jq is required and is not on PATH"
-missing_tool missing-gh rendered jq
+# miss_case <name> <want-rc> <want-output> <tools-present>... -- <args>...
+miss_case() {
+  local name=$1 want=$3 out; local -i want_rc=$2 rc=0; shift 3
+  local -a tools=()
+  while (( $# )) && [[ $1 != -- ]]; do tools+=("$1"); shift; done
+  shift
+  if ! miss_path "${tools[@]}"; then
+    t_fail "$name" "" "tests/test-gh-comments.zsh" "could not build the PATH"
+    (( fails += 1 )); rm -rf "$miss_dir"; return 0
+  fi
+  out=$(cd "$miss_dir" && PATH=$miss_dir zsh -f "$script" "$@" 2>&1) || rc=$?
+  (( rc == want_rc )) || problems+=("exit $rc (want $want_rc)")
+  if (( want_rc == 0 )); then
+    [[ "$out" == "$want"* ]] || problems+=("output does not start with: $want")
+  else
+    [[ "$out" == "$want" ]] || problems+=("output was: $out")
+  fi
+  report "$name" "missing tools" $rc "$out"
+  rm -rf "$miss_dir"
+  return 0
+}
+miss_case missing-jq      1 "gh-comments: needs jq on PATH" -- 21 --fixtures "$fx/issue-basic.tl.json"
+miss_case missing-both    1 "gh-comments: needs jq and gh (the GitHub CLI) on PATH" -- 21 -R acme/widget
+miss_case missing-gh      1 "gh-comments: needs gh (the GitHub CLI) on PATH" jq -- 21 -R acme/widget
+# With no number the script would look the branch's PR up through gh; the
+# refusal has to come first, or a missing gh reads as "no PR found".
+miss_case missing-gh-no-number 1 "gh-comments: needs gh (the GitHub CLI) on PATH" jq --
+# A --fixtures render needs jq and nothing else.
+miss_case missing-gh-fixtures-render 0 "issue #21 " jq -- 21 --fixtures "$fx/issue-basic.tl.json"
 
 # arg-no-zsh-internals — the positive substrings above would also pass if the
 # usage error were printed *and* the shell still died on its own; this pins

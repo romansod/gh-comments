@@ -189,6 +189,22 @@ if (( SLR && LATEST )); then
   exit 1
 fi
 
+# The tools are checked after the parser, so --help and --version need
+# neither, and before the first call to either — the branch lookup below is
+# one — so a missing tool is a sentence naming it rather than zsh's "command
+# not found" with a line number into this file. Both are named at once, so
+# one rerun is enough. gh is needed only to fetch: a --fixtures render has
+# no use for it, and the suite runs offline.
+typeset -a MISSING=()
+command -v jq >/dev/null 2>&1 || MISSING+=(jq)
+if [[ -z "$FIXTURES_TL" ]] && ! command -v gh >/dev/null 2>&1; then
+  MISSING+=("gh (the GitHub CLI)")
+fi
+if (( ${#MISSING} )); then
+  echo "$PROG: needs ${(j: and :)MISSING} on PATH" >&2
+  exit 1
+fi
+
 if [[ -n "$NUM" && "$NUM" != <-> ]]; then
   echo "$PROG: not a PR or issue number: $NUM" >&2
   usage >&2
@@ -211,20 +227,6 @@ if [[ -z "$NUM" ]]; then
   # A branch resolves to a PR, so the type stops being an open question.
   TYPE=pr TYPE_PINNED_BY="the current branch's PR"
   echo "note: no number given — using the current branch's PR #$NUM" >&2
-fi
-
-# Both tools are checked up front, after the parser so that --help and
-# --version work without them, and before anything is fetched so a missing
-# one is a sentence rather than zsh's "command not found" with a line number
-# into this file. gh is needed only to fetch: a --fixtures render has no use
-# for it, and the suite runs offline.
-if ! command -v jq >/dev/null 2>&1; then
-  echo "$PROG: jq is required and is not on PATH" >&2
-  exit 1
-fi
-if [[ -z "$FIXTURES_TL" ]] && ! command -v gh >/dev/null 2>&1; then
-  echo "$PROG: gh (the GitHub CLI) is required and is not on PATH" >&2
-  exit 1
 fi
 
 if [[ -z "$REPO" ]]; then
