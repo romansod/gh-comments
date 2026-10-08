@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# lib.zsh — shared reporting for scripts/tests/. Sourced, never executed.
+# lib.zsh — shared reporting for tests/. Sourced, never executed.
 #
 # Kanji-rain styling: a truecolor palette with 合 pass / 落 fail / 書
 # golden-written case lines. Colors turn

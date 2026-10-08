@@ -96,5 +96,7 @@ repositories and bodies. Scrub a captured payload before committing it.
 1. Bump `VERSION=` in `gh-comments` and `version` in
    `.claude-plugin/plugin.json` together; `make lint` refuses a mismatch.
 2. `claude plugin tag --push` creates and pushes the `gh-comments--v<version>`
-   tag the plugin marketplace reads. Also push a plain `v<version>` tag for
-   `gh extension upgrade`.
+   tag the plugin marketplace reads. Also push a plain `v<version>` tag as
+   the human-readable release marker. `gh extension upgrade` does not read
+   tags: for a script extension it pulls the default branch, so merging to
+   `main` is the release for extension users.

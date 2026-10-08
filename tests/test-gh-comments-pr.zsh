@@ -75,7 +75,7 @@
 #                 bot gate is applied first, so the hidden bot comment counts
 #                 once, as a bot, until --bots puts it back.
 #
-# Not every case is golden. Below the goldens, three sections assert exit
+# Not every case is golden. Below the goldens, five sections assert exit
 # codes and substrings instead, because their input is built at runtime:
 #
 #   oversized payload  generates a >1 MB timeline rather than committing one
@@ -753,6 +753,37 @@ check_legacy_payload() {
 
 check_legacy_payload
 
+# html-entities — numeric entities in an HTML-heavy paste: decimal and hex
+# both decode, and a code point no text should carry (NUL, a C0 control, a
+# surrogate) is replaced rather than written out — a NUL in the dump makes
+# grep call the whole file binary, which breaks the dump-once-and-grep flow.
+check_html_entities() {
+  local name=html-entities tmp fixture out
+  local -i rc=0 nuls=0
+  tmp=$(mktemp -d) || {
+    t_fail "$name" "" "tests/test-gh-comments-pr.zsh" "mktemp -d failed"
+    (( fails += 1 )); return 0
+  }
+  fixture=$tmp/entities.tl.json
+  # The html-heavy fixture carries one rich-text body; append the entities
+  # to it so the htmlheavy gate still fires.
+  jq -c '(.[0].data.repository.pullRequest.timelineItems.nodes[]
+          | select(.__typename == "IssueComment" and (.body | test("<div")) and (.body | test("```") | not))
+          | .body) += "<p>dash&#8212;hex&#x2014;nul&#0;ctl&#x1;sur&#xD800;big&#1114112;tab&#9;end</p>"' \
+    "$fx/html-heavy.tl.json" > "$fixture"
+  out=$(zsh "$script" --pr 9 --fixtures "$fixture" "$fx/html-heavy.th.json" 2>&1) || rc=$?
+  (( rc == 0 )) || problems+=("exit $rc (want 0)")
+  [[ "$out" == *"dash—hex—nul"* ]] || problems+=("decimal or hex entity not decoded")
+  [[ "$out" == *"nul"$'\uFFFD'"ctl"$'\uFFFD'"sur"$'\uFFFD'"big"$'\uFFFD'"tab"$'\t'"end"* ]] \
+    || problems+=("a dangerous code point was not replaced: $(print -r -- "$out" | grep -o 'nul.*end')")
+  nuls=$(print -r -- "$out" | tr -cd '\000' | wc -c)
+  (( nuls == 0 )) || problems+=("$nuls NUL byte(s) in the output")
+  report "$name" "html entities" $rc "$out"
+  rm -rf "$tmp"
+  return 0
+}
+check_html_entities
+
 # --- lean timeline ---------------------------------------------------------
 # --unresolved fetches a reduced timeline: PULL_REQUEST_COMMIT dropped from
 # itemTypes, `body` dropped from the IssueComment fragment. That has two
@@ -872,9 +903,11 @@ case "$1 $2" in
   "repo view")
     emit_log "repo view"; print -r -- acme/widget; exit 0 ;;
   "pr view")
-    # The branch's-PR hint in the not-found diagnosis. Absent answer file
-    # means "no PR for this branch", which is a nonzero exit from real gh.
-    emit_log "pr view"
+    # The branch's-PR hint in the not-found diagnosis and the no-number
+    # lookup. Absent answer file means "no PR for this branch", which is a
+    # nonzero exit from real gh. The argv is logged so a case can see which
+    # repo the lookup was pointed at.
+    emit_log "pr view ${*[3,-1]}"
     [[ -r $GH_STUB_FX/branch-pr ]] || exit 1
     cat "$GH_STUB_FX/branch-pr"; exit 0 ;;
 esac
@@ -1135,6 +1168,35 @@ gh_case notfound-both 43 --toc
   || problems+=("branch PR hint not reported")
 gh_leaks
 report gh-notfound-branch-hint "stubbed gh" $gh_rc "$gh_out"
+
+# gh-notfound-hint-not-circular — when the branch's PR *is* the number that
+# failed, the hint would send the user back to the same command, so it is
+# left out.
+gh_reset
+print -r -- '#43: reach jq through files' > "$stubfx/branch-pr"
+gh_case notfound-both 43 --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *"#43 not found in acme/widget"* ]] || problems+=("no not-found diagnosis")
+[[ "$gh_out" != *"rerun with that number"* ]] \
+  || problems+=("hinted at the number that just failed")
+gh_leaks
+report gh-notfound-hint-not-circular "stubbed gh" $gh_rc "$gh_out"
+
+# gh-no-number-uses-repo-flag — with no number the branch's PR is looked up,
+# and that lookup must be made in the -R repo: resolved in the cwd's repo and
+# fetched from another, the number names a different PR or nothing.
+gh_reset
+print -r -- '7' > "$stubfx/branch-pr"
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --pr -R acme/widget --toc 2>&1) || gh_rc=$?
+(( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0)")
+[[ "$gh_out" == *"note: no number given — using the current branch's PR #7"* ]] \
+  || problems+=("did not use the branch's PR")
+[[ "$gh_out" == *"PR #7 docs: clarify retry semantics"* ]] || problems+=("did not render PR #7")
+grep -q -- '^pr view -R acme/widget ' "$stublog" \
+  || problems+=("the branch lookup was not pointed at -R: $(grep '^pr view' "$stublog")")
+gh_leaks
+report gh-no-number-uses-repo-flag "stubbed gh" $gh_rc "$gh_out"
 
 # gh-issue-number-rejected — the *other* half of that mistake, and the one
 # that changed shape when the union query landed. A number that names an

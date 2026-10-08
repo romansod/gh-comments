@@ -196,6 +196,33 @@ if (( SLR && LATEST )); then
   exit 1
 fi
 
+# refuse_type_flags <type> <because> — flags that only the other resource
+# type can honour are an error, never a no-op: silently ignoring one would
+# report a filtered view as a complete one. Every offender is listed, so
+# one rerun is enough. Called here when --pr / --issue already settles the
+# type, so the refusal costs no fetch, and again once a resolved type is in.
+typeset -A ARTICLE=(pr "a pull request" issue "an issue")
+refuse_type_flags() {
+  local type=$1 because=$2
+  local -a bad=()
+  if [[ $type == issue ]]; then
+    (( UNRESOLVED )) && bad+=(--unresolved)
+    (( SLR )) && bad+=(--since-last-review)
+    (( LATEST )) && bad+=(--latest)
+    (( MERGES )) && bad+=(--merges)
+    if (( ${#bad} )); then
+      echo "$PROG: ${(j:, :)bad} only appl$( (( ${#bad} == 1 )) && print -n ies || print -n y ) to pull requests; $because" >&2
+      exit 1
+    fi
+  elif (( EVENTS )); then
+    echo "$PROG: --events only applies to issues; $because" >&2
+    exit 1
+  fi
+}
+if [[ "$TYPE" != auto ]]; then
+  refuse_type_flags "$TYPE" "the type is pinned to ${ARTICLE[$TYPE]} by $TYPE_PINNED_BY"
+fi
+
 if [[ -n "$NUM" && "$NUM" != <-> ]]; then
   echo "$PROG: not a PR or issue number: $NUM" >&2
   usage >&2
@@ -227,17 +254,6 @@ if (( ${#MISSING} )); then
   exit 1
 fi
 
-if [[ -z "$NUM" ]]; then
-  NUM=$(gh pr view --json number --jq .number 2>/dev/null) || NUM=""
-  if [[ -z "$NUM" ]]; then
-    echo "$PROG: no number given and no PR found for the current branch" >&2
-    exit 1
-  fi
-  # A branch resolves to a PR, so the type stops being an open question.
-  TYPE=pr TYPE_PINNED_BY="the current branch's PR"
-  echo "note: no number given — using the current branch's PR #$NUM" >&2
-fi
-
 if [[ -z "$REPO" ]]; then
   if [[ -n "$FIXTURES_TL" ]]; then
     REPO="fixtures/fixtures"
@@ -250,6 +266,21 @@ if [[ -z "$REPO" ]]; then
 fi
 OWNER=${REPO%%/*}
 NAME=${REPO##*/}
+# Every gh call targets the same repo. The branch lookups below take it
+# too: without it they resolve the branch's PR in the cwd's repo and the
+# number is then fetched from -R's, which is a different PR or nothing.
+typeset -a RFLAG=(-R "$REPO")
+
+if [[ -z "$NUM" ]]; then
+  NUM=$(gh pr view "${RFLAG[@]}" --json number --jq .number 2>/dev/null) || NUM=""
+  if [[ -z "$NUM" ]]; then
+    echo "$PROG: no number given and no PR found for the current branch in $REPO" >&2
+    exit 1
+  fi
+  # A branch resolves to a PR, so the type stops being an open question.
+  TYPE=pr TYPE_PINNED_BY="the current branch's PR"
+  echo "note: no number given — using the current branch's PR #$NUM" >&2
+fi
 
 # ── Query construction ───────────────────────────────────────────────────────
 #
@@ -481,8 +512,10 @@ else
     echo "$PROG: #$NUM not found in $REPO" >&2
     # Diagnose, don't silently switch targets: N is often the issue number
     # embedded in the branch name, while the branch's PR is something else.
-    BRANCH_PR=$(gh pr view --json number,title --jq '"#\(.number): \(.title)"' 2>/dev/null) || BRANCH_PR=""
-    [[ -n "$BRANCH_PR" ]] && echo "  the current branch's PR is $BRANCH_PR — rerun with that number" >&2
+    # Not when the branch's PR *is* the number that failed: that hint would
+    # send the user back to the same command.
+    BRANCH_PR=$(gh pr view "${RFLAG[@]}" --json number,title --jq '"#\(.number): \(.title)"' 2>/dev/null) || BRANCH_PR=""
+    [[ -n "$BRANCH_PR" && "$BRANCH_PR" != "#$NUM:"* ]] && echo "  the current branch's PR is $BRANCH_PR — rerun with that number" >&2
     exit 1
   fi
 fi
@@ -497,30 +530,13 @@ fi
 # whole point of `gh-comments 43 --pr` is that 43 had better be a PR.
 if [[ "$TYPE" != auto && "$TYPE" != "$RTYPE" ]]; then
   TITLE=$(target_title "$TL_FILE")
-  typeset -A ARTICLE=(pr "a pull request" issue "an issue")
   echo "$PROG: #$NUM is ${ARTICLE[$RTYPE]}, not ${ARTICLE[$TYPE]}${TITLE:+: \"$TITLE\"}" >&2
   echo "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG ${(j: :)${(@q-)UNPINNED}}" >&2
   exit 1
 fi
 
-# Flags that only one resource type can honour. Silently ignoring them would
-# report a filtered view as a complete one.
-if [[ "$RTYPE" == issue ]]; then
-  typeset -a BAD=()
-  (( UNRESOLVED )) && BAD+=(--unresolved)
-  (( SLR )) && BAD+=(--since-last-review)
-  (( LATEST )) && BAD+=(--latest)
-  (( MERGES )) && BAD+=(--merges)
-  if (( ${#BAD} )); then
-    echo "$PROG: ${(j:, :)BAD} only appl$( (( ${#BAD} == 1 )) && print -n ies || print -n y ) to pull requests; #$NUM is an issue" >&2
-    exit 1
-  fi
-else
-  if (( EVENTS )); then
-    echo "$PROG: --events only applies to issues; #$NUM is a pull request" >&2
-    exit 1
-  fi
-fi
+# Flags that only one resource type can honour, now that the type is known.
+refuse_type_flags "$RTYPE" "#$NUM is ${ARTICLE[$RTYPE]}"
 
 if [[ "$RTYPE" == pr ]]; then
   if [[ -n "$FIXTURES_TL" ]]; then
@@ -547,6 +563,17 @@ def htmlheavy:
   (length > 200)
   and ((test("```")) | not)
   and ((gsub("<[^>]*>"; "") | length) < (length * 0.6));
+# A numeric entity names any code point, including ones no text should
+# carry: `&#0;` would put a NUL in the dump and grep would call the file
+# binary. NUL, the other C0 controls bar tab and newline, surrogates and
+# anything past U+10FFFF become U+FFFD. Hex entities are decoded by hand,
+# since tonumber reads decimal only. (No apostrophes in these comments: the
+# program is a single-quoted shell string.)
+def codepoint:
+  if . == 0 or (. < 32 and . != 9 and . != 10) or (. >= 55296 and . <= 57343) or . > 1114111
+  then 65533 else . end | [.] | implode;
+def hexnum: ascii_downcase | explode
+  | reduce .[] as $c (0; . * 16 + (if $c >= 97 then $c - 87 else $c - 48 end));
 def html2md:
   gsub("<style\\b[^>]*>[\\s\\S]*?</style>"; "")
   | gsub("<script\\b[^>]*>[\\s\\S]*?</script>"; "")
@@ -569,7 +596,8 @@ def html2md:
   | gsub("&quot;"; "\"") | gsub("&apos;"; "'\''")
   | gsub("&mdash;"; "—") | gsub("&ndash;"; "–") | gsub("&hellip;"; "…") | gsub("&bull;"; "•")
   | gsub("&ldquo;|&rdquo;"; "\"") | gsub("&lsquo;|&rsquo;"; "'\''")
-  | gsub("&#(?<d>[0-9]+);"; "\([(.d | tonumber)] | implode)")
+  | gsub("&#(?<d>[0-9]+);"; (.d | tonumber | codepoint))
+  | gsub("&#[xX](?<h>[0-9a-fA-F]+);"; (.h | hexnum | codepoint))
   | gsub("&amp;"; "&")
   | gsub("[ \\t]+\\n"; "\n") | gsub("\\n[ \\t]+"; "\n")
   | gsub("\\n{3,}"; "\n\n");

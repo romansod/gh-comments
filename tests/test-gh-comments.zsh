@@ -437,6 +437,20 @@ fragment_case gh-query-fragments-auto     1 1 pr    7 --toc
 fragment_case gh-query-fragments-pinned-pr    1 0 pr    7 --pr --toc
 fragment_case gh-query-fragments-pinned-issue 0 1 issue 21 --issue --toc
 
+# gh-pinned-flag-refused-before-fetch — with the type pinned, a flag the
+# pinned type cannot honour is decidable from argv alone, so it is refused
+# before the timeline is paid for.
+for spec in "issue --issue --unresolved|--unresolved only applies to pull requests; the type is pinned to an issue by --issue" \
+            "pr --pr --events|--events only applies to issues; the type is pinned to a pull request by --pr"; do
+  gh_reset
+  gh_case ${=${spec%%|*}}
+  (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+  [[ "$gh_out" == "gh-comments: ${spec#*|}" ]] || problems+=("output was: $gh_out")
+  (( $(grep -c '^graphql:' "$stublog") == 0 )) \
+    || problems+=("fetched before refusing: $(tr '\n' ' ' < "$stublog")")
+  report "gh-pinned-flag-refused-before-fetch-${${spec%% *}}" "stubbed gh" $gh_rc "$gh_out"
+done
+
 # gh-notfound — the union resolves both sequences, so a number it cannot
 # resolve is neither a PR nor an issue. The wording has to stop saying "PR".
 gh_reset

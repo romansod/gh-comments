@@ -58,7 +58,9 @@ Flags:
   merge commits are dropped silently.
 
 When `--latest` or `--since-last-review` matches nothing, the output is the
-TOC under a note saying so, not the full timeline.
+TOC under a note saying so, not the full timeline — unless `--unresolved` or
+`--since` already narrows the view, in which case that view is shown as it
+is and the note names it.
 
 It renders the whole timeline — commits, reviews with their inline threads
 nested in place, comments, force-pushes — paginated, with thread resolution

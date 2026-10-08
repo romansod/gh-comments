@@ -65,7 +65,10 @@ mean and which ones change what you should do.
   (`--since` does include old reviews whose threads received replies in the
   window.)
 - `note: no matching … — showing the TOC instead` means the anchor was not
-  found; what follows is exactly the `--toc` output.
+  found; what follows is exactly the `--toc` output. Under `--unresolved` or
+  `--since` the note says `showing the unresolved view instead` /
+  `showing the --since window instead`, and what follows is that view,
+  bodies included.
 
 ## Misc
 
