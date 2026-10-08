@@ -6,7 +6,8 @@ description: >
   [--comments]`, `gh api .../issues/N/comments`, or any GraphQL query that
   reads issue discussion. Use when the user says "what's on issue N", "catch
   me up on issue N", "why was issue N closed", "what PR closed issue N",
-  "what's left on issue N", or invokes /issue-comments <N>. `gh issue view
+  "what's left on issue N", or invokes /gh-comments:issue-comments <N>.
+  `gh issue view
   --comments` shows no timeline events — it cannot say who closed the issue,
   why, or which PR references it — and off a TTY omits the issue body. For
   pull requests use pr-comments; both drive the same tool.
@@ -17,9 +18,12 @@ You are executing the issue-comments skill.
 ## Invocation
 
 ```
-/issue-comments <N>            — issue N in the current repo
-/issue-comments <N> <o>/<r>    — issue N in another repo
+/gh-comments:issue-comments <N>            — issue N in the current repo
+/gh-comments:issue-comments <N> <o>/<r>    — issue N in another repo
 ```
+
+(`/issue-comments …` where the skill directory is installed on its own
+rather than as the gh-comments plugin.)
 
 Also invoke implicitly whenever a task needs an issue's discussion — picking
 up work it describes, checking what was decided, finding out why it was

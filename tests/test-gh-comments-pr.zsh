@@ -844,8 +844,7 @@ check_lean_identical
 # Every golden case reaches the script through --fixtures, so nothing above
 # exercises the half that fetches and diagnoses: the two graphql calls, the
 # error branches that read them, and the trap that cleans up after. These
-# cases prepend stubs on PATH (the r-git-worktree-status idiom) and pin that
-# behavior. Offline by construction — the stub never reaches the network, and
+# cases prepend stubs on PATH and pin that behavior. Offline by construction — the stub never reaches the network, and
 # CI has no GH_TOKEN, so an escape would fail loudly rather than quietly pass.
 #
 # `mktemp` is stubbed alongside `gh`, for one reason: asserting the payload

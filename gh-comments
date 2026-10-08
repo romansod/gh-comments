@@ -11,6 +11,10 @@ VERSION=1.0.0
 # resolves the symlink and would report the implementation's name instead of
 # the one the user ran. `:r` drops an extension such a symlink may carry.
 PROG=${0:t:r}
+# gh sets GH_EXTENSION=1 when it runs an extension, so someone who typed
+# `gh comments` is addressed as that — a bare `gh-comments` is usually not
+# on their PATH.
+[[ -n ${GH_EXTENSION:-} ]] && PROG="gh ${PROG#gh-}"
 # The resource type is resolved from the API unless --pr / --issue pins it.
 TYPE=auto
 TYPE_PINNED_BY=""
@@ -110,6 +114,9 @@ EOF
 }
 
 NUM="" REPO="" TOC=0 UNRESOLVED=0 SINCE="" SLR=0 SLR_AUTHOR="" BOTS=0 MERGES=0 EVENTS=0 HIDDEN=0
+# The arguments minus the pin, for the wrong-type hint: it suggests the same
+# command again without --pr / --issue, so -R and the view flags survive.
+typeset -a UNPINNED=("${(@)argv:#(--pr|--issue)}")
 LATEST=0 LATEST_AUTHOR=""
 FIXTURES_TL="" FIXTURES_TH=""
 # need_value <flag> <form> <count> [<next>] — a flag that takes a value must
@@ -189,12 +196,27 @@ if (( SLR && LATEST )); then
   exit 1
 fi
 
-# The tools are checked after the parser, so --help and --version need
-# neither, and before the first call to either — the branch lookup below is
-# one — so a missing tool is a sentence naming it rather than zsh's "command
-# not found" with a line number into this file. Both are named at once, so
-# one rerun is enough. gh is needed only to fetch: a --fixtures render has
-# no use for it, and the suite runs offline.
+if [[ -n "$NUM" && "$NUM" != <-> ]]; then
+  echo "$PROG: not a PR or issue number: $NUM" >&2
+  usage >&2
+  exit 1
+fi
+if [[ -z "$NUM" && -n "$FIXTURES_TL" ]]; then
+  echo "$PROG: a number is required with --fixtures" >&2
+  exit 1
+fi
+if [[ -z "$NUM" && "$TYPE" == issue ]]; then
+  echo "$PROG: an issue number is required — there is no \"current branch's issue\"" >&2
+  exit 1
+fi
+
+# The tools are checked after every refusal the parser can make on its own,
+# so --help, --version and a usage error need neither, and before the first
+# call to either — the branch lookup below is one — so a missing tool is a
+# sentence naming it rather than zsh's "command not found" with a line
+# number into this file. Both are named at once, so one rerun is enough. gh
+# is needed only to fetch: a --fixtures render has no use for it, and the
+# suite runs offline.
 typeset -a MISSING=()
 command -v jq >/dev/null 2>&1 || MISSING+=(jq)
 if [[ -z "$FIXTURES_TL" ]] && ! command -v gh >/dev/null 2>&1; then
@@ -205,20 +227,7 @@ if (( ${#MISSING} )); then
   exit 1
 fi
 
-if [[ -n "$NUM" && "$NUM" != <-> ]]; then
-  echo "$PROG: not a PR or issue number: $NUM" >&2
-  usage >&2
-  exit 1
-fi
 if [[ -z "$NUM" ]]; then
-  if [[ -n "$FIXTURES_TL" ]]; then
-    echo "$PROG: a number is required with --fixtures" >&2
-    exit 1
-  fi
-  if [[ "$TYPE" == issue ]]; then
-    echo "$PROG: an issue number is required — there is no \"current branch's issue\"" >&2
-    exit 1
-  fi
   NUM=$(gh pr view --json number --jq .number 2>/dev/null) || NUM=""
   if [[ -z "$NUM" ]]; then
     echo "$PROG: no number given and no PR found for the current branch" >&2
@@ -490,7 +499,7 @@ if [[ "$TYPE" != auto && "$TYPE" != "$RTYPE" ]]; then
   TITLE=$(target_title "$TL_FILE")
   typeset -A ARTICLE=(pr "a pull request" issue "an issue")
   echo "$PROG: #$NUM is ${ARTICLE[$RTYPE]}, not ${ARTICLE[$TYPE]}${TITLE:+: \"$TITLE\"}" >&2
-  echo "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG $NUM" >&2
+  echo "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG ${(j: :)${(@q-)UNPINNED}}" >&2
   exit 1
 fi
 

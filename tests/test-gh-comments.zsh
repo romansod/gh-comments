@@ -299,11 +299,14 @@ refuse type-pr-on-issue \
 refuse type-issue-on-pr \
   'is a pull request, not an issue' \
   1001 --issue --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
-# The hint under a wrong-type refusal names the command that was run, read
-# from the invoked name — see prog-from-invoked-name below for the symlink
-# side of that.
-refuse type-hint-names-command 'rerun as: gh-comments 21' \
+# The hint under a wrong-type refusal is the same command without the pin:
+# the invoked name (see prog-from-invoked-name below for the symlink side of
+# that) and every other argument, so -R and the view flags survive and the
+# suggestion targets the repo the user named.
+refuse type-hint-names-command "rerun as: gh-comments 21 --fixtures $fx/issue-basic.tl.json" \
   21 --pr --fixtures "$fx/issue-basic.tl.json"
+refuse type-hint-keeps-flags "rerun as: gh-comments 21 -R acme/widget --toc --fixtures $fx/issue-basic.tl.json" \
+  21 -R acme/widget --pr --toc --fixtures "$fx/issue-basic.tl.json"
 
 refuse flag-unresolved-on-issue "--unresolved only applies to pull requests; #21 is an issue" \
   21 --unresolved --fixtures "$fx/issue-basic.tl.json"
@@ -562,13 +565,18 @@ miss_case() {
   if (( want_rc == 0 )); then
     [[ "$out" == "$want"* ]] || problems+=("output does not start with: $want")
   else
-    [[ "$out" == "$want" ]] || problems+=("output was: $out")
+    # The first line: a usage error goes on to print the usage text.
+    [[ "${out%%$'\n'*}" == "$want" ]] || problems+=("output was: ${out%%$'\n'*}")
   fi
   report "$name" "missing tools" $rc "$out"
   rm -rf "$miss_dir"
   return 0
 }
 miss_case missing-jq      1 "gh-comments: needs jq on PATH" -- 21 --fixtures "$fx/issue-basic.tl.json"
+# A usage error the parser can make on its own comes before the tool check:
+# the user is told what is wrong with the command, not sent to install gh.
+miss_case parser-before-preflight 1 "gh-comments: not a PR or issue number: abc" -- abc
+miss_case issue-needs-number-before-preflight 1 "gh-comments: an issue number is required — there is no \"current branch's issue\"" -- --issue
 miss_case missing-both    1 "gh-comments: needs jq and gh (the GitHub CLI) on PATH" -- 21 -R acme/widget
 miss_case missing-gh      1 "gh-comments: needs gh (the GitHub CLI) on PATH" jq -- 21 -R acme/widget
 # With no number the script would look the branch's PR up through gh; the
@@ -604,9 +612,10 @@ no_internals
 # ---------------------------------------------------------------------------
 # The invoked name. Every diagnostic is prefixed with the name the script was
 # run as, so a symlink named r-gh-comments reports as r-gh-comments, with or
-# without an extension on the link — and the wrong-type hint names that same
-# command, never a hard-coded one. --version is the exception: it names the
-# product, since that is what the version is of.
+# without an extension on the link, and a run under `gh comments` reports as
+# that — and the wrong-type hint names that same command, never a hard-coded
+# one. --version is the exception: it names the product, since that is what
+# the version is of.
 # ---------------------------------------------------------------------------
 invoked_name() {
   local name=prog-from-invoked-name tmp link out
@@ -628,6 +637,19 @@ invoked_name() {
     out=$(zsh "$tmp/$link" --version 2>&1) || { rc=$?; problems+=("$link --version exited $rc"); }
     [[ "$out" == "gh-comments "* ]] || problems+=("$link: --version renamed the product: $out")
   done
+  # Under `gh comments` the binary is still gh-comments, but gh sets
+  # GH_EXTENSION=1, and the user typed `gh comments` — so that is the name
+  # the usage line, the prefix and the hint carry.
+  out=$(GH_EXTENSION=1 zsh "$script" --help 2>&1) || { rc=$?; problems+=("GH_EXTENSION --help exited $rc"); }
+  [[ "$out" == "Usage: gh comments "* ]] \
+    || problems+=("under gh: usage does not read gh comments: ${out%%$'\n'*}")
+  out=$(GH_EXTENSION=1 zsh "$script" 21 --pr --fixtures "$fx/issue-basic.tl.json" 2>&1) && problems+=("under gh: did not refuse")
+  [[ "$out" == "gh comments: #21 is an issue, not a pull request"* ]] \
+    || problems+=("under gh: diagnostic prefix: ${out%%$'\n'*}")
+  [[ "$out" == *"rerun as: gh comments 21 --fixtures"* ]] \
+    || problems+=("under gh: the hint does not say gh comments")
+  out=$(GH_EXTENSION=1 zsh "$script" --version 2>&1) || { rc=$?; problems+=("GH_EXTENSION --version exited $rc"); }
+  [[ "$out" == "gh-comments "* ]] || problems+=("under gh: --version renamed the product: $out")
   report "$name" "invoked name" $rc "$out"
   rm -rf "$tmp"
   return 0

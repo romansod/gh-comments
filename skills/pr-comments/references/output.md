@@ -54,13 +54,16 @@ mean and which ones change what you should do.
 
 ## Slices
 
-- `--since-last-review` and `--latest` show their anchor and everything after
-  it, and nothing else: orphan threads and the threads of filtered bot
-  reviews are left out too (under `--unresolved` those two blocks always
-  render). A newer reply nested under an *older* review's thread is outside
-  the slice and will not appear; `--unresolved` catches still-open threads
-  regardless of age. (`--since` does include old reviews whose threads
-  received replies in the window.)
+- `--since-last-review` and `--latest` are a window from the anchor on, and
+  nothing before it: timeline items from the anchor, a filtered bot review's
+  threads when that review sits after the anchor, an orphan thread when one
+  of its comments is dated at or after it. `--unresolved` keeps the same
+  window, so with a slicing flag it can omit open threads the header still
+  counts (and says so). A newer reply nested under an *older* review's
+  thread is outside the slice and will not appear. For "everything still
+  open regardless of age" use `--unresolved` without a slicing flag.
+  (`--since` does include old reviews whose threads received replies in the
+  window.)
 - `note: no matching … — showing the TOC instead` means the anchor was not
   found; what follows is exactly the `--toc` output.
 

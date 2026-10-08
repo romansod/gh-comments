@@ -6,7 +6,8 @@ description: >
   `gh pr view --comments`, `gh api .../comments|reviews`, or any GraphQL query
   that reads PR discussion. Use when the user says "address the review
   comments", "address the latest review", "what did reviewers say on PR N",
-  "any unresolved review threads", or invokes /pr-comments <N>. For issues use
+  "any unresolved review threads", or invokes /gh-comments:pr-comments <N>.
+  For issues use
   issue-comments; both drive the same tool. The raw approaches are wrong,
   not merely costly: `gh pr view --comments` omits inline threads entirely
   (and off a TTY prints nothing on a PR with no comments), REST cannot see
@@ -18,10 +19,13 @@ You are executing the pr-comments skill.
 ## Invocation
 
 ```
-/pr-comments <N>            — PR N in the current repo
-/pr-comments                — the current branch's PR
-/pr-comments <N> <o>/<r>    — PR N in another repo
+/gh-comments:pr-comments <N>            — PR N in the current repo
+/gh-comments:pr-comments                — the current branch's PR
+/gh-comments:pr-comments <N> <o>/<r>    — PR N in another repo
 ```
+
+(`/pr-comments …` where the skill directory is installed on its own rather
+than as the gh-comments plugin.)
 
 Also invoke implicitly whenever a task needs PR comments, reviews or review
 threads — reviewing feedback, addressing findings, checking what is open.
