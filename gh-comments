@@ -253,7 +253,7 @@ fi
 # gh accepts for its own -R (github.com/o/n, https://github.com/o/n) are
 # refused here rather than split wrong and reported as a missing number —
 # and here, before the tool check, since argv alone decides it.
-if (( REPO_GIVEN )) && [[ ! "$REPO" =~ '^[^/:]+/[^/:]+$' ]]; then
+if (( REPO_GIVEN )) && [[ ! "$REPO" =~ '^[^/:[:space:]]+/[^/:[:space:]]+$' ]]; then
   print -r -- "$PROG: -R needs <owner/name>; got: $REPO" >&2
   exit 1
 fi
@@ -316,8 +316,10 @@ if [[ -z "$REPO" ]]; then
   fi
 fi
 # The same check for the resolved value: gh's nameWithOwner is always
-# owner/name, but the split below must never see anything else.
-if [[ ! "$REPO" =~ '^[^/:]+/[^/:]+$' ]]; then
+# owner/name, but the split below must never see anything else — and
+# [^/:] alone would match a newline, so a value with more than one line
+# (stderr merged into an answer, say) is refused by name here.
+if [[ ! "$REPO" =~ '^[^/:[:space:]]+/[^/:[:space:]]+$' ]]; then
   print -r -- "$PROG: -R needs <owner/name>; got: $REPO" >&2
   exit 1
 fi

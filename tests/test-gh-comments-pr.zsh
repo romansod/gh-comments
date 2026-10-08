@@ -923,7 +923,9 @@ emit_log() {
   # GH_STUB_NOISY: gh's debug log on stderr, which real gh writes on every
   # call — successful ones included — under GH_DEBUG or DEBUG=1. The answer
   # must come from stdout alone.
-  [[ -n ${GH_STUB_NOISY:-} ]] && print -ru2 -- "[git remote -v]"$'\n'"* Request at 2026-10-08 ($1)"
+  # The lines carry what real ones do — a URL, with its / and : — so a
+  # merged stream cannot slip past the owner/name check by looking plain.
+  [[ -n ${GH_STUB_NOISY:-} ]] && print -ru2 -- "[git remote -v]"$'\n'"* Request to https://api.github.com/graphql ($1)"
   return 0
 }
 
@@ -1253,6 +1255,10 @@ gh_rc=0
 gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_NOISY=1 zsh "$script" --pr --toc 2>/dev/null) || gh_rc=$?
 (( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0)")
 [[ "$gh_out" == *"PR #7 docs: clarify retry semantics"* ]] || problems+=("did not render with gh's debug log on stderr")
+# The repo lookup too: the render never prints the repo, so the fetch's
+# argv is where a merged answer would show.
+grep -q -- '-f owner=acme -f name=widget -F num=7 ' "$qlog" \
+  || problems+=("owner/name carried gh's stderr: $(grep -o -- '-f owner=[^ ]* -f name=[^ ]*' "$qlog" | head -1)")
 gh_leaks
 report gh-debug-stderr-ignored-on-success "stubbed gh" $gh_rc "$gh_out"
 
