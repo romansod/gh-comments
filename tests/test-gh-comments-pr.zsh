@@ -926,9 +926,15 @@ case "$1 $2" in
   "pr view")
     # The branch's-PR hint in the not-found diagnosis and the no-number
     # lookup. Absent answer file means "no PR for this branch", which is a
-    # nonzero exit from real gh. The argv is logged so a case can see which
-    # repo the lookup was pointed at.
+    # nonzero exit from real gh. The argv is logged so a case can see what
+    # the lookup was given. Real gh refuses `pr view -R <repo>` with no
+    # positional, and the script never passes a positional here, so -R is
+    # refused the way gh does — a stub that answered it hid exactly that
+    # regression once.
     emit_log "pr view ${*[3,-1]}"
+    if [[ " ${*[3,-1]} " == *" -R "* || " ${*[3,-1]} " == *" --repo "* || " ${*[3,-1]} " == *" --repo="* ]]; then
+      print -ru2 -- "argument required when using the --repo flag"; exit 1
+    fi
     [[ -r $GH_STUB_FX/branch-pr ]] || exit 1
     cat "$GH_STUB_FX/branch-pr"; exit 0 ;;
 esac
@@ -1227,21 +1233,49 @@ gh_case notfound-both 43 --toc
 gh_leaks
 report gh-notfound-hint-not-circular "stubbed gh" $gh_rc "$gh_out"
 
-# gh-no-number-uses-repo-flag — with no number the branch's PR is looked up,
-# and that lookup must be made in the -R repo: resolved in the cwd's repo and
-# fetched from another, the number names a different PR or nothing.
+# gh-no-number-plain-lookup — with no number the branch's PR is looked up
+# with a bare `gh pr view`: no -R, which gh refuses without a positional
+# (the stub refuses it too), and the fetch then goes to the same repo gh
+# resolved the branch in.
 gh_reset
 print -r -- '7' > "$stubfx/branch-pr"
 gh_rc=0
-gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --pr -R acme/widget --toc 2>&1) || gh_rc=$?
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --pr --toc 2>&1) || gh_rc=$?
 (( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0)")
 [[ "$gh_out" == *"note: no number given — using the current branch's PR #7"* ]] \
   || problems+=("did not use the branch's PR")
 [[ "$gh_out" == *"PR #7 docs: clarify retry semantics"* ]] || problems+=("did not render PR #7")
-grep -q -- '^pr view -R acme/widget ' "$stublog" \
-  || problems+=("the branch lookup was not pointed at -R: $(grep '^pr view' "$stublog")")
+grep -q -- '^pr view --json number ' "$stublog" \
+  || problems+=("the branch lookup was not a bare pr view: $(grep '^pr view' "$stublog")")
 gh_leaks
-report gh-no-number-uses-repo-flag "stubbed gh" $gh_rc "$gh_out"
+report gh-no-number-plain-lookup "stubbed gh" $gh_rc "$gh_out"
+
+# gh-no-number-with-repo-flag-refused — "no number" means the cwd's branch
+# PR and -R means another repo; the pair is refused before any gh call
+# rather than resolved in one repo and fetched from the other.
+gh_reset
+print -r -- '7' > "$stubfx/branch-pr"
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --pr -R acme/widget --toc 2>&1) || gh_rc=$?
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == "gh-comments: -R needs a number: the current branch's PR is in the cwd's repo, not in acme/widget" ]] \
+  || problems+=("output was: $gh_out")
+[[ ! -s "$stublog" ]] || problems+=("called gh before refusing: $(tr '\n' ' ' < "$stublog")")
+gh_leaks
+report gh-no-number-with-repo-flag-refused "stubbed gh" $gh_rc "$gh_out"
+
+# gh-notfound-no-hint-under-repo-flag — the branch's PR is in the cwd's
+# repo, so under -R it is no answer to "#N is not in <repo>": no hint, and
+# no lookup to pay for.
+gh_reset
+print -r -- '#44: reach jq through files' > "$stubfx/branch-pr"
+gh_case notfound-both 43 -R acme/widget --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *"#43 not found in acme/widget"* ]] || problems+=("no not-found diagnosis")
+[[ "$gh_out" != *"rerun with that number"* ]] || problems+=("hinted at the cwd branch's PR under -R")
+(( $(grep -c '^pr view' "$stublog") == 0 )) || problems+=("looked the branch up under -R")
+gh_leaks
+report gh-notfound-no-hint-under-repo-flag "stubbed gh" $gh_rc "$gh_out"
 
 # gh-no-number-events-refused-before-fetch — the branch lookup settles the
 # type as PR, so an issue-only flag is refused there and no timeline is paid for.
@@ -1396,6 +1430,9 @@ argcase arg-bad-pr-number     1 "not a PR or issue number: abc" abc
 argcase arg-bad-number-backslash 1 'not a PR or issue number: a\cb'$'\n'"Usage: gh-comments" 'a\cb'
 argcase arg-unknown-flag      1 "unknown flag: --nope" 7 --nope
 argcase arg-second-pr-number  1 "unexpected argument: 8" 7 8
+# The same for the two diagnostics that quote an argument verbatim.
+argcase arg-unknown-flag-backslash 1 'unknown flag: --x\cy' 7 '--x\cy'
+argcase arg-second-number-backslash 1 'unexpected argument: x\cy' 7 'x\cy'
 # --fixtures validates the timeline operand up front, because every path after
 # it assumes that file is readable. The threads operand is optional at parse
 # time — an issue has none — and refused later, once the payload has said the
@@ -1406,6 +1443,7 @@ argcase arg-fixtures-missing  1 "needs a readable timeline JSON file" 7 --fixtur
 argcase arg-repo-url-form     1 "-R needs <owner/name>; got: https://github.com/acme/widget" 7 -R https://github.com/acme/widget
 argcase arg-repo-host-form    1 "-R needs <owner/name>; got: github.com/acme/widget" 7 --repo=github.com/acme/widget
 argcase arg-repo-bare-name    1 "-R needs <owner/name>; got: widget" 7 -R widget
+argcase arg-repo-needs-number 1 "-R needs a number: the current branch's PR is in the cwd's repo, not in acme/widget" -R acme/widget
 argcase arg-fixtures-pr-needs-threads 1 "needs a threads payload for a PR" 7 --fixtures "$fx/zero-threads.tl.json"
 argcase arg-fixtures-no-number 1 "a number is required with --fixtures" \
   --fixtures "$fx/zero-threads.tl.json" "$fx/zero-threads.th.json"

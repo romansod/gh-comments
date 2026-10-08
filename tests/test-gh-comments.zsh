@@ -622,6 +622,7 @@ miss_case missing-jq      1 "gh-comments: needs jq on PATH" -- 21 --fixtures "$f
 # the user is told what is wrong with the command, not sent to install gh.
 miss_case parser-before-preflight 1 "gh-comments: not a PR or issue number: abc" -- abc
 miss_case issue-needs-number-before-preflight 1 "gh-comments: an issue number is required — there is no \"current branch's issue\"" -- --issue
+miss_case repo-needs-number-before-preflight 1 "gh-comments: -R needs a number: the current branch's PR is in the cwd's repo, not in acme/widget" -- -R acme/widget
 miss_case missing-both    1 "gh-comments: needs jq and gh (the GitHub CLI) on PATH" -- 21 -R acme/widget
 miss_case missing-gh      1 "gh-comments: needs gh (the GitHub CLI) on PATH" jq -- 21 -R acme/widget
 # With no number the script would look the branch's PR up through gh; the

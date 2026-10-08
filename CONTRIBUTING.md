@@ -77,6 +77,15 @@ Some cases pin a documented limitation rather than desired behaviour; they
 are marked `LIMITATION` in the test file's header comment. Changing one is a
 deliberate semantics change and should update the docs with it.
 
+### The gh stub
+
+The non-golden cases talk to a stub `gh` that answers the calls the script
+makes and refuses what real `gh` refuses, as far as it has been taught:
+`pr view -R <repo>` with no positional is one such refusal, learnt after a
+stub that answered it let a broken branch lookup through a green suite.
+A change to the shape of any `gh` call therefore needs one run against the
+real `gh` as well, before the stub is taught the new shape.
+
 ### Fixtures
 
 A fixture holds the exact shape the script fetches: the output of

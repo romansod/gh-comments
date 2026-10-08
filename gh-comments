@@ -161,9 +161,9 @@ while (( $# )); do
       FIXTURES_TL="$2"; shift 2
       if (( $# >= 1 )) && [[ "$1" != -* && -r "$1" ]]; then FIXTURES_TH="$1"; shift; fi
       ;;
-    -*) echo "$PROG: unknown flag: $1" >&2; exit 1 ;;
+    -*) print -r -- "$PROG: unknown flag: $1" >&2; exit 1 ;;
     *)
-      if [[ -n "$NUM" ]]; then echo "$PROG: unexpected argument: $1" >&2; exit 1; fi
+      if [[ -n "$NUM" ]]; then print -r -- "$PROG: unexpected argument: $1" >&2; exit 1; fi
       NUM="$1"; shift ;;
   esac
 done
@@ -236,6 +236,18 @@ if [[ -z "$NUM" && "$TYPE" == issue ]]; then
   print -r -- "$PROG: an issue number is required — there is no \"current branch's issue\"" >&2
   exit 1
 fi
+# "No number" means the current branch's PR, and that PR is in the cwd's
+# repo; -R names a different one. Asking for both is ambiguous — resolved
+# in the cwd's repo and fetched from -R's it is a different PR or nothing,
+# and gh itself refuses `pr view -R` with no argument — so it is refused
+# rather than guessed at. REPO is only -R's value this early, so its
+# presence is the flag having been given.
+typeset -i REPO_GIVEN=0
+[[ -n "$REPO" ]] && REPO_GIVEN=1
+if [[ -z "$NUM" ]] && (( REPO_GIVEN )); then
+  print -r -- "$PROG: -R needs a number: the current branch's PR is in the cwd's repo, not in $REPO" >&2
+  exit 1
+fi
 
 # The tools are checked after every refusal the parser can make on its own,
 # so --help, --version and a usage error need neither, and before the first
@@ -273,13 +285,12 @@ if [[ ! "$REPO" =~ '^[^/:]+/[^/:]+$' ]]; then
 fi
 OWNER=${REPO%%/*}
 NAME=${REPO##*/}
-# Every gh call targets the same repo. The branch lookups below take it
-# too: without it they resolve the branch's PR in the cwd's repo and the
-# number is then fetched from -R's, which is a different PR or nothing.
-typeset -a RFLAG=(-R "$REPO")
 
+# The branch lookup runs only without -R (refused above), so it and the
+# fetch agree on the repo: gh resolves both from the cwd. It takes no -R
+# on purpose — `gh pr view -R <repo>` with no argument is refused by gh.
 if [[ -z "$NUM" ]]; then
-  NUM=$(gh pr view "${RFLAG[@]}" --json number --jq .number 2>/dev/null) || NUM=""
+  NUM=$(gh pr view --json number --jq .number 2>/dev/null) || NUM=""
   if [[ -z "$NUM" ]]; then
     print -r -- "$PROG: no number given and no PR found for the current branch in $REPO" >&2
     exit 1
@@ -525,8 +536,12 @@ else
     # Diagnose, don't silently switch targets: N is often the issue number
     # embedded in the branch name, while the branch's PR is something else.
     # Not when the branch's PR *is* the number that failed: that hint would
-    # send the user back to the same command.
-    BRANCH_PR=$(gh pr view "${RFLAG[@]}" --json number,title --jq '"#\(.number): \(.title)"' 2>/dev/null) || BRANCH_PR=""
+    # send the user back to the same command. And not under -R: the branch's
+    # PR is in the cwd's repo, not the one the number was not found in.
+    BRANCH_PR=""
+    if (( ! REPO_GIVEN )); then
+      BRANCH_PR=$(gh pr view --json number,title --jq '"#\(.number): \(.title)"' 2>/dev/null) || BRANCH_PR=""
+    fi
     [[ -n "$BRANCH_PR" && "$BRANCH_PR" != "#$NUM:"* ]] && print -r -- "  the current branch's PR is $BRANCH_PR — rerun with that number" >&2
     exit 1
   fi
