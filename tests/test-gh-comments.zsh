@@ -339,6 +339,9 @@ refuse type-hint-drops-wrong-type-flags "rerun as: gh-comments 21 --toc --fixtur
 refuse type-hint-drops-events "rerun as: gh-comments 1001 --fixtures $prfx/basic.tl.json $prfx/basic.th.json" \
   1001 --issue --events --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
 
+# A missing number is reported before a flag the pinned type refuses, like
+# a malformed one: one rerun fixes the command line.
+refuse type-pinned-flag-after-missing-number "an issue number is required" --issue --unresolved
 refuse flag-unresolved-on-issue "--unresolved only applies to pull requests; #21 is an issue" \
   21 --unresolved --fixtures "$fx/issue-basic.tl.json"
 refuse flag-slr-on-issue "--since-last-review only applies to pull requests; #21 is an issue" \
@@ -471,8 +474,8 @@ fragment_case gh-query-fragments-pinned-issue 0 1 issue 21 --issue --toc
 # gh-pinned-flag-refused-before-fetch — with the type pinned, a flag the
 # pinned type cannot honour is decidable from argv alone, so it is refused
 # before the timeline is paid for.
-for spec in "issue --issue --unresolved|--unresolved only applies to pull requests; the type is pinned to an issue by --issue" \
-            "pr --pr --events|--events only applies to issues; the type is pinned to a pull request by --pr"; do
+for spec in "issue --issue 21 --unresolved|--unresolved only applies to pull requests; the type is pinned to an issue by --issue" \
+            "pr --pr 7 --events|--events only applies to issues; the type is pinned to a pull request by --pr"; do
   gh_reset
   gh_case ${=${spec%%|*}}
   (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")

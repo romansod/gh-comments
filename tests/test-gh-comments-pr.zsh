@@ -918,20 +918,22 @@ cat > "$stubdir/gh" <<'STUB'
 # fails here instead of silently landing in a fallthrough. The two graphql
 # calls are told apart by their query text: only the threads query mentions
 # reviewThreads.
-emit_log() { print -r -- "$1" >> "${GH_STUB_LOG:-/dev/null}" }
+emit_log() {
+  print -r -- "$1" >> "${GH_STUB_LOG:-/dev/null}"
+  # GH_STUB_NOISY: gh's debug log on stderr, which real gh writes on every
+  # call — successful ones included — under GH_DEBUG or DEBUG=1. The answer
+  # must come from stdout alone.
+  [[ -n ${GH_STUB_NOISY:-} ]] && print -ru2 -- "[git remote -v]"$'\n'"* Request at 2026-10-08 ($1)"
+  return 0
+}
 
 case "$1 $2" in
   "repo view")
     # GH_STUB_NO_REPO: the cwd is not a GitHub repo, in gh's wording.
     # GH_STUB_REPO_ERROR: gh itself failed (no network, a bad token).
-    # GH_STUB_REPO_FLAKY: the first call fails that way, the next succeeds.
     emit_log "repo view"
     [[ -n ${GH_STUB_NO_REPO:-} ]] && { print -ru2 -- "no git remotes found"; exit 1; }
     [[ -n ${GH_STUB_REPO_ERROR:-} ]] && { print -ru2 -- "error connecting to api.github.com"; exit 1; }
-    if [[ -n ${GH_STUB_REPO_FLAKY:-} && ! -e $GH_STUB_FX/repo-view-failed-once ]]; then
-      : > "$GH_STUB_FX/repo-view-failed-once"
-      print -ru2 -- "error connecting to api.github.com"; exit 1
-    fi
     print -r -- acme/widget; exit 0 ;;
   "pr view")
     # The branch's-PR hint in the not-found diagnosis and the no-number
@@ -1240,18 +1242,19 @@ gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_REPO_ERROR=1 zsh "$script" -
 gh_leaks
 report gh-repo-view-error "stubbed gh" $gh_rc "$gh_out"
 
-# gh-repo-view-flaky — the first `gh repo view` fails and the retry that
-# fetches its text succeeds: the retry's answer is the answer, not an
-# error with no text.
+# gh-debug-stderr-ignored-on-success — under GH_DEBUG / DEBUG=1 real gh
+# writes its debug log to stderr on every call, successful ones included.
+# The repo lookup, the branch lookup and the fetches must take their answer
+# from stdout alone: with no number, the run renders. (A merged stream once
+# read the branch lookup's debug lines as a failed lookup.)
 gh_reset
+print -r -- '7' > "$stubfx/branch-pr"
 gh_rc=0
-gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_REPO_FLAKY=1 zsh "$script" --pr 7 --toc 2>&1) || gh_rc=$?
-(( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0): $gh_out")
-[[ "$gh_out" == *"PR #7 docs: clarify retry semantics"* ]] || problems+=("did not render after the retry")
-[[ "$gh_out" != *"gh error:"* ]] || problems+=("reported an error although the retry succeeded")
-(( $(grep -c '^repo view' "$stublog") == 2 )) || problems+=("expected two repo view calls: $(tr '\n' ' ' < "$stublog")")
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_NOISY=1 zsh "$script" --pr --toc 2>/dev/null) || gh_rc=$?
+(( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0)")
+[[ "$gh_out" == *"PR #7 docs: clarify retry semantics"* ]] || problems+=("did not render with gh's debug log on stderr")
 gh_leaks
-report gh-repo-view-flaky "stubbed gh" $gh_rc "$gh_out"
+report gh-debug-stderr-ignored-on-success "stubbed gh" $gh_rc "$gh_out"
 
 # gh-branch-lookup-error — with no number, gh failing to look the branch
 # up is gh's error, not "no PR found": that message is kept for gh's own

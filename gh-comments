@@ -224,11 +224,6 @@ if [[ -n "$NUM" && "$NUM" != <-> ]]; then
   usage >&2
   exit 1
 fi
-# After the number check, so a bad number is the first thing reported and
-# one rerun is enough.
-if [[ "$TYPE" != auto ]]; then
-  refuse_type_flags "$TYPE" "the type is pinned to ${ARTICLE[$TYPE]} by $TYPE_PINNED_BY"
-fi
 if [[ -z "$NUM" && -n "$FIXTURES_TL" ]]; then
   print -r -- "$PROG: a number is required with --fixtures" >&2
   exit 1
@@ -248,6 +243,11 @@ typeset -i REPO_GIVEN=0
 if [[ -z "$NUM" ]] && (( REPO_GIVEN )); then
   print -r -- "$PROG: -R needs a number: the current branch's PR is in the cwd's repo, not in $REPO" >&2
   exit 1
+fi
+# After every number check — malformed or missing — so a number problem is
+# the first thing reported and one rerun is enough.
+if [[ "$TYPE" != auto ]]; then
+  refuse_type_flags "$TYPE" "the type is pinned to ${ARTICLE[$TYPE]} by $TYPE_PINNED_BY"
 fi
 # The query takes owner and name apart, so the host- and URL-qualified forms
 # gh accepts for its own -R (github.com/o/n, https://github.com/o/n) are
@@ -275,36 +275,43 @@ if (( ${#MISSING} )); then
   exit 1
 fi
 
+# ── gh's stderr ──────────────────────────────────────────────────────────────
+#
+# Every gh call from here on writes its stderr to one file, read only when
+# the call fails. The two streams are never merged into an answer: gh writes
+# its debug log to stderr on success under GH_DEBUG or DEBUG=1, and a lookup
+# that merged them once read a working run as a failure. The EXIT trap is
+# installed now, before the first temp file; it also covers the payload
+# files made later (see there for why the signal traps must exit).
+GH_ERR=$(mktemp) TL_FILE="" TH_FILE=""
+trap 'rm -f "$GH_ERR" ${TL_FILE:+"$TL_FILE"} ${TH_FILE:+"$TH_FILE"}' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 if [[ -z "$REPO" ]]; then
   if [[ -n "$FIXTURES_TL" ]]; then
     REPO="fixtures/fixtures"
   else
-    if ! REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null); then
-      # gh is asked once more, both streams captured this time (off a TTY
-      # gh writes nothing but the answer to stdout and nothing to stderr on
-      # success). A failure that has cleared by now is taken as the answer;
-      # one that persists is diagnosed from its own text: "not in a GitHub
-      # repo" is right only for gh's no-repo wordings (not a git repository,
-      # no remotes, no remote on a GitHub host), and anything else — an
-      # expired token, no network — is gh's own error to show, as the fetch
-      # branch does. The repeat costs a round trip only on this error path,
-      # and spares a temp file before the EXIT trap exists.
-      if ! REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>&1); then
-        if [[ "$REPO" == *"not a git repository"* || "$REPO" == *"no git remotes"* \
-              || "$REPO" == *"none of the git remotes"* ]]; then
-          # With no number the way out is a number *and* -R: -R alone is
-          # refused above, so the hint has to ask for both.
-          if [[ -z "$NUM" ]]; then
-            print -r -- "$PROG: no number given and not in a GitHub repo — pass <number> -R <owner/name>" >&2
-          else
-            print -r -- "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
-          fi
+    if ! REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>"$GH_ERR"); then
+      # "Not in a GitHub repo" is right only for gh's no-repo wordings (not
+      # a git repository, no remotes, no remote on a GitHub host). Anything
+      # else — an expired token, no network — is gh's own error to show, as
+      # the fetch branch does.
+      REPO_ERR=$(<"$GH_ERR")
+      if [[ "$REPO_ERR" == *"not a git repository"* || "$REPO_ERR" == *"no git remotes"* \
+            || "$REPO_ERR" == *"none of the git remotes"* ]]; then
+        # With no number the way out is a number *and* -R: -R alone is
+        # refused above, so the hint has to ask for both.
+        if [[ -z "$NUM" ]]; then
+          print -r -- "$PROG: no number given and not in a GitHub repo — pass <number> -R <owner/name>" >&2
         else
-          print -r -- "$PROG: gh error:" >&2
-          [[ -n "$REPO" ]] && print -r -- "$REPO" >&2
+          print -r -- "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
         fi
-        exit 1
+      else
+        print -r -- "$PROG: gh error:" >&2
+        [[ -n "$REPO_ERR" ]] && print -r -- "$REPO_ERR" >&2
       fi
+      exit 1
     fi
   fi
 fi
@@ -321,21 +328,21 @@ NAME=${REPO##*/}
 # fetch agree on the repo: gh resolves both from the cwd. It takes no -R
 # on purpose — `gh pr view -R <repo>` with no argument is refused by gh.
 if [[ -z "$NUM" ]]; then
-  # Both streams captured, as for the repo above: "no PR found" is the
-  # diagnosis only for gh's own no-PR wordings (no pull requests found for
-  # the branch, no current branch to look up); any other failure is gh's
-  # error to show, not an empty result. An answer that is not a number is
-  # treated the same way, in case gh ever wrote something else on success.
-  if ! LOOKUP=$(gh pr view --json number --jq .number 2>&1) || [[ "$LOOKUP" != <-> ]]; then
-    if [[ "$LOOKUP" == *"no pull requests found"* || "$LOOKUP" == *"could not determine current branch"* ]]; then
+  # As for the repo above: "no PR found" is the diagnosis only for gh's own
+  # no-PR wordings (no pull requests found for the branch, no current
+  # branch to look up); any other failure is gh's error to show, not an
+  # empty result. An answer that is not a number is treated the same way.
+  if ! NUM=$(gh pr view --json number --jq .number 2>"$GH_ERR") || [[ "$NUM" != <-> ]]; then
+    LOOKUP_ERR=$(<"$GH_ERR")
+    if [[ "$LOOKUP_ERR" == *"no pull requests found"* || "$LOOKUP_ERR" == *"could not determine current branch"* ]]; then
       print -r -- "$PROG: no number given and no PR found for the current branch in $REPO" >&2
     else
       print -r -- "$PROG: gh error:" >&2
-      [[ -n "$LOOKUP" ]] && print -r -- "$LOOKUP" >&2
+      [[ -n "$LOOKUP_ERR" ]] && print -r -- "$LOOKUP_ERR" >&2
+      [[ -n "$NUM" ]] && print -r -- "$NUM" >&2
     fi
     exit 1
   fi
-  NUM=$LOOKUP
   # A branch resolves to a PR, so the type stops being an open question —
   # and an issue-only flag can be refused here, before the fetch.
   TYPE=pr TYPE_PINNED_BY="the current branch's PR"
@@ -490,16 +497,14 @@ TH_QUERY='query($owner:String!,$name:String!,$num:Int!,$endCursor:String){
 # jq", exit 127, zero output) — and did so *after* both fetches had been paid
 # for. --slurpfile slurps a stream of JSON values into an array, which is
 # exactly what `jq -s .` produced, so the jq program needs no changes.
-# Cleanup needs all three traps, and the signal ones have to exit. A single
-# `trap ... EXIT INT TERM` deletes the payloads and then *keeps running*, since
-# zsh resumes execution after a non-exiting signal handler — the script limps
-# on into the error branch and reads files that no longer exist. But EXIT alone
-# does not fire on SIGTERM at all, so it leaks all three files. Handlers that
-# exit get both: the exit runs the EXIT trap, and the script actually stops.
-TL_FILE=$(mktemp) TH_FILE=$(mktemp) GH_ERR=""
-trap 'rm -f "$TL_FILE" "$TH_FILE" ${GH_ERR:+"$GH_ERR"}' EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+# Cleanup needs all three traps (installed above, with the stderr file), and
+# the signal ones have to exit. A single `trap ... EXIT INT TERM` deletes the
+# payloads and then *keeps running*, since zsh resumes execution after a
+# non-exiting signal handler — the script limps on into the error branch and
+# reads files that no longer exist. But EXIT alone does not fire on SIGTERM
+# at all, so it leaks all three files. Handlers that exit get both: the exit
+# runs the EXIT trap, and the script actually stops.
+TL_FILE=$(mktemp) TH_FILE=$(mktemp)
 
 # resolved_type <file> — what the timeline payload actually holds. The union's
 # __typename is authoritative when present; the wrapping field name is the
@@ -551,7 +556,6 @@ else
   # second stderr capture guarding a latency win nobody asked for. Left
   # sequential deliberately: the win is wall-clock, not context, and not
   # worth the handlers it needs.
-  GH_ERR=$(mktemp)
   # owner and name are strings whatever they look like: -F would read
   # `2048` as a number (a String! variable then refuses it) and `@x` as a
   # file to send. -f passes them as typed. The number is a number.
