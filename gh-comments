@@ -213,6 +213,20 @@ if [[ -z "$NUM" ]]; then
   echo "note: no number given — using the current branch's PR #$NUM" >&2
 fi
 
+# Both tools are checked up front, after the parser so that --help and
+# --version work without them, and before anything is fetched so a missing
+# one is a sentence rather than zsh's "command not found" with a line number
+# into this file. gh is needed only to fetch: a --fixtures render has no use
+# for it, and the suite runs offline.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "$PROG: jq is required and is not on PATH" >&2
+  exit 1
+fi
+if [[ -z "$FIXTURES_TL" ]] && ! command -v gh >/dev/null 2>&1; then
+  echo "$PROG: gh (the GitHub CLI) is required and is not on PATH" >&2
+  exit 1
+fi
+
 if [[ -z "$REPO" ]]; then
   if [[ -n "$FIXTURES_TL" ]]; then
     REPO="fixtures/fixtures"

@@ -528,6 +528,42 @@ argcase arg-since-empty          1 "--since needs <iso-date>" 21 --since=
 # Two answers to "which item do I slice from" cannot both be honoured.
 argcase arg-latest-with-slr      1 "--latest and --since-last-review are exclusive" 21 --latest --since-last-review
 
+# missing-* — a tool the script needs but PATH lacks is a sentence naming it,
+# not zsh's "command not found" with a line number. PATH is rebuilt from
+# scratch with only what the script and its stub-free paths need, so the
+# absence is real rather than a shadowing stub. gh is needed only to fetch,
+# so a --fixtures render must not demand it.
+missing_tool() {
+  local name=$1 want=$2 tmp t out; shift 2
+  local -i rc=0
+  tmp=$(mktemp -d) || {
+    t_fail "$name" "" "tests/test-gh-comments.zsh" "mktemp -d failed"
+    (( fails += 1 )); return 0
+  }
+  for t in zsh mktemp grep cat tail rm "$@"; do
+    ln -s "$(command -v $t)" "$tmp/$t" || problems+=("could not link $t")
+  done
+  out=$(PATH=$tmp zsh "$script" 21 --fixtures "$fx/issue-basic.tl.json" 2>&1) || rc=$?
+  if [[ $want == rendered ]]; then
+    (( rc == 0 )) || problems+=("exit $rc (want 0)")
+    [[ "$out" == "issue #21 "* ]] || problems+=("a --fixtures render demanded a tool it does not use")
+  else
+    (( rc == 1 )) || problems+=("exit $rc (want 1)")
+    [[ "$out" == "gh-comments: $want" ]] || problems+=("output was: $out")
+  fi
+  # The fetch path needs gh; without --fixtures the refusal names it.
+  out=$(PATH=$tmp zsh "$script" 21 -R acme/widget 2>&1) || rc=$?
+  if [[ $want == rendered ]]; then
+    [[ "$out" == "gh-comments: gh (the GitHub CLI) is required and is not on PATH" ]] \
+      || problems+=("fetch without gh: $out")
+  fi
+  report "$name" "missing tools" $rc "$out"
+  rm -rf "$tmp"
+  return 0
+}
+missing_tool missing-jq "jq is required and is not on PATH"
+missing_tool missing-gh rendered jq
+
 # arg-no-zsh-internals — the positive substrings above would also pass if the
 # usage error were printed *and* the shell still died on its own; this pins
 # that the parser never reaches set -u's message at all.
