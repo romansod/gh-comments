@@ -772,7 +772,7 @@ check_html_entities() {
   # to it so the htmlheavy gate still fires.
   jq -c '(.[0].data.repository.pullRequest.timelineItems.nodes[]
           | select(.__typename == "IssueComment" and (.body | test("<div")) and (.body | test("```") | not))
-          | .body) += "<p>dash&#8212;hex&#x2014;nul&#0;ctl&#x1;sur&#xD800;big&#1114112;tab&#9;end lit&#38;amp;eral&#x26;amp;lt;</p>"' \
+          | .body) += "<p>dash&#8212;hex&#x2014;nul&#0;ctl&#x1;sur&#xD800;big&#1114112;tab&#9;end lit&#38;amp;eral&#x26;amp;lt; cr&#13;lf win&#146;s&#150;x nb&#160;sp&#xA0;x</p>"' \
     "$fx/html-heavy.tl.json" > "$fixture"
   out=$(zsh "$script" --pr 9 --fixtures "$fixture" "$fx/html-heavy.th.json" 2>&1) || rc=$?
   (( rc == 0 )) || problems+=("exit $rc (want 0)")
@@ -785,6 +785,10 @@ check_html_entities() {
   local r=$'\xEF\xBF\xBD'
   [[ "$out" == *"nul${r}ctl${r}sur${r}big${r}tab"$'\t'"end"* ]] \
     || problems+=("a dangerous code point was not replaced: $(print -r -- "$out" | grep -o 'nul.*end')")
+  # A CR entity is dropped like a literal CR; 128-159 read as windows-1252
+  # (curly apostrophe, en dash), not as C1 controls; &#160; is a space.
+  [[ "$out" == *"crlf win’s–x nb sp x"* ]] \
+    || problems+=("CR, C1 or nbsp entity mishandled: $(print -r -- "$out" | grep -o 'crlf.*sp.x' | head -1)")
   nuls=$(print -r -- "$out" | tr -cd '\000' | wc -c)
   (( nuls == 0 )) || problems+=("$nuls NUL byte(s) in the output")
   report "$name" "html entities" $rc "$out"
@@ -963,6 +967,9 @@ case "${GH_STUB_MODE:-}" in
   # `pullRequest(number:)` reported it as NOT_FOUND.
   issue-target)
     print -rn -- '{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue","number":43,"title":"ARG_MAX crash on large PRs"}}}}'
+    exit 0 ;;
+  issue-backslash)
+    print -rn -- '{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue","number":43,"title":"fix \\t and \\c in the parser"}}}}'
     exit 0 ;;
 
   # Both streams carry the not-found wording — the shape real gh produces,
@@ -1219,6 +1226,18 @@ gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --events 2>&1) || gh_r
 (( $(grep -c '^graphql:' "$stublog") == 0 )) || problems+=("fetched before refusing")
 gh_leaks
 report gh-no-number-events-refused-before-fetch "stubbed gh" $gh_rc "$gh_out"
+
+# gh-wrong-type-title-backslash — a title is third-party text; the
+# diagnostic must print it as is, not read `\t` or `\c` as an escape.
+gh_reset
+gh_case issue-backslash 43 --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *'not a pull request: "fix \t and \c in the parser"'* ]] \
+  || problems+=("the title was mangled: $(print -r -- "$gh_out" | head -1)")
+[[ "$gh_out" == *$'\n'"  the type was pinned by --pr — rerun as: gh-comments 43 --toc"* ]] \
+  || problems+=("the hint line was lost or glued on")
+gh_leaks
+report gh-wrong-type-title-backslash "stubbed gh" $gh_rc "$gh_out"
 
 # gh-issue-number-rejected — the *other* half of that mistake, and the one
 # that changed shape when the union query landed. A number that names an

@@ -517,7 +517,7 @@ else
     # Not when the branch's PR *is* the number that failed: that hint would
     # send the user back to the same command.
     BRANCH_PR=$(gh pr view "${RFLAG[@]}" --json number,title --jq '"#\(.number): \(.title)"' 2>/dev/null) || BRANCH_PR=""
-    [[ -n "$BRANCH_PR" && "$BRANCH_PR" != "#$NUM:"* ]] && echo "  the current branch's PR is $BRANCH_PR — rerun with that number" >&2
+    [[ -n "$BRANCH_PR" && "$BRANCH_PR" != "#$NUM:"* ]] && print -r -- "  the current branch's PR is $BRANCH_PR — rerun with that number" >&2
     exit 1
   fi
 fi
@@ -532,7 +532,9 @@ fi
 # whole point of `gh-comments 43 --pr` is that 43 had better be a PR.
 if [[ "$TYPE" != auto && "$TYPE" != "$RTYPE" ]]; then
   TITLE=$(target_title "$TL_FILE")
-  echo "$PROG: #$NUM is ${ARTICLE[$RTYPE]}, not ${ARTICLE[$TYPE]}${TITLE:+: \"$TITLE\"}" >&2
+  # print -r, not echo: a title or an argument can carry a backslash, which
+  # the echo builtin would read as an escape.
+  print -r -- "$PROG: #$NUM is ${ARTICLE[$RTYPE]}, not ${ARTICLE[$TYPE]}${TITLE:+: \"$TITLE\"}" >&2
   # The suggested command has to work: a view flag the resolved type would
   # refuse on the rerun is dropped from it too.
   typeset -a HINT=("${(@)UNPINNED}")
@@ -541,7 +543,7 @@ if [[ "$TYPE" != auto && "$TYPE" != "$RTYPE" ]]; then
   else
     HINT=("${(@)HINT:#--events}")
   fi
-  echo "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG ${(j: :)${(@q-)HINT}}" >&2
+  print -r -- "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG ${(j: :)${(@q-)HINT}}" >&2
   exit 1
 fi
 
@@ -576,12 +578,21 @@ def htmlheavy:
 # A numeric entity names any code point, including ones no text should
 # carry: `&#0;` would put a NUL in the dump and grep would call the file
 # binary. NUL, the other C0 controls bar tab and newline, surrogates and
-# anything past U+10FFFF become U+FFFD. Hex entities are decoded by hand,
-# since tonumber reads decimal only. (No apostrophes in these comments: the
-# program is a single-quoted shell string.)
+# anything past U+10FFFF become U+FFFD. A carriage return goes the way a
+# literal one does in clean (dropped). 128-159 are read as windows-1252,
+# as HTML itself does: Word-style pastes spell curly quotes and dashes as
+# &#146; and &#150;, and read literally those are C1 terminal controls.
+# &#160; is a plain space, as &nbsp; is, so the dump greps. Hex entities
+# are decoded by hand, since tonumber reads decimal only. (No apostrophes
+# in these comments: the program is a single-quoted shell string.)
+def cp1252: [8364,65533,8218,402,8222,8230,8224,8225,710,8240,352,8249,338,65533,381,65533,
+             65533,8216,8217,8220,8221,8226,8211,8212,732,8482,353,8250,339,65533,382,376];
 def codepoint:
-  if . == 0 or (. < 32 and . != 9 and . != 10) or (. >= 55296 and . <= 57343) or . > 1114111
-  then 65533 else . end | [.] | implode;
+  if . == 13 then ""
+  else (if . == 160 then 32
+        elif . >= 128 and . <= 159 then cp1252[. - 128]
+        elif . == 0 or (. < 32 and . != 9 and . != 10) or (. >= 55296 and . <= 57343) or . > 1114111
+        then 65533 else . end) | [.] | implode end;
 def hexnum: ascii_downcase | explode
   | reduce .[] as $c (0; . * 16 + (if $c >= 97 then $c - 87 else $c - 48 end));
 def html2md:
