@@ -125,7 +125,7 @@ FIXTURES_TL="" FIXTURES_TH=""
 # with a line number into the script.
 need_value() {
   if (( $3 < 2 )) || [[ -z "${4:-}" || "${4:-}" == -* ]]; then
-    echo "$PROG: $1 needs $2" >&2
+    print -r -- "$PROG: $1 needs $2" >&2
     exit 1
   fi
 }
@@ -155,7 +155,7 @@ while (( $# )); do
       # is not itself a flag, so `--fixtures tl.json 21` still reads 21 as the
       # number rather than swallowing it.
       if (( $# < 2 )) || [[ ! -r "$2" ]]; then
-        echo "$PROG: --fixtures needs a readable timeline JSON file (plus a threads file for a PR)" >&2
+        print -r -- "$PROG: --fixtures needs a readable timeline JSON file (plus a threads file for a PR)" >&2
         exit 1
       fi
       FIXTURES_TL="$2"; shift 2
@@ -179,7 +179,7 @@ done
 # with; an offset such as `+02:00` is refused, since it cannot be compared
 # lexically at all.
 if [[ -n "$SINCE" && ! "$SINCE" =~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])(T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?Z?)?$' ]]; then
-  echo "$PROG: --since needs an ISO date, UTC (YYYY-MM-DD, optionally THH:MM[:SS][Z]); got: $SINCE" >&2
+  print -r -- "$PROG: --since needs an ISO date, UTC (YYYY-MM-DD, optionally THH:MM[:SS][Z]); got: $SINCE" >&2
   exit 1
 fi
 # Every GitHub timestamp is `YYYY-MM-DDTHH:MM:SSZ`, and the comparison is a
@@ -192,7 +192,7 @@ SINCE=${SINCE%Z}
 # to that question cannot both be honoured, so asking for both is an error
 # rather than a silent preference.
 if (( SLR && LATEST )); then
-  echo "$PROG: --latest and --since-last-review are exclusive — each picks the item to slice from" >&2
+  print -r -- "$PROG: --latest and --since-last-review are exclusive — each picks the item to slice from" >&2
   exit 1
 fi
 
@@ -211,11 +211,11 @@ refuse_type_flags() {
     (( LATEST )) && bad+=(--latest)
     (( MERGES )) && bad+=(--merges)
     if (( ${#bad} )); then
-      echo "$PROG: ${(j:, :)bad} only appl$( (( ${#bad} == 1 )) && print -n ies || print -n y ) to pull requests; $because" >&2
+      print -r -- "$PROG: ${(j:, :)bad} only appl$( (( ${#bad} == 1 )) && print -n ies || print -n y ) to pull requests; $because" >&2
       exit 1
     fi
   elif (( EVENTS )); then
-    echo "$PROG: --events only applies to issues; $because" >&2
+    print -r -- "$PROG: --events only applies to issues; $because" >&2
     exit 1
   fi
 }
@@ -224,16 +224,16 @@ if [[ "$TYPE" != auto ]]; then
 fi
 
 if [[ -n "$NUM" && "$NUM" != <-> ]]; then
-  echo "$PROG: not a PR or issue number: $NUM" >&2
+  print -r -- "$PROG: not a PR or issue number: $NUM" >&2
   usage >&2
   exit 1
 fi
 if [[ -z "$NUM" && -n "$FIXTURES_TL" ]]; then
-  echo "$PROG: a number is required with --fixtures" >&2
+  print -r -- "$PROG: a number is required with --fixtures" >&2
   exit 1
 fi
 if [[ -z "$NUM" && "$TYPE" == issue ]]; then
-  echo "$PROG: an issue number is required — there is no \"current branch's issue\"" >&2
+  print -r -- "$PROG: an issue number is required — there is no \"current branch's issue\"" >&2
   exit 1
 fi
 
@@ -250,7 +250,7 @@ if [[ -z "$FIXTURES_TL" ]] && ! command -v gh >/dev/null 2>&1; then
   MISSING+=("gh (the GitHub CLI)")
 fi
 if (( ${#MISSING} )); then
-  echo "$PROG: needs ${(j: and :)MISSING} on PATH" >&2
+  print -r -- "$PROG: needs ${(j: and :)MISSING} on PATH" >&2
   exit 1
 fi
 
@@ -259,7 +259,7 @@ if [[ -z "$REPO" ]]; then
     REPO="fixtures/fixtures"
   else
     REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
-      echo "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
+      print -r -- "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
       exit 1
     }
   fi
@@ -274,7 +274,7 @@ typeset -a RFLAG=(-R "$REPO")
 if [[ -z "$NUM" ]]; then
   NUM=$(gh pr view "${RFLAG[@]}" --json number --jq .number 2>/dev/null) || NUM=""
   if [[ -z "$NUM" ]]; then
-    echo "$PROG: no number given and no PR found for the current branch in $REPO" >&2
+    print -r -- "$PROG: no number given and no PR found for the current branch in $REPO" >&2
     exit 1
   fi
   # A branch resolves to a PR, so the type stops being an open question —
@@ -496,7 +496,7 @@ else
   if ! gh api graphql --paginate -F owner="$OWNER" -F name="$NAME" -F num="$NUM" -f query="$TL_QUERY" > "$TL_FILE" 2>"$GH_ERR"; then
     # gh may report the failure on either stream, so both are searched.
     if ! grep -q "Could not resolve" "$GH_ERR" "$TL_FILE"; then
-      echo "$PROG: gh error:" >&2
+      print -r -- "$PROG: gh error:" >&2
       # gh writes a one-line summary to stderr *and* the full errors[] body
       # (type/path/locations) to stdout; show both, since either can carry the
       # detail the other lacks. The JSON body arrives with no trailing newline,
@@ -511,7 +511,7 @@ else
     fi
     # `issueOrPullRequest` resolves both sequences, so a number that fails to
     # resolve is not a PR *or* an issue — it does not exist in this repo.
-    echo "$PROG: #$NUM not found in $REPO" >&2
+    print -r -- "$PROG: #$NUM not found in $REPO" >&2
     # Diagnose, don't silently switch targets: N is often the issue number
     # embedded in the branch name, while the branch's PR is something else.
     # Not when the branch's PR *is* the number that failed: that hint would
@@ -524,7 +524,7 @@ fi
 
 RTYPE=$(resolved_type "$TL_FILE")
 if [[ "$RTYPE" == none || "$RTYPE" == unknown ]]; then
-  echo "$PROG: #$NUM not found in $REPO" >&2
+  print -r -- "$PROG: #$NUM not found in $REPO" >&2
   exit 1
 fi
 
@@ -532,8 +532,8 @@ fi
 # whole point of `gh-comments 43 --pr` is that 43 had better be a PR.
 if [[ "$TYPE" != auto && "$TYPE" != "$RTYPE" ]]; then
   TITLE=$(target_title "$TL_FILE")
-  # print -r, not echo: a title or an argument can carry a backslash, which
-  # the echo builtin would read as an escape.
+  # Every diagnostic is print -r, not echo: a title or an argument can
+  # carry a backslash, which the echo builtin would read as an escape.
   print -r -- "$PROG: #$NUM is ${ARTICLE[$RTYPE]}, not ${ARTICLE[$TYPE]}${TITLE:+: \"$TITLE\"}" >&2
   # The suggested command has to work: a view flag the resolved type would
   # refuse on the rerun is dropped from it too.
@@ -553,7 +553,7 @@ refuse_type_flags "$RTYPE" "#$NUM is ${ARTICLE[$RTYPE]}"
 if [[ "$RTYPE" == pr ]]; then
   if [[ -n "$FIXTURES_TL" ]]; then
     if [[ -z "$FIXTURES_TH" ]]; then
-      echo "$PROG: --fixtures needs a threads payload for a PR: --fixtures <tl.json> <th.json>" >&2
+      print -r -- "$PROG: --fixtures needs a threads payload for a PR: --fixtures <tl.json> <th.json>" >&2
       exit 1
     fi
   else

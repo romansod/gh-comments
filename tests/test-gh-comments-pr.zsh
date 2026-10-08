@@ -21,9 +21,12 @@
 # `body` item renders: basic (markdown), multi (one-liner, so --since and
 # --since-last-review can pin that it survives narrowing), html-heavy (a
 # rich-text paste), and zero-threads (empty string — the header line must
-# still render, bare). The rest deliberately do not: they were captured before
-# those fields were added to the query, and legacy-pr-payload below pins that
-# such a payload renders no `body` line rather than a hollow "body [ghost ]".
+# still render, bare) — and so do the four derived from basic and multi
+# (bot-review, bot-review-late, empty-review, hidden). all-resolved,
+# late-reply, outdated-open, reply-51 and slr-late-reply deliberately do not:
+# they were captured before those fields were added to the query, and
+# legacy-pr-payload below pins (on all-resolved) that such a payload renders
+# no `body` line rather than a hollow "body [ghost ]".
 #   multi         two reviews (CHANGES_REQUESTED + APPROVED with no threads);
 #                 issue comments between reviews — exercises --since and
 #                 --since-last-review[=<user>]
@@ -75,8 +78,13 @@
 #                 bot gate is applied first, so the hidden bot comment counts
 #                 once, as a bot, until --bots puts it back.
 #
-# Not every case is golden. Below the goldens, six sections assert exit
-# codes and substrings instead, because their input is built at runtime:
+# Not every case is golden. Directly below the goldens come the invariant
+# cases, which take no golden and build no input: threads-match-header and
+# slice-matches-full run a rule over every *.th.json in the directory (a new
+# fixture is covered the day it lands), and hidden-bodies-gated,
+# fallback-is-toc, fallback-keeps-narrowing and latest-skips-hidden say out
+# loud what their goldens would otherwise re-record. Then six sections
+# assert exit codes and substrings, because their input is built at runtime:
 #
 #   oversized payload  generates a >1 MB timeline rather than committing one
 #   fixture shapes     the --slurpfile unwrap: array form, bare stream, garbage
@@ -1362,6 +1370,9 @@ argcase() {
 
 argcase arg-help              0 "Usage: gh-comments" --help
 argcase arg-bad-pr-number     1 "not a PR or issue number: abc" abc
+# An argument is printed as is: `\c` would otherwise end the line early and
+# glue the usage text onto the diagnostic.
+argcase arg-bad-number-backslash 1 'not a PR or issue number: a\cb'$'\n'"Usage: gh-comments" 'a\cb'
 argcase arg-unknown-flag      1 "unknown flag: --nope" 7 --nope
 argcase arg-second-pr-number  1 "unexpected argument: 8" 7 8
 # --fixtures validates the timeline operand up front, because every path after

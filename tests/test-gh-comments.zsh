@@ -41,6 +41,10 @@
 #
 # Below the goldens, non-golden cases assert exit codes and substrings:
 #
+#   bot filtering    bot-authored closed/xref events survive the default view
+#                    while the bot comment and the bot label stay gated
+#   header           a short labels(first:20) page grows a (+N more) marker;
+#                    a complete one does not
 #   auto-detection   the same PR fixture rendered with no --pr must equal the
 #                    --pr suite's golden, byte for byte
 #   type refusals    a pinned type that does not match is an error, never a
@@ -54,6 +58,9 @@
 #   missing tools    jq or gh absent from PATH is one sentence naming every
 #                    missing tool, refused before the branch lookup runs gh;
 #                    a --fixtures render needs only jq
+#   invoked name     a symlink's name, and `gh comments` under GH_EXTENSION=1,
+#                    prefix every diagnostic and the rerun hint; --version
+#                    keeps the product name
 #
 # issue-basic's body carries an HTML comment on its own line: `clean` strips it
 # and then closes the gap it left, so the golden shows one paragraph break
