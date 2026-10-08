@@ -314,6 +314,25 @@ refuse type-hint-names-command "rerun as: gh-comments 21 --fixtures $fx/issue-ba
   21 --pr --fixtures "$fx/issue-basic.tl.json"
 refuse type-hint-keeps-flags "rerun as: gh-comments 21 -R acme/widget --toc --fixtures $fx/issue-basic.tl.json" \
   21 -R acme/widget --pr --toc --fixtures "$fx/issue-basic.tl.json"
+# An argument with a space is quoted in the hint, so the suggested command
+# runs as one.
+hint_quotes() {
+  local name=type-hint-quotes-spaces tmp out
+  local -i rc=0
+  tmp=$(mktemp -d) || {
+    t_fail "$name" "" "tests/test-gh-comments.zsh" "mktemp -d failed"
+    (( fails += 1 )); return 0
+  }
+  mkdir "$tmp/with space" && cp "$fx/issue-basic.tl.json" "$tmp/with space/tl.json"
+  out=$(zsh "$script" 21 --pr --fixtures "$tmp/with space/tl.json" 2>&1) || rc=$?
+  (( rc == 1 )) || problems+=("exit $rc (want 1)")
+  [[ "$out" == *"rerun as: gh-comments 21 --fixtures '$tmp/with space/tl.json'"* ]] \
+    || problems+=("the path with a space is not quoted: ${out##*rerun as: }")
+  report "$name" "refusals" $rc "$out"
+  rm -rf "$tmp"
+  return 0
+}
+hint_quotes
 # ...but not a flag the resolved type would refuse on the rerun.
 refuse type-hint-drops-wrong-type-flags "rerun as: gh-comments 21 --toc --fixtures $fx/issue-basic.tl.json" \
   21 --pr --unresolved --latest=alice --toc --fixtures "$fx/issue-basic.tl.json"

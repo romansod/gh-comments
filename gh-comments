@@ -264,6 +264,13 @@ if [[ -z "$REPO" ]]; then
     }
   fi
 fi
+# The query takes owner and name apart, so the host- and URL-qualified forms
+# gh accepts for its own -R (github.com/o/n, https://github.com/o/n) are
+# refused here rather than split wrong and reported as a missing number.
+if [[ ! "$REPO" =~ '^[^/:]+/[^/:]+$' ]]; then
+  print -r -- "$PROG: -R needs <owner/name>; got: $REPO" >&2
+  exit 1
+fi
 OWNER=${REPO%%/*}
 NAME=${REPO##*/}
 # Every gh call targets the same repo. The branch lookups below take it
@@ -494,8 +501,11 @@ else
   # worth the handlers it needs.
   GH_ERR=$(mktemp)
   if ! gh api graphql --paginate -F owner="$OWNER" -F name="$NAME" -F num="$NUM" -f query="$TL_QUERY" > "$TL_FILE" 2>"$GH_ERR"; then
-    # gh may report the failure on either stream, so both are searched.
-    if ! grep -q "Could not resolve" "$GH_ERR" "$TL_FILE"; then
+    # gh may report the failure on either stream, so both are searched. The
+    # match is the union's exact wording: a repository that does not resolve
+    # says "Could not resolve to a Repository", and that is gh's own
+    # message to show, not a claim that the number is wrong.
+    if ! grep -q "Could not resolve to an issue or pull request" "$GH_ERR" "$TL_FILE"; then
       print -r -- "$PROG: gh error:" >&2
       # gh writes a one-line summary to stderr *and* the full errors[] body
       # (type/path/locations) to stdout; show both, since either can carry the

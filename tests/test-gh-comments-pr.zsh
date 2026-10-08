@@ -963,7 +963,7 @@ if [[ $which == th ]]; then
     # the threads call is skipped when the timeline call fails — which is
     # exactly why it stays: it is what went red when the two briefly ran
     # concurrently and gh's raw error printed ahead of the curated diagnosis.
-    notfound-*) print -ru2 -- "gh: Could not resolve to a PullRequest with the number of 999."; exit 1 ;;
+    notfound-*) print -ru2 -- "gh: Could not resolve to an issue or pull request with the number of 999."; exit 1 ;;
     *)       jq -c '.[]' "$GH_STUB_TH"; exit 0 ;;
   esac
 fi
@@ -982,18 +982,24 @@ case "${GH_STUB_MODE:-}" in
 
   # Both streams carry the not-found wording — the shape real gh produces,
   # verified against github.com: a one-line summary on stderr and the full
-  # errors[] array on stdout.
+  # errors[] array on stdout, in the union field's wording.
   notfound-both)
-    print -rn -- '{"data":{"repository":{"pullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","pullRequest"],"message":"Could not resolve to a PullRequest with the number of 999."}]}'
-    print -ru2 -- "gh: Could not resolve to a PullRequest with the number of 999."
+    print -rn -- '{"data":{"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","issueOrPullRequest"],"message":"Could not resolve to an issue or pull request with the number of 999."}]}'
+    print -ru2 -- "gh: Could not resolve to an issue or pull request with the number of 999."
     exit 1 ;;
   # One stream each: the subject greps both, and these pin each half. If it
   # ever greps only one, exactly one of the two cases goes red.
   notfound-stderr)
-    print -ru2 -- "gh: Could not resolve to a PullRequest with the number of 999."
+    print -ru2 -- "gh: Could not resolve to an issue or pull request with the number of 999."
     exit 1 ;;
   notfound-stdout)
-    print -rn -- '{"errors":[{"message":"Could not resolve to a PullRequest with the number of 999."}]}'
+    print -rn -- '{"errors":[{"message":"Could not resolve to an issue or pull request with the number of 999."}]}'
+    exit 1 ;;
+  # A repository that does not resolve, in gh's wording (verified live). It
+  # also says "Could not resolve", and must not be read as a bad number.
+  badrepo)
+    print -rn -- '{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","path":["repository"],"message":"Could not resolve to a Repository with the name '"'"'acme/no-such-repo'"'"'."}]}'
+    print -ru2 -- "gh: Could not resolve to a Repository with the name 'acme/no-such-repo'."
     exit 1 ;;
 
   # A summary on stderr AND the structured body on stdout: gh's shape for a
@@ -1180,6 +1186,21 @@ for mode in both stderr stdout; do
   gh_leaks
   report "gh-notfound-$mode" "stubbed gh" $gh_rc "$gh_out"
 done
+
+# gh-badrepo-not-a-bad-number — a repository that does not resolve is gh's
+# own error to show, not "#1 not found": the user typed the repo wrong, and
+# the branch-PR hint would send them to check the number instead.
+gh_reset
+print -r -- '#44: reach jq through files' > "$stubfx/branch-pr"
+gh_case badrepo 1 -R acme/no-such-repo --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *"gh-comments: gh error:"* ]] || problems+=("did not fall through to the gh-error branch")
+[[ "$gh_out" == *"Could not resolve to a Repository with the name 'acme/no-such-repo'"* ]] \
+  || problems+=("gh's own message was not shown")
+[[ "$gh_out" != *"not found in acme/no-such-repo"* ]] || problems+=("reported the number as missing")
+[[ "$gh_out" != *"rerun with that number"* ]] || problems+=("hinted at the branch PR for a bad repo")
+gh_leaks
+report gh-badrepo-not-a-bad-number "stubbed gh" $gh_rc "$gh_out"
 
 # gh-notfound-branch-hint — the number exists nowhere in the repo, so the only
 # hint left is the branch's actual PR. That is the common mistake made
@@ -1380,6 +1401,11 @@ argcase arg-second-pr-number  1 "unexpected argument: 8" 7 8
 # time — an issue has none — and refused later, once the payload has said the
 # target is a PR after all.
 argcase arg-fixtures-missing  1 "needs a readable timeline JSON file" 7 --fixtures /nonexistent/a /nonexistent/b
+# The query takes owner and name apart, so the host- and URL-qualified forms
+# gh's own -R accepts are refused up front rather than split wrong.
+argcase arg-repo-url-form     1 "-R needs <owner/name>; got: https://github.com/acme/widget" 7 -R https://github.com/acme/widget
+argcase arg-repo-host-form    1 "-R needs <owner/name>; got: github.com/acme/widget" 7 --repo=github.com/acme/widget
+argcase arg-repo-bare-name    1 "-R needs <owner/name>; got: widget" 7 -R widget
 argcase arg-fixtures-pr-needs-threads 1 "needs a threads payload for a PR" 7 --fixtures "$fx/zero-threads.tl.json"
 argcase arg-fixtures-no-number 1 "a number is required with --fixtures" \
   --fixtures "$fx/zero-threads.tl.json" "$fx/zero-threads.th.json"
