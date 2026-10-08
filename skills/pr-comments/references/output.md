@@ -59,7 +59,10 @@ mean and which ones change what you should do.
   threads when that review sits after the anchor, an orphan thread when one
   of its comments is dated at or after it. `--unresolved` keeps the same
   window, so with a slicing flag it can omit open threads the header still
-  counts (and says so). A newer reply nested under an *older* review's
+  counts; it says so only when no open thread falls inside the window
+  (`no unresolved threads after the anchor; N open before it`), so
+  otherwise compare the header's open count with the threads shown. A
+  newer reply nested under an *older* review's
   thread is outside the slice and will not appear. For "everything still
   open regardless of age" use `--unresolved` without a slicing flag.
   (`--since` does include old reviews whose threads received replies in the

@@ -924,9 +924,14 @@ case "$1 $2" in
   "repo view")
     # GH_STUB_NO_REPO: the cwd is not a GitHub repo, in gh's wording.
     # GH_STUB_REPO_ERROR: gh itself failed (no network, a bad token).
+    # GH_STUB_REPO_FLAKY: the first call fails that way, the next succeeds.
     emit_log "repo view"
     [[ -n ${GH_STUB_NO_REPO:-} ]] && { print -ru2 -- "no git remotes found"; exit 1; }
     [[ -n ${GH_STUB_REPO_ERROR:-} ]] && { print -ru2 -- "error connecting to api.github.com"; exit 1; }
+    if [[ -n ${GH_STUB_REPO_FLAKY:-} && ! -e $GH_STUB_FX/repo-view-failed-once ]]; then
+      : > "$GH_STUB_FX/repo-view-failed-once"
+      print -ru2 -- "error connecting to api.github.com"; exit 1
+    fi
     print -r -- acme/widget; exit 0 ;;
   "pr view")
     # The branch's-PR hint in the not-found diagnosis and the no-number
@@ -940,7 +945,9 @@ case "$1 $2" in
     if [[ " ${*[3,-1]} " == *" -R "* || " ${*[3,-1]} " == *" --repo "* || " ${*[3,-1]} " == *" --repo="* ]]; then
       print -ru2 -- "argument required when using the --repo flag"; exit 1
     fi
-    [[ -r $GH_STUB_FX/branch-pr ]] || exit 1
+    # GH_STUB_PR_VIEW_ERROR: gh itself failed, which is not "no PR".
+    [[ -n ${GH_STUB_PR_VIEW_ERROR:-} ]] && { print -ru2 -- "error connecting to api.github.com"; exit 1; }
+    [[ -r $GH_STUB_FX/branch-pr ]] || { print -ru2 -- 'no pull requests found for branch "feature"'; exit 1; }
     cat "$GH_STUB_FX/branch-pr"; exit 0 ;;
 esac
 
@@ -1233,6 +1240,41 @@ gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_REPO_ERROR=1 zsh "$script" -
 gh_leaks
 report gh-repo-view-error "stubbed gh" $gh_rc "$gh_out"
 
+# gh-repo-view-flaky — the first `gh repo view` fails and the retry that
+# fetches its text succeeds: the retry's answer is the answer, not an
+# error with no text.
+gh_reset
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_REPO_FLAKY=1 zsh "$script" --pr 7 --toc 2>&1) || gh_rc=$?
+(( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0): $gh_out")
+[[ "$gh_out" == *"PR #7 docs: clarify retry semantics"* ]] || problems+=("did not render after the retry")
+[[ "$gh_out" != *"gh error:"* ]] || problems+=("reported an error although the retry succeeded")
+(( $(grep -c '^repo view' "$stublog") == 2 )) || problems+=("expected two repo view calls: $(tr '\n' ' ' < "$stublog")")
+gh_leaks
+report gh-repo-view-flaky "stubbed gh" $gh_rc "$gh_out"
+
+# gh-branch-lookup-error — with no number, gh failing to look the branch
+# up is gh's error, not "no PR found": that message is kept for gh's own
+# no-PR wording (gh-no-number-no-pr below).
+gh_reset
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_PR_VIEW_ERROR=1 zsh "$script" --pr --toc 2>&1) || gh_rc=$?
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == "gh-comments: gh error:"$'\n'"error connecting to api.github.com" ]] || problems+=("output was: $gh_out")
+(( $(grep -c '^graphql' "$stublog") == 0 )) || problems+=("fetched after the lookup failed")
+gh_leaks
+report gh-branch-lookup-error "stubbed gh" $gh_rc "$gh_out"
+
+# gh-no-number-no-pr — and the real "no PR for this branch" answer.
+gh_reset
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --pr --toc 2>&1) || gh_rc=$?
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == "gh-comments: no number given and no PR found for the current branch in acme/widget" ]] \
+  || problems+=("output was: $gh_out")
+gh_leaks
+report gh-no-number-no-pr "stubbed gh" $gh_rc "$gh_out"
+
 # gh-badrepo-not-a-bad-number — a repository that does not resolve is gh's
 # own error to show, not "#1 not found": the user typed the repo wrong, and
 # the branch-PR hint would send them to check the number instead.
@@ -1480,6 +1522,9 @@ argcase() {
 
 argcase arg-help              0 "Usage: gh-comments" --help
 argcase arg-bad-pr-number     1 "not a PR or issue number: abc" abc
+# A bad number is reported before a flag the pinned type refuses, so one
+# rerun fixes the command line.
+argcase arg-bad-number-before-pinned-flag 1 "not a PR or issue number: abc" abc --events
 # An argument is printed as is: `\c` would otherwise end the line early and
 # glue the usage text onto the diagnostic.
 argcase arg-bad-number-backslash 1 'not a PR or issue number: a\cb'$'\n'"Usage: gh-comments" 'a\cb'

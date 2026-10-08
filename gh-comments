@@ -219,14 +219,15 @@ refuse_type_flags() {
     exit 1
   fi
 }
-if [[ "$TYPE" != auto ]]; then
-  refuse_type_flags "$TYPE" "the type is pinned to ${ARTICLE[$TYPE]} by $TYPE_PINNED_BY"
-fi
-
 if [[ -n "$NUM" && "$NUM" != <-> ]]; then
   print -r -- "$PROG: not a PR or issue number: $NUM" >&2
   usage >&2
   exit 1
+fi
+# After the number check, so a bad number is the first thing reported and
+# one rerun is enough.
+if [[ "$TYPE" != auto ]]; then
+  refuse_type_flags "$TYPE" "the type is pinned to ${ARTICLE[$TYPE]} by $TYPE_PINNED_BY"
 fi
 if [[ -z "$NUM" && -n "$FIXTURES_TL" ]]; then
   print -r -- "$PROG: a number is required with --fixtures" >&2
@@ -278,29 +279,33 @@ if [[ -z "$REPO" ]]; then
   if [[ -n "$FIXTURES_TL" ]]; then
     REPO="fixtures/fixtures"
   else
-    REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
-      # gh is asked once more, for its stderr this time: "not in a GitHub
-      # repo" is only the right diagnosis for gh's no-repo wordings (not a
-      # git repository, no remotes, no remote on a GitHub host). Any other
-      # failure — an expired token, no network — is gh's own error to show,
-      # as the fetch branch does. The repeat costs a round trip only on this
-      # error path, and spares a temp file before the EXIT trap exists.
-      REPO_ERR=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>&1 >/dev/null) || true
-      if [[ "$REPO_ERR" == *"not a git repository"* || "$REPO_ERR" == *"no git remotes"* \
-            || "$REPO_ERR" == *"none of the git remotes"* ]]; then
-        # With no number the way out is a number *and* -R: -R alone is
-        # refused above, so the hint has to ask for both.
-        if [[ -z "$NUM" ]]; then
-          print -r -- "$PROG: no number given and not in a GitHub repo — pass <number> -R <owner/name>" >&2
+    if ! REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null); then
+      # gh is asked once more, both streams captured this time (off a TTY
+      # gh writes nothing but the answer to stdout and nothing to stderr on
+      # success). A failure that has cleared by now is taken as the answer;
+      # one that persists is diagnosed from its own text: "not in a GitHub
+      # repo" is right only for gh's no-repo wordings (not a git repository,
+      # no remotes, no remote on a GitHub host), and anything else — an
+      # expired token, no network — is gh's own error to show, as the fetch
+      # branch does. The repeat costs a round trip only on this error path,
+      # and spares a temp file before the EXIT trap exists.
+      if ! REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>&1); then
+        if [[ "$REPO" == *"not a git repository"* || "$REPO" == *"no git remotes"* \
+              || "$REPO" == *"none of the git remotes"* ]]; then
+          # With no number the way out is a number *and* -R: -R alone is
+          # refused above, so the hint has to ask for both.
+          if [[ -z "$NUM" ]]; then
+            print -r -- "$PROG: no number given and not in a GitHub repo — pass <number> -R <owner/name>" >&2
+          else
+            print -r -- "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
+          fi
         else
-          print -r -- "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
+          print -r -- "$PROG: gh error:" >&2
+          [[ -n "$REPO" ]] && print -r -- "$REPO" >&2
         fi
-      else
-        print -r -- "$PROG: gh error:" >&2
-        [[ -n "$REPO_ERR" ]] && print -r -- "$REPO_ERR" >&2
+        exit 1
       fi
-      exit 1
-    }
+    fi
   fi
 fi
 # The same check for the resolved value: gh's nameWithOwner is always
@@ -316,11 +321,21 @@ NAME=${REPO##*/}
 # fetch agree on the repo: gh resolves both from the cwd. It takes no -R
 # on purpose — `gh pr view -R <repo>` with no argument is refused by gh.
 if [[ -z "$NUM" ]]; then
-  NUM=$(gh pr view --json number --jq .number 2>/dev/null) || NUM=""
-  if [[ -z "$NUM" ]]; then
-    print -r -- "$PROG: no number given and no PR found for the current branch in $REPO" >&2
+  # Both streams captured, as for the repo above: "no PR found" is the
+  # diagnosis only for gh's own no-PR wordings (no pull requests found for
+  # the branch, no current branch to look up); any other failure is gh's
+  # error to show, not an empty result. An answer that is not a number is
+  # treated the same way, in case gh ever wrote something else on success.
+  if ! LOOKUP=$(gh pr view --json number --jq .number 2>&1) || [[ "$LOOKUP" != <-> ]]; then
+    if [[ "$LOOKUP" == *"no pull requests found"* || "$LOOKUP" == *"could not determine current branch"* ]]; then
+      print -r -- "$PROG: no number given and no PR found for the current branch in $REPO" >&2
+    else
+      print -r -- "$PROG: gh error:" >&2
+      [[ -n "$LOOKUP" ]] && print -r -- "$LOOKUP" >&2
+    fi
     exit 1
   fi
+  NUM=$LOOKUP
   # A branch resolves to a PR, so the type stops being an open question —
   # and an issue-only flag can be refused here, before the fetch.
   TYPE=pr TYPE_PINNED_BY="the current branch's PR"
