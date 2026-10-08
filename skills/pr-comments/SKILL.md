@@ -42,7 +42,8 @@ that turns out to be an issue is refused with its title, never rendered as
 the wrong thing. With no `<N>` it uses the current branch's PR.
 
 Flags:
-- `-R owner/name` — another repo (default: the cwd's).
+- `-R owner/name` — another repo (default: the cwd's; needs `<N>`, since "no
+  number" means the cwd branch's PR).
 - `--toc` — one line per item, no bodies.
 - `--unresolved` — only reviews with open threads, and those threads.
 - `--latest[=<user>]` — the last substantive review or top-level comment

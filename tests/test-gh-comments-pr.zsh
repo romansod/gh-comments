@@ -922,9 +922,11 @@ emit_log() { print -r -- "$1" >> "${GH_STUB_LOG:-/dev/null}" }
 
 case "$1 $2" in
   "repo view")
-    # GH_STUB_NO_REPO: the cwd is not a GitHub repo (gh exits 1).
+    # GH_STUB_NO_REPO: the cwd is not a GitHub repo, in gh's wording.
+    # GH_STUB_REPO_ERROR: gh itself failed (no network, a bad token).
     emit_log "repo view"
-    [[ -n ${GH_STUB_NO_REPO:-} ]] && exit 1
+    [[ -n ${GH_STUB_NO_REPO:-} ]] && { print -ru2 -- "no git remotes found"; exit 1; }
+    [[ -n ${GH_STUB_REPO_ERROR:-} ]] && { print -ru2 -- "error connecting to api.github.com"; exit 1; }
     print -r -- acme/widget; exit 0 ;;
   "pr view")
     # The branch's-PR hint in the not-found diagnosis and the no-number
@@ -1002,7 +1004,14 @@ case "${GH_STUB_MODE:-}" in
     print -ru2 -- "gh: Could not resolve to an issue or pull request with the number of 999."
     exit 1 ;;
   notfound-stdout)
-    print -rn -- '{"errors":[{"message":"Could not resolve to an issue or pull request with the number of 999."}]}'
+    print -rn -- '{"data":{"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","issueOrPullRequest"],"message":"Could not resolve to an issue or pull request with the number of 999."}]}'
+    exit 1 ;;
+  # A page gh fetched before a later one failed: the target's body quotes
+  # the not-found sentence, and the failure itself is something else. The
+  # diagnosis must come from the error structure, not from the text.
+  notfound-in-body)
+    print -r -- '{"data":{"repository":{"issueOrPullRequest":{"__typename":"PullRequest","body":"gh said: Could not resolve to an issue or pull request with the number of 999."}}}}'
+    print -ru2 -- "gh: HTTP 502 Bad Gateway (fetching page 2)"
     exit 1 ;;
   # A repository that does not resolve, in gh's wording (verified live). It
   # also says "Could not resolve", and must not be read as a bad number.
@@ -1112,6 +1121,10 @@ gh_case ok 7 --toc
   || problems+=("expected exactly 2 graphql calls, log has: $(tr '\n' ' ' < "$stublog")")
 grep -qx 'graphql:tl' "$stublog" || problems+=("no timeline query was issued")
 grep -qx 'graphql:th' "$stublog" || problems+=("no threads query was issued")
+# owner and name travel as raw strings (-f): -F would read a digit-only
+# name as a number and a leading @ as a file. Only the number is typed.
+grep -q -- '-f owner=acme -f name=widget -F num=7 ' "$qlog" \
+  || problems+=("owner/name not passed as raw strings: $(grep -o -- '-[fF] owner=[^ ]* -[fF] name=[^ ]* -[fF] num=[^ ]*' "$qlog")")
 gh_leaks
 report gh-live-render "stubbed gh" $gh_rc "$gh_out"
 
@@ -1195,6 +1208,30 @@ for mode in both stderr stdout; do
   gh_leaks
   report "gh-notfound-$mode" "stubbed gh" $gh_rc "$gh_out"
 done
+
+# gh-notfound-phrase-in-body — a body on an already-fetched page quotes the
+# not-found sentence and a later page fails for another reason: that is a
+# gh error, not a missing number.
+gh_reset
+gh_case notfound-in-body 999 --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *"gh-comments: gh error:"* ]] || problems+=("did not fall through to the gh-error branch")
+[[ "$gh_out" == *"HTTP 502 Bad Gateway"* ]] || problems+=("gh's own error was not shown")
+[[ "$gh_out" != *"not found in acme/widget"* ]] || problems+=("a body quoting the sentence was read as not-found")
+gh_leaks
+report gh-notfound-phrase-in-body "stubbed gh" $gh_rc "$gh_out"
+
+# gh-repo-view-error — gh failing to resolve the cwd's repo for its own
+# reasons (no network, a bad token) is gh's error to show, not "not in a
+# GitHub repo" with advice to pass -R.
+gh_reset
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_REPO_ERROR=1 zsh "$script" --pr 7 --toc 2>&1) || gh_rc=$?
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == "gh-comments: gh error:"$'\n'"error connecting to api.github.com" ]] || problems+=("output was: $gh_out")
+(( $(grep -c '^graphql' "$stublog") == 0 )) || problems+=("fetched after the repo lookup failed")
+gh_leaks
+report gh-repo-view-error "stubbed gh" $gh_rc "$gh_out"
 
 # gh-badrepo-not-a-bad-number — a repository that does not resolve is gh's
 # own error to show, not "#1 not found": the user typed the repo wrong, and

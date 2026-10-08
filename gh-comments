@@ -45,7 +45,7 @@ page carries an explicit [TRUNCATED: ...] marker instead of dropping them
 silently. Rich-text HTML pastes are converted to markdown.
 
 Flags:
-  -R, --repo <owner/name>       Target repo (default: repo of the cwd)
+  -R, --repo <owner/name>       Target repo (default: repo of the cwd); needs a number
   --pr, --issue                 Pin the resource type instead of resolving it
   --toc                         Skeleton only: one line per item, no bodies
   --since <iso-date>            Only items at/after this date (UTC): YYYY-MM-DD,
@@ -248,6 +248,14 @@ if [[ -z "$NUM" ]] && (( REPO_GIVEN )); then
   print -r -- "$PROG: -R needs a number: the current branch's PR is in the cwd's repo, not in $REPO" >&2
   exit 1
 fi
+# The query takes owner and name apart, so the host- and URL-qualified forms
+# gh accepts for its own -R (github.com/o/n, https://github.com/o/n) are
+# refused here rather than split wrong and reported as a missing number —
+# and here, before the tool check, since argv alone decides it.
+if (( REPO_GIVEN )) && [[ ! "$REPO" =~ '^[^/:]+/[^/:]+$' ]]; then
+  print -r -- "$PROG: -R needs <owner/name>; got: $REPO" >&2
+  exit 1
+fi
 
 # The tools are checked after every refusal the parser can make on its own,
 # so --help, --version and a usage error need neither, and before the first
@@ -271,20 +279,32 @@ if [[ -z "$REPO" ]]; then
     REPO="fixtures/fixtures"
   else
     REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
-      # With no number the way out is a number *and* -R: -R alone is
-      # refused above, so the hint has to ask for both.
-      if [[ -z "$NUM" ]]; then
-        print -r -- "$PROG: no number given and not in a GitHub repo — pass <number> -R <owner/name>" >&2
+      # gh is asked once more, for its stderr this time: "not in a GitHub
+      # repo" is only the right diagnosis for gh's no-repo wordings (not a
+      # git repository, no remotes, no remote on a GitHub host). Any other
+      # failure — an expired token, no network — is gh's own error to show,
+      # as the fetch branch does. The repeat costs a round trip only on this
+      # error path, and spares a temp file before the EXIT trap exists.
+      REPO_ERR=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>&1 >/dev/null) || true
+      if [[ "$REPO_ERR" == *"not a git repository"* || "$REPO_ERR" == *"no git remotes"* \
+            || "$REPO_ERR" == *"none of the git remotes"* ]]; then
+        # With no number the way out is a number *and* -R: -R alone is
+        # refused above, so the hint has to ask for both.
+        if [[ -z "$NUM" ]]; then
+          print -r -- "$PROG: no number given and not in a GitHub repo — pass <number> -R <owner/name>" >&2
+        else
+          print -r -- "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
+        fi
       else
-        print -r -- "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
+        print -r -- "$PROG: gh error:" >&2
+        [[ -n "$REPO_ERR" ]] && print -r -- "$REPO_ERR" >&2
       fi
       exit 1
     }
   fi
 fi
-# The query takes owner and name apart, so the host- and URL-qualified forms
-# gh accepts for its own -R (github.com/o/n, https://github.com/o/n) are
-# refused here rather than split wrong and reported as a missing number.
+# The same check for the resolved value: gh's nameWithOwner is always
+# owner/name, but the split below must never see anything else.
 if [[ ! "$REPO" =~ '^[^/:]+/[^/:]+$' ]]; then
   print -r -- "$PROG: -R needs <owner/name>; got: $REPO" >&2
   exit 1
@@ -517,12 +537,20 @@ else
   # sequential deliberately: the win is wall-clock, not context, and not
   # worth the handlers it needs.
   GH_ERR=$(mktemp)
-  if ! gh api graphql --paginate -F owner="$OWNER" -F name="$NAME" -F num="$NUM" -f query="$TL_QUERY" > "$TL_FILE" 2>"$GH_ERR"; then
-    # gh may report the failure on either stream, so both are searched. The
-    # match is the union's exact wording: a repository that does not resolve
-    # says "Could not resolve to a Repository", and that is gh's own
-    # message to show, not a claim that the number is wrong.
-    if ! grep -q "Could not resolve to an issue or pull request" "$GH_ERR" "$TL_FILE"; then
+  # owner and name are strings whatever they look like: -F would read
+  # `2048` as a number (a String! variable then refuses it) and `@x` as a
+  # file to send. -f passes them as typed. The number is a number.
+  if ! gh api graphql --paginate -f owner="$OWNER" -f name="$NAME" -F num="$NUM" -f query="$TL_QUERY" > "$TL_FILE" 2>"$GH_ERR"; then
+    # gh may report the failure on either stream. The match is structural:
+    # the errors[] entry the union field returns on stdout, NOT_FOUND at its
+    # own path, or gh's one-line summary on stderr — never the payload as
+    # text, which holds every page fetched before the failure, bodies
+    # included, and a body can quote this very sentence. A repository that
+    # does not resolve has a different path and says "Could not resolve to
+    # a Repository": that is gh's own message to show, not a claim that the
+    # number is wrong.
+    if ! { grep -q '^gh: Could not resolve to an issue or pull request' "$GH_ERR" \
+           || jq -es 'any(.[] | .errors[]?; .type == "NOT_FOUND" and .path == ["repository","issueOrPullRequest"])' "$TL_FILE" >/dev/null 2>&1; }; then
       print -r -- "$PROG: gh error:" >&2
       # gh writes a one-line summary to stderr *and* the full errors[] body
       # (type/path/locations) to stdout; show both, since either can carry the
@@ -592,7 +620,7 @@ if [[ "$RTYPE" == pr ]]; then
     # gets here and the curated diagnosis above stays the whole report. This
     # call has no diagnosis of its own and rides set -e: a half-fetched PR must
     # never render as a complete one.
-    gh api graphql --paginate -F owner="$OWNER" -F name="$NAME" -F num="$NUM" -f query="$TH_QUERY" > "$TH_FILE"
+    gh api graphql --paginate -f owner="$OWNER" -f name="$NAME" -F num="$NUM" -f query="$TH_QUERY" > "$TH_FILE"
   fi
 fi
 
