@@ -1,0 +1,6 @@
+PR #20 fix(parser): tolerate trailing commas [OPEN base:main]
+reviews: 1 · inline threads: 2 (2 open) · top-level comments: 1
+
+review  [reviewer-bart 2026-08-18 09:15] CHANGES_REQUESTED, 2 threads (2 open) Two findings, both inline.
+thread  src/parser/commas.ts:159 [P-1] OPEN,outdated @c0ffee1
+thread  src/parser/lex.ts:31 [P-2] OPEN @c0ffee1

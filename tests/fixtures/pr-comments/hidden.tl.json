@@ -1,0 +1,126 @@
+[
+ {
+  "data": {
+   "repository": {
+    "pullRequest": {
+     "title": "feat(widget): harden frobnicator retry loop",
+     "state": "OPEN",
+     "isDraft": false,
+     "baseRefName": "main",
+     "author": {
+      "login": "romansod",
+      "__typename": "User"
+     },
+     "createdAt": "2026-08-11T09:00:00Z",
+     "body": "Closes #900.\n\nTwo commits, reviewable independently:\n\n- the parser fix, which is the whole behavior change\n- the test that would have caught it\n\n<!-- reviewers: the second commit is the interesting one -->\n\nRetry backoff now caps at 30s. I left the jitter alone — that is #901.",
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": null
+      },
+      "nodes": [
+       {
+        "__typename": "PullRequestCommit",
+        "commit": {
+         "abbreviatedOid": "1a2b3c4",
+         "messageHeadline": "feat(widget): harden frobnicator retry loop",
+         "committedDate": "2026-08-14T20:01:00Z",
+         "parents": {
+          "totalCount": 1
+         }
+        }
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "vercel[bot]",
+         "__typename": "Bot"
+        },
+        "createdAt": "2026-08-14T20:02:00Z",
+        "body": "Deployment preview ready: https://example.vercel.app",
+        "isMinimized": true,
+        "minimizedReason": "RESOLVED"
+       },
+       {
+        "__typename": "PullRequestReview",
+        "id": "PRR_review1",
+        "author": {
+         "login": "reviewer-bart",
+         "__typename": "User"
+        },
+        "submittedAt": "2026-08-14T21:26:00Z",
+        "state": "CHANGES_REQUESTED",
+        "body": "I need to run this in another harness to double-check, but two findings so far — see inline threads. The retry loop can still false-green when the probe itself throws."
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "dave",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-14T22:00:00Z",
+        "isMinimized": true,
+        "minimizedReason": "OUTDATED",
+        "body": "Wait — does the retry loop still swallow probe exceptions on the first attempt? I think the guard is inverted."
+       },
+       {
+        "__typename": "PullRequestCommit",
+        "commit": {
+         "abbreviatedOid": "e5f6a7b",
+         "messageHeadline": "fix(widget): close false-green paths from review",
+         "committedDate": "2026-08-14T23:10:00Z",
+         "parents": {
+          "totalCount": 1
+         }
+        }
+       },
+       {
+        "__typename": "HeadRefForcePushedEvent",
+        "createdAt": "2026-08-14T23:12:00Z",
+        "beforeCommit": {
+         "abbreviatedOid": "aaa1111"
+        },
+        "afterCommit": {
+         "abbreviatedOid": "bbb2222"
+        }
+       },
+       {
+        "__typename": "PullRequestCommit",
+        "commit": {
+         "abbreviatedOid": "9d8c7b6",
+         "messageHeadline": "Merge branch 'main' into feat/widget-retry",
+         "committedDate": "2026-08-15T00:00:00Z",
+         "parents": {
+          "totalCount": 2
+         }
+        }
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "romansod",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-14T23:40:00Z",
+        "body": "Thanks @reviewer-bart — verified both findings against the code, addressed in e5f6a7b. The probe now rethrows instead of swallowing, and the assertion gate covers the empty-result path.",
+        "isMinimized": false,
+        "minimizedReason": null
+       },
+       {
+        "__typename": "PullRequestReview",
+        "id": "PRR_pending",
+        "author": {
+         "login": "romansod",
+         "__typename": "User"
+        },
+        "submittedAt": null,
+        "state": "PENDING",
+        "body": "draft note that must never render"
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

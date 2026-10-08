@@ -1,0 +1,58 @@
+[
+  {
+    "data": {
+      "repository": {
+        "pullRequest": {
+          "reviewThreads": {
+            "pageInfo": { "hasNextPage": false, "endCursor": null },
+            "nodes": [
+              {
+                "isResolved": false,
+                "isOutdated": false,
+                "path": "src/cache/invalidate.ts",
+                "line": 12,
+                "originalLine": 12,
+                "comments": {
+                  "nodes": [
+                    {
+                      "author": { "login": "grace", "__typename": "User" },
+                      "createdAt": "2026-08-02T10:00:00Z",
+                      "body": "<!-- finding:C-1 -->\nSchema fingerprint ignores column order.",
+                      "pullRequestReview": { "id": "PRR_lr1" },
+                      "originalCommit": { "abbreviatedOid": "aaa0001" }
+                    },
+                    {
+                      "author": { "login": "heidi", "__typename": "User" },
+                      "createdAt": "2026-08-15T09:00:00Z",
+                      "body": "Still repros on latest main — column reorder keeps the stale entry.",
+                      "pullRequestReview": { "id": "PRR_replywrap5" },
+                      "originalCommit": { "abbreviatedOid": "aaa0001" }
+                    }
+                  ]
+                }
+              },
+              {
+                "isResolved": false,
+                "isOutdated": false,
+                "path": "docs/cache.md",
+                "line": 5,
+                "originalLine": 5,
+                "comments": {
+                  "nodes": [
+                    {
+                      "author": { "login": "grace", "__typename": "User" },
+                      "createdAt": "2026-08-16T08:00:00Z",
+                      "body": "Doc drift: invalidation section still describes the old TTL scheme.",
+                      "pullRequestReview": null,
+                      "originalCommit": { "abbreviatedOid": "bbb0002" }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]

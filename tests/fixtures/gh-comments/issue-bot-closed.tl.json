@@ -1,0 +1,99 @@
+[
+ {
+  "data": {
+   "repository": {
+    "issueOrPullRequest": {
+     "__typename": "Issue",
+     "number": 33,
+     "title": "https proxy reattaches listeners without removing them",
+     "state": "CLOSED",
+     "stateReason": "NOT_PLANNED",
+     "author": {
+      "login": "charlie",
+      "__typename": "User"
+     },
+     "createdAt": "2026-04-23T06:13:00Z",
+     "body": "Minor, but it can trigger `MaxListenersExceededWarning` on a busy proxy.",
+     "labels": {
+      "totalCount": 2,
+      "nodes": [
+       {
+        "name": "https"
+       },
+       {
+        "name": "stale"
+       }
+      ]
+     },
+     "assignees": {
+      "nodes": []
+     },
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": "Y3Vyc29yOnYyOpHS"
+      },
+      "nodes": [
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "alice",
+         "__typename": "User"
+        },
+        "createdAt": "2026-04-23T19:57:00Z",
+        "body": "Opened a PR for this \u2014 the listener is reattached on every CONNECT."
+       },
+       {
+        "__typename": "LabeledEvent",
+        "actor": {
+         "login": "github-actions[bot]",
+         "__typename": "Bot"
+        },
+        "createdAt": "2026-07-23T01:41:00Z",
+        "label": {
+         "name": "stale"
+        }
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "github-actions[bot]",
+         "__typename": "Bot"
+        },
+        "createdAt": "2026-07-23T01:41:10Z",
+        "body": "This issue has been marked as stale due to 90 days of inactivity."
+       },
+       {
+        "__typename": "CrossReferencedEvent",
+        "actor": {
+         "login": "dependabot[bot]",
+         "__typename": "Bot"
+        },
+        "createdAt": "2026-08-01T06:00:00Z",
+        "willCloseTarget": true,
+        "source": {
+         "__typename": "PullRequest",
+         "number": 71,
+         "state": "OPEN",
+         "title": "build(deps): bump the proxy agent past the leak",
+         "repository": {
+          "nameWithOwner": "fixtures/fixtures"
+         }
+        }
+       },
+       {
+        "__typename": "ClosedEvent",
+        "actor": {
+         "login": "github-actions[bot]",
+         "__typename": "Bot"
+        },
+        "createdAt": "2026-08-23T01:33:00Z",
+        "stateReason": "NOT_PLANNED"
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

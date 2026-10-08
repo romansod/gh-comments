@@ -1,0 +1,40 @@
+PR #1001 feat(widget): harden frobnicator retry loop [OPEN base:main]
+reviews: 1 · inline threads: 3 (2 open) · top-level comments: 2 (+1 bot filtered) (1 hidden)
+
+body [romansod 2026-08-11 09:00]
+  Closes #900.
+
+  Two commits, reviewable independently:
+
+  - the parser fix, which is the whole behavior change
+  - the test that would have caught it
+
+  Retry backoff now caps at 30s. I left the jitter alone — that is #901.
+
+commit  1a2b3c4 feat(widget): harden frobnicator retry loop
+
+review  [reviewer-bart 2026-08-14 21:26] CHANGES_REQUESTED, 2 threads (1 open)
+  I need to run this in another harness to double-check, but two findings so far — see inline threads. The retry loop can still false-green when the probe itself throws.
+thread  src/widget/retry.ts:42 [B-M1] OPEN @1a2b3c4
+    [reviewer-bart 2026-08-14 21:26]
+      Probe exceptions are swallowed here, so a throwing probe reads as success.
+    [romansod 2026-08-14 23:41] (hidden: resolved)
+      Fixed in e5f6a7b — the probe now rethrows.
+thread  src/widget/probe.ts:17 [B-M2] resolved,outdated @1a2b3c4
+    [reviewer-bart 2026-08-14 21:26]
+      Empty result set passes the assertion gate.
+
+comment [dave 2026-08-14 22:00] (hidden: outdated)
+  Wait — does the retry loop still swallow probe exceptions on the first attempt? I think the guard is inverted.
+
+commit  e5f6a7b fix(widget): close false-green paths from review
+
+force-push  aaa1111..bbb2222  [2026-08-14 23:12]
+
+comment [romansod 2026-08-14 23:40]
+  Thanks @reviewer-bart — verified both findings against the code, addressed in e5f6a7b. The probe now rethrows instead of swallowing, and the assertion gate covers the empty-result path.
+
+threads with no parent review:
+thread  README.md:3 OPEN @bbb2222
+    [reviewer-bart 2026-08-15 10:00]
+      Typo: frobnicator, not frobnicater.

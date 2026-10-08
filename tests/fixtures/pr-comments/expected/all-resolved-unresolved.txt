@@ -1,0 +1,4 @@
+PR #8 refactor(db): extract query builder [OPEN base:main]
+reviews: 1 · inline threads: 2 (0 open) · top-level comments: 0
+
+(no unresolved threads)

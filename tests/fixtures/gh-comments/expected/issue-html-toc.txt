@@ -1,0 +1,6 @@
+issue #9 bug: rich-text pastes render as raw HTML [OPEN]
+comments: 2 · cross-refs: 0 · events: 0
+
+body [alice 2026-08-14 09:00] The renderer drops everything after the first page of a paginated issu… [+238 chars]
+comment [bob 2026-08-14 09:30] Repro on **two** repos: - Timeline stops at [page 2](https://example.c… [+96 chars]
+comment [carol 2026-08-14 10:00] Plain markdown comment with an HTML repro snippet that must survive un… [+234 chars]

@@ -1,0 +1,21 @@
+issue #9 bug: rich-text pastes render as raw HTML [OPEN]
+comments: 2 · cross-refs: 0 · events: 0
+
+body [alice 2026-08-14 09:00]
+  The renderer drops everything after the first page of a paginated issue timeline, and the counts header still reports the full total, so the output reads as complete when it is not. Reproduced on three repos of different sizes; the cutoff is always exactly one hundred timeline items, which is the page size.
+
+comment [bob 2026-08-14 09:30]
+  Repro on **two** repos:
+
+  - Timeline stops at [page 2](https://example.com/page-2)
+  - Bot noise is counted as `comments`
+  Priority: **P2** & **P3** — happy to test a fix.
+
+comment [carol 2026-08-14 10:00]
+  Plain markdown comment with an HTML repro snippet that must survive untouched:
+
+  ```html
+  <div style="color: red">boom</div>
+  ```
+
+  The `style` attribute above is content, not paste formatting — padding this body well past the two-hundred-character detector floor so only the code-fence guard is protecting it.

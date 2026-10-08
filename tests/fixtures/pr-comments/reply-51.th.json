@@ -1,0 +1,42 @@
+[
+  {
+    "data": {
+      "repository": {
+        "pullRequest": {
+          "reviewThreads": {
+            "pageInfo": { "hasNextPage": false, "endCursor": null },
+            "nodes": [
+              {
+                "isResolved": false,
+                "isOutdated": false,
+                "path": "src/auth/rotate.ts",
+                "line": 30,
+                "originalLine": 30,
+                "comments": {
+                  "totalCount": 53,
+                  "pageInfo": { "hasNextPage": true },
+                  "nodes": [
+                    {
+                      "author": { "login": "alice", "__typename": "User" },
+                      "createdAt": "2026-08-14T09:00:00Z",
+                      "body": "<!-- finding:S-1 -->\nTwo requests can rotate the same key concurrently.",
+                      "pullRequestReview": { "id": "PRR_big1" },
+                      "originalCommit": { "abbreviatedOid": "5e55e55" }
+                    },
+                    {
+                      "author": { "login": "romansod", "__typename": "User" },
+                      "createdAt": "2026-08-14T09:30:00Z",
+                      "body": "Looking — will add a mutex around the window.",
+                      "pullRequestReview": { "id": "PRR_replywrap9" },
+                      "originalCommit": { "abbreviatedOid": "5e55e55" }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]

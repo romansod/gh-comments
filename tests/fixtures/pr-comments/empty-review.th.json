@@ -1,0 +1,58 @@
+[
+  {
+    "data": {
+      "repository": {
+        "pullRequest": {
+          "reviewThreads": {
+            "pageInfo": { "hasNextPage": false, "endCursor": null },
+            "nodes": [
+              {
+                "isResolved": true,
+                "isOutdated": false,
+                "path": "src/api/page.ts",
+                "line": 10,
+                "originalLine": 10,
+                "comments": {
+                  "nodes": [
+                    {
+                      "author": { "login": "alice", "__typename": "User" },
+                      "createdAt": "2026-08-10T12:00:00Z",
+                      "body": "<!-- finding:A-1 -->\nOff-by-one: the cursor page includes the boundary row twice.",
+                      "pullRequestReview": { "id": "PRR_r1" },
+                      "originalCommit": { "abbreviatedOid": "c0ffee1" }
+                    },
+                    {
+                      "author": { "login": "bob", "__typename": "User" },
+                      "createdAt": "2026-08-11T10:05:00Z",
+                      "body": "Good catch — fixed in d00dad1.",
+                      "pullRequestReview": { "id": "PRR_replywrap1" },
+                      "originalCommit": { "abbreviatedOid": "c0ffee1" }
+                    }
+                  ]
+                }
+              },
+              {
+                "isResolved": false,
+                "isOutdated": false,
+                "path": "src/api/cursor.ts",
+                "line": 55,
+                "originalLine": 55,
+                "comments": {
+                  "nodes": [
+                    {
+                      "author": { "login": "alice", "__typename": "User" },
+                      "createdAt": "2026-08-10T12:00:30Z",
+                      "body": "<!-- finding:A-2 -->\nCursor can skip a row when an insert lands between pages.",
+                      "pullRequestReview": { "id": "PRR_r1" },
+                      "originalCommit": { "abbreviatedOid": "c0ffee1" }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]

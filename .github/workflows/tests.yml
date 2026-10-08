@@ -1,0 +1,66 @@
+# The offline test suite on every PR and on pushes to main, on Ubuntu and on
+# macOS: the tool is zsh, and most of the people who run a zsh tool are on
+# macOS, where the preinstalled zsh, jq and gh differ from Ubuntu's packages.
+#
+# Nothing here reaches the network after checkout. Golden cases render saved
+# fixture payloads, and the fetch paths run against a `gh` stub on PATH. No
+# GH_TOKEN is provided, so an accidental API call fails loudly.
+#
+# The suite runs twice. A runner has no controlling terminal, so `zsh run.zsh`
+# alone can never fail the way a terminal does; tests/run-pty.py re-runs the
+# same suite under a pty (see its docstring). Both passes always run, so one
+# push reports both environments.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  tests:
+    name: tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # ubuntu-latest ships jq, git, gh and python3 but not zsh.
+      - name: Install zsh
+        if: runner.os == 'Linux'
+        run: |
+          if ! command -v zsh >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq zsh
+          fi
+
+      - name: Preflight — required tools
+        run: |
+          missing=0
+          for tool in zsh jq gh python3 make; do
+            if command -v "$tool" >/dev/null 2>&1; then
+              printf '%-8s %s\n' "$tool" "$("$tool" --version 2>/dev/null | grep -m1 '[0-9]')"
+            else
+              echo "::error::required tool missing on runner: $tool"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Run tests
+        env:
+          # The Actions log renders ANSI — keep the colors on.
+          FORCE_COLOR: "1"
+        run: make test
+
+      # Under a pty stdout is a TTY, so no FORCE_COLOR is needed.
+      - name: Run tests under a pty
+        if: always()
+        run: make test-pty
+
+      - name: Lint
+        if: always()
+        run: make lint

@@ -1,0 +1,40 @@
+[
+  {
+    "data": {
+      "repository": {
+        "pullRequest": {
+          "reviewThreads": {
+            "pageInfo": { "hasNextPage": false, "endCursor": null },
+            "nodes": [
+              {
+                "isResolved": false,
+                "isOutdated": false,
+                "path": "src/parser/read.ts",
+                "line": 7,
+                "originalLine": 7,
+                "comments": {
+                  "nodes": [
+                    {
+                      "author": { "login": "alice", "__typename": "User" },
+                      "createdAt": "2026-08-05T10:00:00Z",
+                      "body": "<!-- finding:P-1 -->\nEmpty input throws instead of returning the empty AST.",
+                      "pullRequestReview": { "id": "PRR_s1" },
+                      "originalCommit": { "abbreviatedOid": "1231231" }
+                    },
+                    {
+                      "author": { "login": "carol", "__typename": "User" },
+                      "createdAt": "2026-08-08T09:00:00Z",
+                      "body": "Reopening — still fails when the input is a single BOM.",
+                      "pullRequestReview": { "id": "PRR_replywrap7" },
+                      "originalCommit": { "abbreviatedOid": "1231231" }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]

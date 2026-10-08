@@ -1,0 +1,23 @@
+PR #42 feat(api): cursor pagination (bot-reviewed) [OPEN base:main]
+reviews: 1 (+2 bots filtered) · inline threads: 5 (4 open) · top-level comments: 2
+
+body [alice 2026-08-10 08:30]
+  Rewrites the retry loop around a single deadline instead of a per-attempt timeout.
+
+review  [bob 2026-08-11 14:00] APPROVED, 0 threads (0 open)
+  LGTM once alice's items are closed out.
+
+comment [alice 2026-08-12 09:00]
+  The cursor-skip finding is still open — an insert between pages can still skip a row.
+
+commit  e11e11e fix(api): make cursor stable under concurrent inserts
+
+threads with no parent review:
+thread  src/api/types.ts:4 OPEN @e11e11e
+    [alice 2026-08-12 11:00]
+      Cursor type should be opaque, not a string.
+
+threads in filtered bot reviews:
+thread  src/api/limits.ts:12 [B-1] OPEN @d00dad1
+    [copilot-pull-request-reviewer 2026-08-12 09:30]
+      No upper bound on page size: a client can ask for every row in one page.

@@ -1,0 +1,162 @@
+[
+ {
+  "data": {
+   "repository": {
+    "issueOrPullRequest": {
+     "__typename": "Issue",
+     "number": 21,
+     "title": "design: support GitHub issue discussion alongside PR comments",
+     "state": "OPEN",
+     "stateReason": "REOPENED",
+     "author": {
+      "login": "romansod",
+      "__typename": "User"
+     },
+     "createdAt": "2026-08-16T16:32:55Z",
+     "body": "## Problem\n`r-pr-comments` gives a reliable view of PR discussion but rejects an issue\nnumber. We want the same for issues without duplicating the renderer.\n\n<!-- triage: keep this out of the render -->\n\n## Options\n1. A second script.\n2. Rename to `r-gh-comments`.\n3. One implementation, both entry points.\n",
+     "labels": {
+      "totalCount": 2,
+      "nodes": [
+       {
+        "name": "design"
+       },
+       {
+        "name": "enhancement"
+       }
+      ]
+     },
+     "assignees": {
+      "nodes": [
+       {
+        "login": "romansod"
+       }
+      ]
+     },
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": "Y3Vyc29yOnYyOpHO"
+      },
+      "nodes": [
+       {
+        "__typename": "LabeledEvent",
+        "actor": {
+         "login": "romansod",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-16T16:33:00Z",
+        "label": {
+         "name": "design"
+        }
+       },
+       {
+        "__typename": "AssignedEvent",
+        "actor": {
+         "login": "romansod",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-16T16:33:10Z",
+        "assignee": {
+         "__typename": "User",
+         "login": "romansod"
+        }
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "alice",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-16T18:00:00Z",
+        "body": "Option 3, and let the API resolve the type \u2014 `issueOrPullRequest`\nmeans the number is never ambiguous."
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "github-actions[bot]",
+         "__typename": "Bot"
+        },
+        "createdAt": "2026-08-17T09:00:00Z",
+        "body": "This issue has had no activity for 0 days. Marking as stale."
+       },
+       {
+        "__typename": "RenamedTitleEvent",
+        "actor": {
+         "login": "romansod",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-17T10:00:00Z",
+        "previousTitle": "issue comments?",
+        "currentTitle": "design: support GitHub issue discussion alongside PR comments"
+       },
+       {
+        "__typename": "CrossReferencedEvent",
+        "actor": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-18T12:00:00Z",
+        "willCloseTarget": true,
+        "source": {
+         "__typename": "PullRequest",
+         "number": 44,
+         "state": "MERGED",
+         "title": "fix(r-pr-comments): reach jq through files so large PRs don't blow ARG_MAX",
+         "repository": {
+          "nameWithOwner": "fixtures/fixtures"
+         }
+        }
+       },
+       {
+        "__typename": "ClosedEvent",
+        "actor": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-19T08:00:00Z",
+        "stateReason": "COMPLETED"
+       },
+       {
+        "__typename": "ReopenedEvent",
+        "actor": {
+         "login": "romansod",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-20T09:30:00Z"
+       },
+       {
+        "__typename": "MilestonedEvent",
+        "actor": {
+         "login": "romansod",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-20T09:31:00Z",
+        "milestoneTitle": "v2"
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "carol",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-21T14:20:00Z",
+        "body": "Reopening: #44 only fixed the ARG_MAX crash.\n\nThe issue-side render\nis still missing."
+       },
+       {
+        "__typename": "UnlabeledEvent",
+        "actor": {
+         "login": "romansod",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-21T14:25:00Z",
+        "label": {
+         "name": "bug"
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

@@ -1,0 +1,5 @@
+PR #1001 feat(widget): harden frobnicator retry loop [OPEN base:main]
+reviews: 0 (+1 bot filtered) · inline threads: 2 (1 open) · top-level comments: 1 (+1 bot filtered)
+
+threads in filtered bot reviews:
+thread  src/widget/retry.ts:42 [B-M1] OPEN @1a2b3c4

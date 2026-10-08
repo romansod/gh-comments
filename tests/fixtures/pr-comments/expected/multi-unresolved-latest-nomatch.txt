@@ -1,0 +1,9 @@
+PR #42 feat(api): cursor pagination [OPEN base:main]
+reviews: 2 · inline threads: 2 (1 open) · top-level comments: 2
+note: no matching review or comment — showing the unresolved view instead
+
+review  [alice 2026-08-10 12:00] CHANGES_REQUESTED, 2 threads (1 open)
+  First pass — two blockers inline.
+thread  src/api/cursor.ts:55 [A-2] OPEN @c0ffee1
+    [alice 2026-08-10 12:00]
+      Cursor can skip a row when an insert lands between pages.

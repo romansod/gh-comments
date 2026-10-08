@@ -1,0 +1,45 @@
+[
+  {
+    "data": {
+      "repository": {
+        "pullRequest": {
+          "title": "refactor(db): extract query builder",
+          "state": "OPEN",
+          "isDraft": false,
+          "baseRefName": "main",
+          "timelineItems": {
+            "pageInfo": { "hasNextPage": false, "endCursor": null },
+            "nodes": [
+              {
+                "__typename": "PullRequestCommit",
+                "commit": {
+                  "abbreviatedOid": "ab1ab1a",
+                  "messageHeadline": "refactor(db): extract query builder",
+                  "committedDate": "2026-08-13T12:00:00Z",
+                  "parents": { "totalCount": 1 }
+                }
+              },
+              {
+                "__typename": "PullRequestReview",
+                "id": "PRR_ar1",
+                "author": { "login": "erin", "__typename": "User" },
+                "submittedAt": "2026-08-13T13:00:00Z",
+                "state": "CHANGES_REQUESTED",
+                "body": "Two nits inline — both minor."
+              },
+              {
+                "__typename": "PullRequestCommit",
+                "commit": {
+                  "abbreviatedOid": "cd2cd2c",
+                  "messageHeadline": "chore(db): address review nits",
+                  "committedDate": "2026-08-13T14:00:00Z",
+                  "parents": { "totalCount": 1 }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]

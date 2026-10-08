@@ -1,0 +1,14 @@
+PR #42 feat(api): cursor pagination [OPEN base:main]
+reviews: 2 · inline threads: 2 (1 open) · top-level comments: 2
+note: no matching review or comment — showing the TOC instead
+
+body [alice 2026-08-10 08:30] Rewrites the retry loop around a single deadline instead of a per-atte… [+12 chars]
+commit  c0ffee1 feat(api): add pagination cursors
+review  [alice 2026-08-10 12:00] CHANGES_REQUESTED, 2 threads (1 open) First pass — two blockers inline.
+thread  src/api/page.ts:10 [A-1] resolved @c0ffee1
+thread  src/api/cursor.ts:55 [A-2] OPEN @c0ffee1
+commit  d00dad1 fix(api): dedupe boundary row in cursor page
+comment [bob 2026-08-11 11:00] Drive-by: consider capping page size at 100.
+review  [bob 2026-08-11 14:00] APPROVED, 0 threads (0 open) LGTM once alice's items are closed out.
+comment [alice 2026-08-12 09:00] The cursor-skip finding is still open — an insert between pages can st… [+15 chars]
+commit  e11e11e fix(api): make cursor stable under concurrent inserts

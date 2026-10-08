@@ -1,0 +1,7 @@
+PR #42 feat(api): cursor pagination (bot-reviewed) [OPEN base:main]
+reviews: 1 (+2 bots filtered) · inline threads: 5 (4 open) · top-level comments: 2
+
+threads with no parent review:
+thread  src/api/types.ts:4 OPEN @e11e11e
+threads in filtered bot reviews:
+thread  src/api/limits.ts:12 [B-1] OPEN @d00dad1

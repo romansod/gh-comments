@@ -1,0 +1,14 @@
+PR #1001 feat(widget): harden frobnicator retry loop [OPEN base:main]
+reviews: 0 (+1 bot filtered) · inline threads: 3 (2 open) · top-level comments: 1 (+1 bot filtered)
+
+threads with no parent review:
+thread  README.md:3 OPEN @bbb2222
+    [reviewer-bart 2026-08-15 10:00]
+      Typo: frobnicator, not frobnicater.
+
+threads in filtered bot reviews:
+thread  src/widget/retry.ts:42 [B-M1] OPEN @1a2b3c4
+    [copilot-pull-request-reviewer 2026-08-14 21:26]
+      Probe exceptions are swallowed here, so a throwing probe reads as success.
+    [romansod 2026-08-14 23:41]
+      Fixed in e5f6a7b — the probe now rethrows.

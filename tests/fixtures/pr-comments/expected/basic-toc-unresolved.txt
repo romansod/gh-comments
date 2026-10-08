@@ -1,0 +1,7 @@
+PR #1001 feat(widget): harden frobnicator retry loop [OPEN base:main]
+reviews: 1 · inline threads: 3 (2 open) · top-level comments: 1 (+1 bot filtered)
+
+review  [reviewer-bart 2026-08-14 21:26] CHANGES_REQUESTED, 2 threads (1 open) I need to run this in another harness to double-check, but two finding… [+97 chars]
+thread  src/widget/retry.ts:42 [B-M1] OPEN @1a2b3c4
+threads with no parent review:
+thread  README.md:3 OPEN @bbb2222

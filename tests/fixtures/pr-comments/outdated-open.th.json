@@ -1,0 +1,76 @@
+[
+  {
+    "data": {
+      "repository": {
+        "pullRequest": {
+          "reviewThreads": {
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": null
+            },
+            "nodes": [
+              {
+                "isResolved": false,
+                "isOutdated": true,
+                "path": "src/parser/commas.ts",
+                "line": null,
+                "originalLine": 159,
+                "comments": {
+                  "totalCount": 1,
+                  "pageInfo": {
+                    "hasNextPage": false
+                  },
+                  "nodes": [
+                    {
+                      "author": {
+                        "login": "reviewer-bart",
+                        "__typename": "User"
+                      },
+                      "createdAt": "2026-08-18T09:15:00Z",
+                      "body": "<!-- finding:P-1 -->\nThis branch never runs when the comma is last.",
+                      "pullRequestReview": {
+                        "id": "PRR_od1"
+                      },
+                      "originalCommit": {
+                        "abbreviatedOid": "c0ffee1"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "isResolved": false,
+                "isOutdated": false,
+                "path": "src/parser/lex.ts",
+                "line": 31,
+                "originalLine": 31,
+                "comments": {
+                  "totalCount": 1,
+                  "pageInfo": {
+                    "hasNextPage": false
+                  },
+                  "nodes": [
+                    {
+                      "author": {
+                        "login": "reviewer-bart",
+                        "__typename": "User"
+                      },
+                      "createdAt": "2026-08-18T09:15:00Z",
+                      "body": "<!-- finding:P-2 -->\nThe lexer still emits a token for the empty slot.",
+                      "pullRequestReview": {
+                        "id": "PRR_od1"
+                      },
+                      "originalCommit": {
+                        "abbreviatedOid": "c0ffee1"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]

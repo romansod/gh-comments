@@ -1,0 +1,15 @@
+PR #11 fix(cache): invalidate on schema change [OPEN base:main]
+reviews: 1 · inline threads: 2 (2 open) · top-level comments: 0
+
+review  [grace 2026-08-02 10:00] CHANGES_REQUESTED, 1 thread (1 open)
+  One blocker inline.
+thread  src/cache/invalidate.ts:12 [C-1] OPEN @aaa0001
+    [grace 2026-08-02 10:00]
+      Schema fingerprint ignores column order.
+    [heidi 2026-08-15 09:00]
+      Still repros on latest main — column reorder keeps the stale entry.
+
+threads with no parent review:
+thread  docs/cache.md:5 OPEN @bbb0002
+    [grace 2026-08-16 08:00]
+      Doc drift: invalidation section still describes the old TTL scheme.

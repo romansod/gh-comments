@@ -1,0 +1,17 @@
+PR #8 refactor(db): extract query builder [OPEN base:main]
+reviews: 1 · inline threads: 2 (0 open) · top-level comments: 0
+
+commit  ab1ab1a refactor(db): extract query builder
+
+review  [erin 2026-08-13 13:00] CHANGES_REQUESTED, 2 threads (0 open)
+  Two nits inline — both minor.
+thread  src/db/build.ts:21 resolved @ab1ab1a
+    [erin 2026-08-13 13:00]
+      Nit: prefer an early return here.
+    [frank 2026-08-13 14:05]
+      Done in cd2cd2c.
+thread  src/db/build.ts:88 resolved,outdated @ab1ab1a
+    [erin 2026-08-13 13:00]
+      Nit: rename qb to builder.
+
+commit  cd2cd2c chore(db): address review nits

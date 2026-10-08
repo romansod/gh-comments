@@ -1,0 +1,7 @@
+issue #33 https proxy reattaches listeners without removing them [CLOSED not_planned labels:https,stale]
+comments: 1 (+1 bot filtered) · cross-refs: 1 · events: 1 (+1 housekeeping filtered)
+
+body [charlie 2026-04-23 06:13] Minor, but it can trigger `MaxListenersExceededWarning` on a busy prox… [+2 chars]
+comment [alice 2026-04-23 19:57] Opened a PR for this — the listener is reattached on every CONNECT.
+xref [dependabot[bot] 2026-08-01 06:00] #71 PR OPEN (closes) "build(deps): bump the proxy agent past the leak"
+closed [github-actions[bot] 2026-08-23 01:33] as not_planned

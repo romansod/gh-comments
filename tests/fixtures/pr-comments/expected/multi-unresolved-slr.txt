@@ -1,0 +1,4 @@
+PR #42 feat(api): cursor pagination [OPEN base:main]
+reviews: 2 · inline threads: 2 (1 open) · top-level comments: 2
+
+(no unresolved threads after the anchor; 1 open before it)

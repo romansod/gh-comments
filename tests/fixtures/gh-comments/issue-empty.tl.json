@@ -1,0 +1,32 @@
+[
+ {
+  "data": {
+   "repository": {
+    "issueOrPullRequest": {
+     "__typename": "Issue",
+     "number": 7,
+     "title": "spike: nothing here yet",
+     "state": "OPEN",
+     "stateReason": null,
+     "author": null,
+     "createdAt": "2026-08-22T07:15:00Z",
+     "body": "",
+     "labels": {
+      "totalCount": 0,
+      "nodes": []
+     },
+     "assignees": {
+      "nodes": []
+     },
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": null
+      },
+      "nodes": []
+     }
+    }
+   }
+  }
+ }
+]

@@ -1,0 +1,11 @@
+issue #5 docs: retry semantics are undocumented [CLOSED not_planned]
+comments: 1 · cross-refs: 1 · events: 1 (+1 housekeeping filtered)
+
+body [erin 2026-08-09 08:00]
+  The README says retries are "automatic" and stops there.
+
+xref [dana 2026-08-10 11:00] other/upstream#99 issue OPEN "umbrella: retry semantics"
+
+comment [dana 2026-08-10 11:05]
+
+closed [dana 2026-08-11 09:01] as not_planned

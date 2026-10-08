@@ -1,0 +1,84 @@
+[
+ {
+  "data": {
+   "repository": {
+    "issueOrPullRequest": {
+     "__typename": "Issue",
+     "number": 5,
+     "title": "docs: retry semantics are undocumented",
+     "state": "CLOSED",
+     "stateReason": "NOT_PLANNED",
+     "author": {
+      "login": "erin",
+      "__typename": "User"
+     },
+     "createdAt": "2026-08-09T08:00:00Z",
+     "body": "The README says retries are \"automatic\" and stops there.",
+     "labels": {
+      "totalCount": 0,
+      "nodes": []
+     },
+     "assignees": {
+      "nodes": []
+     },
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": "Y3Vyc29yOnYyOpHP"
+      },
+      "nodes": [
+       {
+        "__typename": "CrossReferencedEvent",
+        "actor": {
+         "login": "dana",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-10T11:00:00Z",
+        "willCloseTarget": false,
+        "source": {
+         "__typename": "Issue",
+         "number": 99,
+         "state": "OPEN",
+         "title": "umbrella: retry semantics",
+         "repository": {
+          "nameWithOwner": "other/upstream"
+         }
+        }
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "dana",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-10T11:05:00Z",
+        "body": ""
+       },
+       {
+        "__typename": "UnassignedEvent",
+        "actor": {
+         "login": "dana",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-11T09:00:00Z",
+        "assignee": {
+         "__typename": "User",
+         "login": "erin"
+        }
+       },
+       {
+        "__typename": "ClosedEvent",
+        "actor": {
+         "login": "dana",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-11T09:01:00Z",
+        "stateReason": "NOT_PLANNED"
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

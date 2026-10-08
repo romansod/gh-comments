@@ -1,0 +1,64 @@
+[
+  {
+    "data": {
+      "repository": {
+        "pullRequest": {
+          "title": "fix(parser): tolerate trailing commas",
+          "state": "OPEN",
+          "isDraft": false,
+          "baseRefName": "main",
+          "timelineItems": {
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": null
+            },
+            "nodes": [
+              {
+                "__typename": "PullRequestCommit",
+                "commit": {
+                  "abbreviatedOid": "c0ffee1",
+                  "messageHeadline": "fix(parser): tolerate trailing commas",
+                  "committedDate": "2026-08-18T08:00:00Z",
+                  "parents": {
+                    "totalCount": 1
+                  }
+                }
+              },
+              {
+                "__typename": "PullRequestReview",
+                "id": "PRR_od1",
+                "author": {
+                  "login": "reviewer-bart",
+                  "__typename": "User"
+                },
+                "submittedAt": "2026-08-18T09:15:00Z",
+                "state": "CHANGES_REQUESTED",
+                "body": "Two findings, both inline."
+              },
+              {
+                "__typename": "PullRequestCommit",
+                "commit": {
+                  "abbreviatedOid": "c0ffee2",
+                  "messageHeadline": "address review: rewrite the comma branch",
+                  "committedDate": "2026-08-18T11:00:00Z",
+                  "parents": {
+                    "totalCount": 1
+                  }
+                }
+              },
+              {
+                "__typename": "IssueComment",
+                "author": {
+                  "login": "romansod",
+                  "__typename": "User"
+                },
+                "createdAt": "2026-08-18T11:05:00Z",
+                "body": "Rewrote that branch, so the first thread is on code that no longer exists."
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]

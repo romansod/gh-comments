@@ -1,0 +1,13 @@
+PR #42 feat(api): cursor pagination [OPEN base:main]
+reviews: 2 · inline threads: 2 (1 open) · top-level comments: 2
+
+body [alice 2026-08-10 08:30]
+  Rewrites the retry loop around a single deadline instead of a per-attempt timeout.
+
+review  [bob 2026-08-11 14:00] APPROVED, 0 threads (0 open)
+  LGTM once alice's items are closed out.
+
+comment [alice 2026-08-12 09:00]
+  The cursor-skip finding is still open — an insert between pages can still skip a row.
+
+commit  e11e11e fix(api): make cursor stable under concurrent inserts

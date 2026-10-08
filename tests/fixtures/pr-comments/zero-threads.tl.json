@@ -1,0 +1,59 @@
+[
+ {
+  "data": {
+   "repository": {
+    "pullRequest": {
+     "title": "docs: clarify retry semantics",
+     "state": "OPEN",
+     "isDraft": false,
+     "baseRefName": "main",
+     "author": {
+      "login": "carol",
+      "__typename": "User"
+     },
+     "createdAt": "2026-08-15T13:00:00Z",
+     "body": "",
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": null
+      },
+      "nodes": [
+       {
+        "__typename": "PullRequestCommit",
+        "commit": {
+         "abbreviatedOid": "f00f001",
+         "messageHeadline": "docs: clarify retry semantics",
+         "committedDate": "2026-08-13T08:00:00Z",
+         "parents": {
+          "totalCount": 1
+         }
+        }
+       },
+       {
+        "__typename": "PullRequestReview",
+        "id": "PRR_zt1",
+        "author": {
+         "login": "carol",
+         "__typename": "User"
+        },
+        "submittedAt": "2026-08-13T09:00:00Z",
+        "state": "APPROVED",
+        "body": "Docs look good."
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "dave",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-13T10:00:00Z",
+        "body": "Thanks \u2014 merging once CI is green."
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

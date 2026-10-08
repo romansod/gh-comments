@@ -1,0 +1,963 @@
+#!/usr/bin/env zsh
+
+set -euo pipefail
+
+# The release version. .claude-plugin/plugin.json and the release tag carry
+# the same string; `make lint` checks that they agree.
+VERSION=1.0.0
+
+# The name this was invoked as prefixes every diagnostic, so a symlink named
+# r-gh-comments reports as r-gh-comments. `:t` deliberately, not `:A` — `:A`
+# resolves the symlink and would report the implementation's name instead of
+# the one the user ran. `:r` drops an extension such a symlink may carry.
+PROG=${0:t:r}
+# The resource type is resolved from the API unless --pr / --issue pins it.
+TYPE=auto
+TYPE_PINNED_BY=""
+
+usage() {
+  local u
+  u=$(cat <<'EOF'
+Usage: @PROG@ [<number>] [flags]
+
+Renders a GitHub pull request's or issue's discussion as compact,
+grep-friendly text, with an aggregate-counts header line.
+
+The resource type is resolved, never guessed: a repository numbers issues and
+pull requests in one sequence, so <number> names exactly one of them and the
+`issueOrPullRequest` GraphQL field says which. Pin it with --pr / --issue when
+you want a wrong number to be an error rather than a different render.
+
+  PRs    commits, reviews, inline comment threads (in place, with resolution
+         state), issue comments, force-pushes.
+  Issues the opening post, comments, and the events that change what the issue
+         means — closed/reopened, cross-references, renames. Label, assignee
+         and milestone churn is filtered out unless you ask for it.
+
+With no number, uses the current branch's open PR (like `gh pr view`).
+
+One paginated GraphQL fetch per surface; a thread with more replies than one
+page carries an explicit [TRUNCATED: ...] marker instead of dropping them
+silently. Rich-text HTML pastes are converted to markdown.
+
+Flags:
+  -R, --repo <owner/name>       Target repo (default: repo of the cwd)
+  --pr, --issue                 Pin the resource type instead of resolving it
+  --toc                         Skeleton only: one line per item, no bodies
+  --since <iso-date>            Only items at/after this date (UTC): YYYY-MM-DD,
+                                optionally with THH:MM[:SS][Z] (e.g. 2026-08-12)
+  --bots                        Include bot comments and bot review bodies
+                                (filtered by default). Threads are never
+                                filtered: those of a filtered bot review render
+                                under "threads in filtered bot reviews:".
+                                Timeline events are never filtered by author —
+                                a bot closing an issue is still why it closed.
+  --hidden                      Show the bodies of hidden (minimized) comments.
+                                By default a comment hidden as outdated, spam,
+                                resolved, off-topic or duplicate renders as a
+                                single marker line, e.g.
+                                `comment [user date] (hidden: outdated)`, and
+                                the counts line reports `(N hidden)`.
+
+  Pull requests only:
+  --unresolved                  Only reviews with open threads, and those threads
+  --since-last-review[=<user>]  Only the last review (optionally by <user>)
+                                and everything after it
+  --latest[=<user>]             Only the most recent *substantive* review or
+                                top-level comment (optionally by <user>) and
+                                everything after it. Substantive: a review with
+                                a body or inline threads, or a comment with a
+                                body that is not hidden — so a bare approval
+                                or a hidden comment is looked past as the
+                                anchor, though it still shows when it comes
+                                after the anchor; a bot is looked past and
+                                not shown unless --bots. Exclusive with
+                                --since-last-review, which anchors on the last
+                                review object and ignores comments.
+                                When either flag matches nothing, the TOC is
+                                shown instead of the full timeline, under a
+                                note saying so; with --unresolved or --since
+                                that already-narrow view is shown as it is.
+  --merges                      Include merge commits (filtered by default)
+
+  Issues only:
+  --events                      Include label / assignee / milestone events
+                                (filtered by default; the counts line always
+                                states how many were held back)
+
+  --fixtures <tl.json> [<th.json>]
+                                Render from saved GraphQL payloads instead of
+                                fetching (testing/offline). Each file holds the
+                                `gh api graphql --paginate ... | jq -s .` output
+                                for the timeline / threads query. The threads
+                                payload is required for a PR, meaningless for
+                                an issue.
+  -h, --help                    This help
+  --version                     Print the version
+
+Every item starts at column 0 with a stable prefix, so the output greps:
+  grep '^review\|^commit'      PR timeline skeleton
+  grep 'thread.*OPEN'          unaddressed inline threads
+  grep '^xref\|^closed'        what happened to an issue
+  grep -A 20 'B-M1'            one finding with its thread
+  <!-- finding:ID --> markers are promoted onto thread header lines.
+
+Typical agent flow: dump once, slice locally.
+  @PROG@ 989 > gh989.txt && grep '^review' gh989.txt
+EOF
+  )
+  print -r -- "${u//@PROG@/$PROG}"
+}
+
+NUM="" REPO="" TOC=0 UNRESOLVED=0 SINCE="" SLR=0 SLR_AUTHOR="" BOTS=0 MERGES=0 EVENTS=0 HIDDEN=0
+LATEST=0 LATEST_AUTHOR=""
+FIXTURES_TL="" FIXTURES_TH=""
+# need_value <flag> <form> <count> [<next>] — a flag that takes a value must
+# have one, and it must not be the next flag. Under `set -u` a bare `-R` at
+# the end of the line used to die with zsh's own "2: parameter not set",
+# with a line number into the script.
+need_value() {
+  if (( $3 < 2 )) || [[ -z "${4:-}" || "${4:-}" == -* ]]; then
+    echo "$PROG: $1 needs $2" >&2
+    exit 1
+  fi
+}
+while (( $# )); do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --version) print -r -- "gh-comments $VERSION"; exit 0 ;;
+    -R|--repo) need_value "$1" "<owner/name>" $# "${2:-}"; REPO="$2"; shift 2 ;;
+    --repo=*)  REPO="${1#*=}"; [[ -n "$REPO" ]] || need_value --repo "<owner/name>" 1; shift ;;
+    --pr)      TYPE=pr; TYPE_PINNED_BY="--pr"; shift ;;
+    --issue)   TYPE=issue; TYPE_PINNED_BY="--issue"; shift ;;
+    --toc) TOC=1; shift ;;
+    --unresolved) UNRESOLVED=1; shift ;;
+    --since) need_value "$1" "<iso-date>" $# "${2:-}"; SINCE="$2"; shift 2 ;;
+    --since=*) SINCE="${1#*=}"; [[ -n "$SINCE" ]] || need_value --since "<iso-date>" 1; shift ;;
+    --since-last-review) SLR=1; shift ;;
+    --since-last-review=*) SLR=1; SLR_AUTHOR="${1#*=}"; shift ;;
+    --latest) LATEST=1; shift ;;
+    --latest=*) LATEST=1; LATEST_AUTHOR="${1#*=}"; shift ;;
+    --bots) BOTS=1; shift ;;
+    --hidden) HIDDEN=1; shift ;;
+    --merges) MERGES=1; shift ;;
+    --events) EVENTS=1; shift ;;
+    --fixtures)
+      # The threads payload is optional: an issue has no review threads to
+      # save. A second operand is taken only when it is a readable file that
+      # is not itself a flag, so `--fixtures tl.json 21` still reads 21 as the
+      # number rather than swallowing it.
+      if (( $# < 2 )) || [[ ! -r "$2" ]]; then
+        echo "$PROG: --fixtures needs a readable timeline JSON file (plus a threads file for a PR)" >&2
+        exit 1
+      fi
+      FIXTURES_TL="$2"; shift 2
+      if (( $# >= 1 )) && [[ "$1" != -* && -r "$1" ]]; then FIXTURES_TH="$1"; shift; fi
+      ;;
+    -*) echo "$PROG: unknown flag: $1" >&2; exit 1 ;;
+    *)
+      if [[ -n "$NUM" ]]; then echo "$PROG: unexpected argument: $1" >&2; exit 1; fi
+      NUM="$1"; shift ;;
+  esac
+done
+
+# --since is compared lexically against ISO timestamps, so anything that is
+# not an ISO date gives a wrong answer with no error: `yesterday` sorts after
+# every digit and matches nothing, `08/20/2026` sorts before `2` and matches
+# everything. Date first, then an optional time; a
+# date-only value already sorts before any timestamp on that day. The fields
+# are bounded (month 01-12, day 01-31, hour 00-23, minute and second 00-59)
+# because a mistyped `2026-13-01` otherwise passes and renders the same empty
+# timeline a word did. Times are UTC, like the timestamps they are compared
+# with; an offset such as `+02:00` is refused, since it cannot be compared
+# lexically at all.
+if [[ -n "$SINCE" && ! "$SINCE" =~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])(T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?Z?)?$' ]]; then
+  echo "$PROG: --since needs an ISO date, UTC (YYYY-MM-DD, optionally THH:MM[:SS][Z]); got: $SINCE" >&2
+  exit 1
+fi
+# Every GitHub timestamp is `YYYY-MM-DDTHH:MM:SSZ`, and the comparison is a
+# plain string `>=`, so an accepted value has to sort at or before every
+# timestamp it means to include. Each accepted form is a prefix of that shape
+# once a trailing Z is dropped; kept, `T18:00Z` sorts *after* `T18:00:00Z`
+# (`Z` > `:`) and silently drops the whole minute it names.
+SINCE=${SINCE%Z}
+# Each of these picks the one item the timeline is sliced from; two answers
+# to that question cannot both be honoured, so asking for both is an error
+# rather than a silent preference.
+if (( SLR && LATEST )); then
+  echo "$PROG: --latest and --since-last-review are exclusive — each picks the item to slice from" >&2
+  exit 1
+fi
+
+if [[ -n "$NUM" && "$NUM" != <-> ]]; then
+  echo "$PROG: not a PR or issue number: $NUM" >&2
+  usage >&2
+  exit 1
+fi
+if [[ -z "$NUM" ]]; then
+  if [[ -n "$FIXTURES_TL" ]]; then
+    echo "$PROG: a number is required with --fixtures" >&2
+    exit 1
+  fi
+  if [[ "$TYPE" == issue ]]; then
+    echo "$PROG: an issue number is required — there is no \"current branch's issue\"" >&2
+    exit 1
+  fi
+  NUM=$(gh pr view --json number --jq .number 2>/dev/null) || NUM=""
+  if [[ -z "$NUM" ]]; then
+    echo "$PROG: no number given and no PR found for the current branch" >&2
+    exit 1
+  fi
+  # A branch resolves to a PR, so the type stops being an open question.
+  TYPE=pr TYPE_PINNED_BY="the current branch's PR"
+  echo "note: no number given — using the current branch's PR #$NUM" >&2
+fi
+
+if [[ -z "$REPO" ]]; then
+  if [[ -n "$FIXTURES_TL" ]]; then
+    REPO="fixtures/fixtures"
+  else
+    REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
+      echo "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
+      exit 1
+    }
+  fi
+fi
+OWNER=${REPO%%/*}
+NAME=${REPO##*/}
+
+# ── Query construction ───────────────────────────────────────────────────────
+#
+# One query serves both resource types. `issueOrPullRequest` is what makes
+# auto-detection safe rather than a guess: the union resolves the number the
+# same way GitHub's own URL router does, and __typename reports the answer.
+#
+# The fragment for the type we did *not* ask for shrinks to `number title` —
+# enough to name the mistake ("#43 is an issue, not a pull request: ...")
+# without paying for a timeline that will never be rendered.
+
+PR_STUB='number title'
+ISSUE_STUB='number title'
+
+# Timeline: commits, reviews, issue comments, force-pushes, in GitHub's own
+# timeline order (which places rebased commits sanely, unlike raw commit dates).
+#
+# Two slots are substituted below rather than a second query being written out,
+# so the shared fields cannot drift between the full and lean shapes.
+PR_FULL='number title state isDraft baseRefName@PR_BODY@
+      timelineItems(first:100,after:$endCursor,itemTypes:[@ITEM_TYPES@]){
+        pageInfo{hasNextPage endCursor}
+        nodes{
+          __typename
+          @COMMIT_FRAGMENT@
+          ... on PullRequestReview{id author{login __typename} submittedAt state body}
+          ... on IssueComment{author{login __typename} createdAt isMinimized minimizedReason@COMMENT_BODY@}
+          ... on HeadRefForcePushedEvent{createdAt beforeCommit{abbreviatedOid} afterCommit{abbreviatedOid}}
+        }
+      }'
+
+# Issue timeline. Every event type below is *fetched* unconditionally and
+# filtered in the renderer, so the counts line can honestly report how many
+# housekeeping events --events would have shown. Gating them in the query would
+# make "(+6 housekeeping filtered)" unknowable, which is the failure mode this
+# repo's bot/merge filtering already avoids.
+#
+# Deliberately not fetched: pinned/locked/transferred/duplicate/sub-issue
+# events. They are rare and none of them change what the issue asks for.
+ISSUE_FULL='number title state stateReason author{login __typename} createdAt body
+      labels(first:20){totalCount nodes{name}}
+      assignees(first:10){nodes{login}}
+      timelineItems(first:100,after:$endCursor,itemTypes:[ISSUE_COMMENT,CLOSED_EVENT,REOPENED_EVENT,CROSS_REFERENCED_EVENT,RENAMED_TITLE_EVENT,LABELED_EVENT,UNLABELED_EVENT,ASSIGNED_EVENT,UNASSIGNED_EVENT,MILESTONED_EVENT,DEMILESTONED_EVENT]){
+        pageInfo{hasNextPage endCursor}
+        nodes{
+          __typename
+          ... on IssueComment{author{login __typename} createdAt isMinimized minimizedReason body}
+          ... on ClosedEvent{actor{login __typename} createdAt stateReason}
+          ... on ReopenedEvent{actor{login __typename} createdAt}
+          ... on CrossReferencedEvent{actor{login __typename} createdAt willCloseTarget source{__typename ... on Issue{number title state repository{nameWithOwner}} ... on PullRequest{number title state repository{nameWithOwner}}}}
+          ... on RenamedTitleEvent{actor{login __typename} createdAt previousTitle currentTitle}
+          ... on LabeledEvent{actor{login __typename} createdAt label{name}}
+          ... on UnlabeledEvent{actor{login __typename} createdAt label{name}}
+          ... on AssignedEvent{actor{login __typename} createdAt assignee{__typename ... on User{login} ... on Bot{login} ... on Organization{login} ... on Mannequin{login}}}
+          ... on UnassignedEvent{actor{login __typename} createdAt assignee{__typename ... on User{login} ... on Bot{login} ... on Organization{login} ... on Mannequin{login}}}
+          ... on MilestonedEvent{actor{login __typename} createdAt milestoneTitle}
+          ... on DemilestonedEvent{actor{login __typename} createdAt milestoneTitle}
+        }
+      }'
+
+# --unresolved renders only reviews that still hold an open thread, plus the
+# orphan threads under their own heading. No commit and no issue-comment body
+# can reach that output — but the full query fetched them anyway: of 74,026 B
+# slurped on a thread-heavy PR, 51,937 B was issue-comment bodies that mode
+# never prints. The lean shape measures 5,186 B and renders
+# byte-identically.
+#
+# The PR's own description goes the same way and for the same reason: it is
+# rendered as a `body` item at the top of a normal dump, and --unresolved
+# renders no such item, so fetching it there is pure waste. It is one field but
+# not a small one — a PR description routinely runs longer than any single
+# comment on the PR.
+#
+# The IssueComment *node* has to stay. The counts header reads
+# "top-level comments: 12 (+2 bots filtered) (1 hidden)", which needs one
+# node per comment, author.__typename to spot the bots and isMinimized to
+# spot the hidden ones. Only the body goes.
+#
+# --toc is deliberately not part of the gate: `--toc --unresolved` renders the
+# same reviews-and-threads subset, so it takes the lean query too. Bare --toc
+# does not — it needs every body, for the previews and the findings scan.
+#
+# The flags that are gated out all need what the lean query drops: --since
+# compares commit timestamps, and --since-last-review and --latest index into
+# the full timeline to find the item to slice from (--latest also reads
+# comment bodies to tell a substantive comment from an empty one).
+#
+# This buys wire bytes and wall-clock, *not* context tokens: stdout is
+# identical either way, which is exactly what the byte-identity test asserts.
+#
+# The substituted values go through variables, not inline into ${x//p/r}: the
+# commit fragment is full of braces, and a literal `}` there closes the
+# parameter expansion early.
+if (( UNRESOLVED )) && [[ -z "$SINCE" ]] && (( SLR == 0 )) && (( LATEST == 0 )); then
+  TL_ITEM_TYPES='PULL_REQUEST_REVIEW,ISSUE_COMMENT,HEAD_REF_FORCE_PUSHED_EVENT'
+  TL_COMMIT_FRAGMENT=''
+  TL_COMMENT_BODY=''
+  TL_PR_BODY=''
+else
+  TL_ITEM_TYPES='PULL_REQUEST_COMMIT,PULL_REQUEST_REVIEW,ISSUE_COMMENT,HEAD_REF_FORCE_PUSHED_EVENT'
+  TL_COMMIT_FRAGMENT='... on PullRequestCommit{commit{abbreviatedOid messageHeadline committedDate parents(first:1){totalCount}}}'
+  TL_COMMENT_BODY=' body'
+  TL_PR_BODY=' author{login __typename} createdAt body'
+fi
+PR_FULL=${PR_FULL//@ITEM_TYPES@/$TL_ITEM_TYPES}
+PR_FULL=${PR_FULL//@COMMIT_FRAGMENT@/$TL_COMMIT_FRAGMENT}
+PR_FULL=${PR_FULL//@COMMENT_BODY@/$TL_COMMENT_BODY}
+PR_FULL=${PR_FULL//@PR_BODY@/$TL_PR_BODY}
+
+case "$TYPE" in
+  pr)    PR_FRAGMENT=$PR_FULL;  ISSUE_FRAGMENT=$ISSUE_STUB ;;
+  issue) PR_FRAGMENT=$PR_STUB;  ISSUE_FRAGMENT=$ISSUE_FULL ;;
+  *)     PR_FRAGMENT=$PR_FULL;  ISSUE_FRAGMENT=$ISSUE_FULL ;;
+esac
+
+TL_QUERY='query($owner:String!,$name:String!,$num:Int!,$endCursor:String){
+  repository(owner:$owner,name:$name){
+    issueOrPullRequest(number:$num){
+      __typename
+      ... on PullRequest{@PR_FRAGMENT@}
+      ... on Issue{@ISSUE_FRAGMENT@}
+    }
+  }
+}'
+TL_QUERY=${TL_QUERY//@PR_FRAGMENT@/$PR_FRAGMENT}
+TL_QUERY=${TL_QUERY//@ISSUE_FRAGMENT@/$ISSUE_FRAGMENT}
+
+# Inline threads: resolution state lives only here, not in the REST API.
+# Issued only once the target is known to be a PR.
+TH_QUERY='query($owner:String!,$name:String!,$num:Int!,$endCursor:String){
+  repository(owner:$owner,name:$name){
+    pullRequest(number:$num){
+      reviewThreads(first:50,after:$endCursor){
+        pageInfo{hasNextPage endCursor}
+        nodes{
+          isResolved isOutdated path line originalLine
+          comments(first:50){totalCount pageInfo{hasNextPage} nodes{author{login __typename} createdAt isMinimized minimizedReason body pullRequestReview{id} originalCommit{abbreviatedOid}}}
+        }
+      }
+    }
+  }
+}'
+
+# Both payloads reach jq through files rather than argv. Passing them as
+# --argjson blew macOS's 1 MB ARG_MAX on large PRs ("argument list too long:
+# jq", exit 127, zero output) — and did so *after* both fetches had been paid
+# for. --slurpfile slurps a stream of JSON values into an array, which is
+# exactly what `jq -s .` produced, so the jq program needs no changes.
+# Cleanup needs all three traps, and the signal ones have to exit. A single
+# `trap ... EXIT INT TERM` deletes the payloads and then *keeps running*, since
+# zsh resumes execution after a non-exiting signal handler — the script limps
+# on into the error branch and reads files that no longer exist. But EXIT alone
+# does not fire on SIGTERM at all, so it leaks all three files. Handlers that
+# exit get both: the exit runs the EXIT trap, and the script actually stops.
+TL_FILE=$(mktemp) TH_FILE=$(mktemp) GH_ERR=""
+trap 'rm -f "$TL_FILE" "$TH_FILE" ${GH_ERR:+"$GH_ERR"}' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# resolved_type <file> — what the timeline payload actually holds. The union's
+# __typename is authoritative when present; the wrapping field name is the
+# fallback, which is what keeps payloads captured before `issueOrPullRequest`
+# (every fixture in tests/fixtures/pr-comments/) readable.
+resolved_type() {
+  # `-n` + `input` reads exactly the first document. Both payload shapes reach
+  # here as a *stream* of pages, so a bare filter would answer once per page
+  # and the caller would compare a multi-line string against "pr".
+  jq -rn 'input | (if type == "array" then .[0] else . end)
+         | (.data.repository // {})
+         | if (.issueOrPullRequest // null) != null then
+             (.issueOrPullRequest.__typename
+              | if . == "PullRequest" then "pr" elif . == "Issue" then "issue" else "unknown" end)
+           elif (.pullRequest // null) != null then "pr"
+           elif (.issue // null) != null then "issue"
+           else "none" end' "$1" 2>/dev/null || print -r -- unknown
+}
+
+# target_title <file> — the title of whatever the payload holds, for the
+# wrong-type diagnosis.
+target_title() {
+  jq -rn 'input | (if type == "array" then .[0] else . end)
+         | (.data.repository // {})
+         | ((.issueOrPullRequest // .pullRequest // .issue // {}).title // "")' "$1" 2>/dev/null || true
+}
+
+if [[ -n "$FIXTURES_TL" ]]; then
+  # Fixtures hold the documented `jq -s .` array form; unwrap one level into
+  # the value stream --slurpfile expects (a bare stream is accepted too).
+  jq -c 'if type == "array" then .[] else . end' "$FIXTURES_TL" > "$TL_FILE"
+  if [[ -n "$FIXTURES_TH" ]]; then
+    jq -c 'if type == "array" then .[] else . end' "$FIXTURES_TH" > "$TH_FILE"
+  fi
+else
+  # The two fetches stay sequential and in the foreground. Overlapping them is
+  # worth ~30% of a ~1.9 s run and was tried here, but it
+  # buys wall-clock rather than context tokens — which was never what the issue
+  # was about — and it moves both calls out from under the shell's own process
+  # management. Two defects came with it, both caught in review:
+  #
+  #   - A shell started without job control gives background children SIGINT
+  #     set to SIG_IGN, so Ctrl-C stopped this script and left two gh processes
+  #     paginating the API, writing into files the EXIT trap had unlinked.
+  #   - The threads call then ran unconditionally, so a bad number printed
+  #     gh's raw "Could not resolve" ahead of the curated not-found diagnosis.
+  #
+  # Both were fixable and were fixed, but the cost was a signal handler and a
+  # second stderr capture guarding a latency win nobody asked for. Left
+  # sequential deliberately: the win is wall-clock, not context, and not
+  # worth the handlers it needs.
+  GH_ERR=$(mktemp)
+  if ! gh api graphql --paginate -F owner="$OWNER" -F name="$NAME" -F num="$NUM" -f query="$TL_QUERY" > "$TL_FILE" 2>"$GH_ERR"; then
+    # gh may report the failure on either stream, so both are searched.
+    if ! grep -q "Could not resolve" "$GH_ERR" "$TL_FILE"; then
+      echo "$PROG: gh error:" >&2
+      # gh writes a one-line summary to stderr *and* the full errors[] body
+      # (type/path/locations) to stdout; show both, since either can carry the
+      # detail the other lacks. The JSON body arrives with no trailing newline,
+      # hence the tail -c1 check — $(...) strips a trailing newline, so an empty
+      # result means the file already ended in one.
+      for f in "$GH_ERR" "$TL_FILE"; do
+        [[ -s "$f" ]] || continue
+        cat "$f" >&2
+        if [[ -n "$(tail -c1 "$f")" ]]; then echo >&2; fi
+      done
+      exit 1
+    fi
+    # `issueOrPullRequest` resolves both sequences, so a number that fails to
+    # resolve is not a PR *or* an issue — it does not exist in this repo.
+    echo "$PROG: #$NUM not found in $REPO" >&2
+    # Diagnose, don't silently switch targets: N is often the issue number
+    # embedded in the branch name, while the branch's PR is something else.
+    BRANCH_PR=$(gh pr view --json number,title --jq '"#\(.number): \(.title)"' 2>/dev/null) || BRANCH_PR=""
+    [[ -n "$BRANCH_PR" ]] && echo "  the current branch's PR is $BRANCH_PR — rerun with that number" >&2
+    exit 1
+  fi
+fi
+
+RTYPE=$(resolved_type "$TL_FILE")
+if [[ "$RTYPE" == none || "$RTYPE" == unknown ]]; then
+  echo "$PROG: #$NUM not found in $REPO" >&2
+  exit 1
+fi
+
+# A pinned type that does not match is an error, never a silent switch: the
+# whole point of `gh-comments 43 --pr` is that 43 had better be a PR.
+if [[ "$TYPE" != auto && "$TYPE" != "$RTYPE" ]]; then
+  TITLE=$(target_title "$TL_FILE")
+  typeset -A ARTICLE=(pr "a pull request" issue "an issue")
+  echo "$PROG: #$NUM is ${ARTICLE[$RTYPE]}, not ${ARTICLE[$TYPE]}${TITLE:+: \"$TITLE\"}" >&2
+  echo "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG $NUM" >&2
+  exit 1
+fi
+
+# Flags that only one resource type can honour. Silently ignoring them would
+# report a filtered view as a complete one.
+if [[ "$RTYPE" == issue ]]; then
+  typeset -a BAD=()
+  (( UNRESOLVED )) && BAD+=(--unresolved)
+  (( SLR )) && BAD+=(--since-last-review)
+  (( LATEST )) && BAD+=(--latest)
+  (( MERGES )) && BAD+=(--merges)
+  if (( ${#BAD} )); then
+    echo "$PROG: ${(j:, :)BAD} only appl$( (( ${#BAD} == 1 )) && print -n ies || print -n y ) to pull requests; #$NUM is an issue" >&2
+    exit 1
+  fi
+else
+  if (( EVENTS )); then
+    echo "$PROG: --events only applies to issues; #$NUM is a pull request" >&2
+    exit 1
+  fi
+fi
+
+if [[ "$RTYPE" == pr ]]; then
+  if [[ -n "$FIXTURES_TL" ]]; then
+    if [[ -z "$FIXTURES_TH" ]]; then
+      echo "$PROG: --fixtures needs a threads payload for a PR: --fixtures <tl.json> <th.json>" >&2
+      exit 1
+    fi
+  else
+    # Reached only when the timeline fetch succeeded, so a bad number never
+    # gets here and the curated diagnosis above stays the whole report. This
+    # call has no diagnosis of its own and rides set -e: a half-fetched PR must
+    # never render as a complete one.
+    gh api graphql --paginate -F owner="$OWNER" -F name="$NAME" -F num="$NUM" -f query="$TH_QUERY" > "$TH_FILE"
+  fi
+fi
+
+JQ_PROG='
+def hdate: (. // "") | sub("T";" ") | .[0:16];
+def strip_hc: gsub("<!--[\\s\\S]*?-->"; "");
+# Rich-text pastes arrive as HTML where style attributes can be ~75% of the
+# bytes. Only bodies that are mostly markup are converted; the code-fence
+# guard keeps HTML shown *as code* in a normal markdown comment untouched.
+def htmlheavy:
+  (length > 200)
+  and ((test("```")) | not)
+  and ((gsub("<[^>]*>"; "") | length) < (length * 0.6));
+def html2md:
+  gsub("<style\\b[^>]*>[\\s\\S]*?</style>"; "")
+  | gsub("<script\\b[^>]*>[\\s\\S]*?</script>"; "")
+  | gsub("<a\\b[^>]*href=\"(?<u>[^\"]+)\"[^>]*>(?<t>[\\s\\S]*?)</a>"; "[\(.t)](\(.u))")
+  | gsub("<br\\b[^>]*>"; "\n")
+  | gsub("<pre\\b[^>]*>"; "\n```\n") | gsub("</pre>"; "\n```\n")
+  | gsub("<code\\b[^>]*>|</code>"; "`")
+  | gsub("<(b|strong)\\b[^>]*>|</(b|strong)>"; "**")
+  | gsub("<(i|em)\\b[^>]*>|</(i|em)>"; "*")
+  | gsub("<h1\\b[^>]*>"; "# ") | gsub("<h2\\b[^>]*>"; "## ") | gsub("<h[3-6]\\b[^>]*>"; "### ")
+  | gsub("<li\\b[^>]*>"; "\n- ")
+  | gsub("<blockquote\\b[^>]*>"; "\n> ")
+  | gsub("</t[dh]>"; " | ")
+  | gsub("</(p|div|h[1-6]|table|blockquote)>"; "\n\n")
+  | gsub("</li>"; "")
+  | gsub("</(ul|ol|tr)>"; "\n")
+  | gsub("<[^>]*>"; "")
+  | gsub("&nbsp;"; " ")
+  | gsub("&lt;"; "<") | gsub("&gt;"; ">")
+  | gsub("&quot;"; "\"") | gsub("&apos;"; "'\''")
+  | gsub("&mdash;"; "—") | gsub("&ndash;"; "–") | gsub("&hellip;"; "…") | gsub("&bull;"; "•")
+  | gsub("&ldquo;|&rdquo;"; "\"") | gsub("&lsquo;|&rsquo;"; "'\''")
+  | gsub("&#(?<d>[0-9]+);"; "\([(.d | tonumber)] | implode)")
+  | gsub("&amp;"; "&")
+  | gsub("[ \\t]+\\n"; "\n") | gsub("\\n[ \\t]+"; "\n")
+  | gsub("\\n{3,}"; "\n\n");
+def clean: (. // "") | strip_hc | gsub("\r"; "")
+  | (if htmlheavy then html2md else . end)
+  # After strip_hc, an HTML comment on its own line leaves the blank lines that
+  # surrounded it, stacked. PR templates are made of such comments, so the PR
+  # description this renders is where it shows worst. Three blank lines and one
+  # are the same paragraph break in markdown, so nothing is lost by collapsing.
+  | gsub("\n{3,}"; "\n\n")
+  | sub("^\\s+"; "") | sub("\\s+$"; "");
+def findings: [(. // "") | scan("<!--\\s*finding:([^\\s>]+)\\s*-->")] | flatten | unique;
+# Comments carry an `author`, timeline events carry an `actor`. PR nodes have
+# no `actor` at all, so the fallback cannot change any PR render.
+def who: (.author // .actor // {});
+def login: (who | (.login // "ghost"));
+def isbot: (who | (((.__typename // "") == "Bot") or (((.login // "")) | test("\\[bot\\]$"))));
+def indent(p): split("\n") | map(if . == "" then "" else p + . end) | join("\n");
+def human(n): if n >= 1000 then "\((n / 100 | round) / 10)k" else "\(n)" end;
+# The size cue marks a preview as a preview: a truncated line must never read
+# as a summary of the comment (a body can open "all fixed" and then report new
+# findings).
+def preview(n): clean | gsub("\\s+"; " ")
+  | if length > n then .[0:n] + "… [+\(human(length - n)) chars]" else . end;
+# An empty body must not leave a dangling space on the TOC line: the full
+# render already prints a bare header there, and a golden that pins invisible
+# whitespace is a golden nobody can read.
+def tocsuffix(n): preview(n) as $p | if $p == "" then "" else " " + $p end;
+def botmark($nb; $incl):
+  if $nb == 0 then ""
+  elif $incl then " (incl. \($nb) bot\(if $nb == 1 then "" else "s" end))"
+  else " (+\($nb) bot\(if $nb == 1 then "" else "s" end) filtered)" end;
+def hkmark($n; $incl):
+  if $n == 0 then ""
+  elif $incl then " (incl. \($n) housekeeping)"
+  else " (+\($n) housekeeping filtered)" end;
+# Hidden (minimized) comments. GitHub hides a comment as outdated, spam,
+# resolved, off-topic or duplicate; `gh` drops it from the output entirely.
+# Here it keeps its header line with the reason as a marker and loses its body,
+# so the counts line can still say what was held back,
+# and --hidden puts the body back. Payloads captured before the field was
+# fetched have no isMinimized at all and render exactly as before.
+def hidden: (.isMinimized // false);
+def hidmark: " (hidden: \((.minimizedReason // "?") | ascii_downcase))";
+def showhidden: $hidden == "1";
+# The comments number counts the lines rendered, markers included, so it
+# agrees with a count of `comment` lines in either mode; the tally says how
+# many of them are markers without a body.
+def hiddenmark($n): if $n == 0 then "" else " (\($n) hidden)" end;
+# The body, or a TOC preview of it — unless the comment is hidden and the
+# bodies of hidden comments were not asked for.
+def comment_body($TOC; $pad):
+  if hidden and (showhidden | not) then ""
+  elif $TOC then (.body | tocsuffix(70))
+  else ((.body | clean) as $b | if $b == "" then "" else "\n" + ($b | indent($pad)) end) end;
+def ts: if .__typename == "PullRequestCommit" then .commit.committedDate
+        elif .__typename == "PullRequestReview" then .submittedAt
+        else .createdAt end;
+# The union field, the pre-union PR field, and a bare issue field all land
+# here, so payloads captured before either query shape stay renderable.
+def tgt: (.data.repository // {}) | (.issueOrPullRequest // .pullRequest // .issue);
+
+# The opening post — the description on a PR, the statement of the problem on
+# an issue. Rendered from the target object itself rather than the timeline,
+# because it is not an event: nobody did it *to* the thing, it is the thing.
+# (No apostrophes in here: JQ_PROG is a single-quoted shell string, so one
+# closes it and the rest of the program becomes shell words.)
+def r_body($TOC):
+  "body [\(login) \(.createdAt | hdate)]"
+  + (if $TOC then (.body | tocsuffix(70))
+     else ((.body | clean) as $b | if $b == "" then "" else "\n" + ($b | indent("  ")) end) end);
+# Whether the opening-post fields were fetched at all. Two payloads legitimately
+# lack them: the lean --unresolved timeline, which drops the description it
+# would never render, and any PR payload captured before this field list grew
+# (every fixture in tests/fixtures/pr-comments/ predates it). Both must render
+# no `body` line rather than a hollow "body [ghost ]".
+def has_body: (.createdAt // null) != null;
+
+def r_thread_hdr:
+  "thread  \(.path):\((.line // .originalLine // "?") | tostring)"
+  + (([.comments.nodes[]?.body | findings] | add // [] | unique) as $ids
+     | if ($ids | length) > 0 then " [\($ids | join(","))]" else "" end)
+  + " " + (if .isResolved then "resolved" else "OPEN" end)
+  + (if .isOutdated then ",outdated" else "" end)
+  + ((((.comments.nodes[0] // {}).originalCommit // {}).abbreviatedOid // null)
+     | if . then " @\(.)" else "" end)
+  + (if (((.comments.pageInfo // {}).hasNextPage) // false)
+     then " [TRUNCATED: showing \(.comments.nodes | length) of \((.comments.totalCount) // "?") replies]"
+     else "" end);
+
+def r_thread_comments:
+  [.comments.nodes[]
+   | "    [\(login) \(.createdAt | hdate)]"
+     + (if hidden then hidmark else "" end)
+     + comment_body(false; "      ")]
+  | join("\n");
+
+def r_thread($TOC):
+  r_thread_hdr
+  + (if $TOC then ""
+     else (r_thread_comments as $tc | if $tc == "" then "" else "\n" + $tc end) end);
+
+# A titled run of threads that have no review header to hang under: the
+# orphans, and the threads of a review that --bots held back. Emits nothing
+# at all for an empty list, so the title never appears over nothing.
+def r_thread_block($title; $TOC):
+  if length == 0 then empty
+  else $title, (.[] | r_thread($TOC), (if $TOC then empty else "" end)) end;
+
+def r_item($tmap; $TOC; $UNRES):
+  if .__typename == "PullRequestCommit" then
+    "commit  \(.commit.abbreviatedOid) \(.commit.messageHeadline)"
+  elif .__typename == "HeadRefForcePushedEvent" then
+    "force-push  \(((.beforeCommit // {}).abbreviatedOid) // "?")..\(((.afterCommit // {}).abbreviatedOid) // "?")  [\(.createdAt | hdate)]"
+  elif .__typename == "IssueComment" then
+    "comment [\(login) \(.createdAt | hdate)]"
+    + (if hidden then hidmark else "" end)
+    + comment_body($TOC; "  ")
+  else
+    . as $r
+    | ($tmap[$r.id] // []) as $ths
+    | ([$ths[] | select(.isResolved | not)]) as $open
+    | (if $UNRES then $open else $ths end) as $show
+    | "review  [\($r | login) \($r.submittedAt | hdate)] \($r.state), \($ths | length) thread\(if ($ths | length) == 1 then "" else "s" end) (\($open | length) open)"
+      + (($r.body | clean) as $b
+         | if $b == "" then ""
+           elif $TOC then " " + ($r.body | preview(70))
+           else "\n" + ($b | indent("  ")) end)
+      + ([$show[] | "\n" + r_thread($TOC)] | join(""))
+  end;
+
+# ── issue rendering ─────────────────────────────────────────────────────────
+# Housekeeping: the events that record project bookkeeping rather than what the
+# issue asks for. Fetched always, shown only under --events, counted either way.
+def housekeeping: ["LabeledEvent","UnlabeledEvent","AssignedEvent","UnassignedEvent",
+                   "MilestonedEvent","DemilestonedEvent"];
+def ishk: .__typename as $t | (housekeeping | index($t)) != null;
+
+def r_xref($repo):
+  (.source // {}) as $s
+  | ((($s.repository // {}).nameWithOwner) // "") as $srepo
+  | (if $srepo == "" or $srepo == $repo then "#\($s.number // "?")"
+     else "\($srepo)#\($s.number // "?")" end) as $ref
+  | (if $s.__typename == "PullRequest" then "PR" else "issue" end) as $kind
+  | "xref [\(login) \(.createdAt | hdate)] \($ref) \($kind) \($s.state // "?")"
+    + (if (.willCloseTarget // false) then " (closes)" else "" end)
+    + ((($s.title // "") | gsub("\\s+"; " ")) as $t
+       | if $t == "" then "" else " \"\($t)\"" end);
+
+def r_issue_item($repo; $TOC):
+  "[\(login) \(.createdAt | hdate)]" as $by
+  | if .__typename == "IssueComment" then
+      "comment \($by)"
+      + (if hidden then hidmark else "" end)
+      + comment_body($TOC; "  ")
+    elif .__typename == "ClosedEvent" then
+      "closed \($by)" + ((.stateReason // null) | if . then " as \(ascii_downcase)" else "" end)
+    elif .__typename == "ReopenedEvent" then "reopened \($by)"
+    elif .__typename == "CrossReferencedEvent" then r_xref($repo)
+    elif .__typename == "RenamedTitleEvent" then
+      "renamed \($by) \"\(.previousTitle // "")\" → \"\(.currentTitle // "")\""
+    elif .__typename == "LabeledEvent" then "label \($by) +\(((.label // {}).name) // "?")"
+    elif .__typename == "UnlabeledEvent" then "label \($by) -\(((.label // {}).name) // "?")"
+    elif .__typename == "AssignedEvent" then "assign \($by) +\(((.assignee // {}).login) // "?")"
+    elif .__typename == "UnassignedEvent" then "assign \($by) -\(((.assignee // {}).login) // "?")"
+    elif .__typename == "MilestonedEvent" then "milestone \($by) +\(.milestoneTitle // "?")"
+    elif .__typename == "DemilestonedEvent" then "milestone \($by) -\(.milestoneTitle // "?")"
+    else "event \($by) \(.__typename)" end;
+
+($toc == "1") as $TOC |
+($unresolved == "1") as $UNRES |
+($bots == "1") as $BOTS |
+($merges == "1") as $MERGES |
+($events == "1") as $EVENTS |
+
+($tl[0] | tgt) as $meta |
+if $meta == null then error("#\($num) not found in \($repo)") else
+
+if $rtype == "issue" then
+
+([$tl[] | tgt.timelineItems.nodes[]]) as $nodes0 |
+([$nodes0[] | select(.__typename == "IssueComment")]) as $comsall |
+([$comsall[] | select(isbot)] | length) as $combots |
+# The bot gate comes first: a hidden bot comment is counted once, as a bot,
+# unless --bots put it back — then it is counted among the hidden.
+([$comsall[] | select(($BOTS or (isbot | not)) and hidden)] | length) as $comhidden |
+([$nodes0[] | select(.__typename != "IssueComment")]) as $evall |
+([$evall[] | select(ishk)] | length) as $evhk |
+([$evall[] | select(.__typename == "CrossReferencedEvent")] | length) as $evxref |
+
+# --bots governs *comments*, exactly as it does on a PR. Events are never
+# filtered by author, because the bot-authored ones are the ones that matter
+# most: a stale bot closing the issue produces the only `closed` line there
+# will ever be, and a Dependabot PR that says "Closes #N" produces the only
+# `xref`. Filtering those alongside the bot comment they arrive with left a
+# dump that said [CLOSED not_planned] in its header, `events: 0` in its
+# counts, and gave no reason anywhere — the exact question ("why was this
+# closed") the issue renderer exists to answer.
+#
+# Bot noise on an issue is comments and labels, and each of those already has
+# its own gate. One filter per axis; none of them overlapping.
+([$nodes0[]
+  | select((.__typename == "IssueComment" and isbot and ($BOTS | not)) | not)
+  | select((ishk and ($EVENTS | not)) | not)]) as $nodes1 |
+(if $since != "" then [$nodes1[] | select((.createdAt // "9999") >= $since)] else $nodes1 end) as $items |
+
+"issue #\($num) \($meta.title) [\($meta.state)"
+  + ((($meta.stateReason) // null) | if . then " " + ascii_downcase else "" end)
+  + ((($meta.labels // {}) | (.nodes // []) | map(.name)) as $ln
+     | if ($ln | length) == 0 then ""
+       else " labels:" + ($ln | join(","))
+            # `labels(first:20)` is a page like any other. Twenty is beyond
+            # generous for a header line, but a silent cut is the one thing
+            # this renderer does not do anywhere else.
+            + (((($meta.labels // {}).totalCount // ($ln | length)) - ($ln | length)) as $more
+               | if $more > 0 then " (+\($more) more)" else "" end)
+       end)
+  + ((([(($meta.assignees // {}).nodes // [])[] | .login]) | if length > 0 then " assignees:" + join(",") else "" end))
+  + "]",
+("comments: \(if $BOTS then ($comsall | length) else ($comsall | length) - $combots end)\(botmark($combots; $BOTS))\(hiddenmark($comhidden))"
+ + " · cross-refs: \($evxref)"
+ + " · events: \(($evall | length) - $evxref - (if $EVENTS then 0 else $evhk end))\(hkmark($evhk; $EVENTS))"),
+"",
+# The opening post is the issue, not a timeline entry: --since narrows the
+# discussion, it does not take away what is being discussed.
+(if ($meta | has_body)
+ then ($meta | r_body($TOC)), (if $TOC then empty else "" end)
+ else empty end),
+(if ($items | length) == 0 then "(no timeline items)"
+ else ($items[] | r_issue_item($repo; $TOC), (if $TOC then empty else "" end)) end)
+
+else
+
+([$tl[] | tgt.timelineItems.nodes[]]) as $nodes0 |
+([$th[].data.repository.pullRequest.reviewThreads.nodes[]]) as $threads |
+
+([$nodes0[] | select(.__typename == "PullRequestReview" and .submittedAt != null)]) as $revsall |
+([$revsall[] | select(isbot)] | length) as $revbots |
+([$nodes0[] | select(.__typename == "IssueComment")]) as $comsall |
+([$comsall[] | select(isbot)] | length) as $combots |
+# Bot gate first, then hidden among what survives it — as on an issue.
+([$comsall[] | select(($BOTS or (isbot | not)) and hidden)] | length) as $comhidden |
+([$threads[] | select(.isResolved | not)] | length) as $topen |
+
+# A thread hangs under the review its opening comment belongs to. One whose
+# review is not a submitted review in the timeline — a pending review, or a
+# review the timeline page never carried — would hang under nothing and
+# vanish while the header counted it, so it is keyed as an orphan instead.
+([$revsall[] | .id]) as $revids |
+(reduce $threads[] as $t ({};
+   (((($t.comments.nodes[0] // {}).pullRequestReview // {}).id) // "orphan") as $rid
+   | (if ($revids | index($rid)) != null then $rid else "orphan" end) as $rid
+   | .[$rid] += [$t])) as $tmap |
+
+([$nodes0[]
+  | select(.__typename != "PullRequestReview" or .submittedAt != null)
+  | select(((.__typename == "IssueComment" or .__typename == "PullRequestReview") and isbot and ($BOTS | not)) | not)
+  | select((.__typename == "PullRequestCommit" and (((.commit.parents // {}).totalCount // 1) > 1) and ($MERGES | not)) | not)
+ ]) as $nodes1 |
+
+(if $slr == "1" then
+   ([$nodes1 | to_entries[]
+     | select(.value.__typename == "PullRequestReview")
+     | select($slr_author == "" or ((.value | login) == $slr_author))
+     | .key] | last)
+ else null end) as $slr_idx |
+
+# --latest wants the last item a reader would call "the latest review": a
+# review that said something (a body) or asked something (a thread), or a
+# top-level comment with a body that is not hidden. --since-last-review only
+# ever looks at review objects, so a reviewer who followed up in a comment
+# is invisible to it, and a bare approval anchors it. Those are looked past
+# as the anchor here — not dropped: everything after the anchor renders.
+# Candidates come from $nodes1, so a bot is skipped unless --bots put it back.
+def substantive:
+  (.__typename == "PullRequestReview"
+   and (((.body | clean) != "") or ((($tmap[.id] // []) | length) > 0)))
+  or (.__typename == "IssueComment" and (hidden | not) and ((.body | clean) != ""));
+(if $latest == "1" then
+   ([$nodes1 | to_entries[]
+     | select(.value | substantive)
+     | select($latest_author == "" or ((.value | login) == $latest_author))
+     | .key] | last)
+ else null end) as $latest_idx |
+
+# A slicing flag that matches nothing falls back to the TOC, not the full
+# render: the full timeline is the one thing the caller asked not to see, and
+# on a PR with no reviews it came out slightly larger than a plain run. The
+# note under the counts line says which happened,
+# and the rest of the output is exactly what --toc prints. That holds only
+# when nothing else narrows the view: under --unresolved the alternative was
+# never the full timeline, and under --since the window is already narrow, so
+# there the fallback is that view as it is, bodies included, and the note
+# names it. Forcing the TOC on those too stripped the thread bodies from the
+# one flag the docs point at for them.
+(($slr == "1" and $slr_idx == null) or ($latest == "1" and $latest_idx == null)) as $fellback |
+(($UNRES | not) and ($since == "")) as $unnarrowed |
+($TOC or ($fellback and $unnarrowed)) as $TOC |
+(if $UNRES then "the unresolved view" elif $since != "" then "the --since window" else "the TOC" end) as $fallback_view |
+(($slr == "1" and $slr_idx != null) or ($latest == "1" and $latest_idx != null)) as $sliced |
+
+(if $slr == "1" and $slr_idx != null then $nodes1[$slr_idx:]
+ elif $latest == "1" and $latest_idx != null then $nodes1[$latest_idx:]
+ else $nodes1 end) as $nodes2 |
+(if $since != ""
+ then [$nodes2[]
+       | select(((ts // "9999") >= $since)
+                or (.__typename == "PullRequestReview"
+                    and ([($tmap[.id] // [])[] | .comments.nodes[]? | .createdAt // empty]
+                         | any(. >= $since))))]
+ else $nodes2 end) as $items |
+
+# Threads are not filtered by author — only comments and review bodies are.
+# Without --bots a bot review is dropped from $nodes1, and a thread renders
+# only through its parent review, so their threads vanished from every mode
+# while the counts line went on counting them: on a
+# PR where the bot held the only open thread, the header said "(1 open)" over
+# "(no unresolved threads)". Collect those threads here and render them under
+# their own heading, the way the orphans get one; with --bots the review is
+# back in $nodes1 and they nest under it as usual.
+def thread_window: if $since != ""
+    then map(select([.comments.nodes[]? | .createdAt // empty] | any(. >= $since)))
+    else . end
+  | if $UNRES then map(select(.isResolved | not)) else . end;
+
+# A slicing flag is a window on the timeline from the anchoring item on, and
+# the two titled blocks are cut to it the same way the items are. A held bot
+# review is inside the window exactly when it sits at or after the anchor in
+# the timeline — by position, which is how $nodes2 is sliced, not by
+# timestamp, since the two orders can disagree — so its threads render under
+# the heading, as they would have nested had the review not been held back.
+# An orphan has no position, so it is in when one of its comments is dated at
+# or after the anchor, the way --since places it. The anchor is whichever
+# flag matched — a review for --since-last-review, a review or a top-level
+# comment for --latest, so its date is read through ts. Without a slice (no
+# slicing flag, or nothing matched) every orphan and held review is in.
+(if $slr == "1" then $slr_idx elif $latest == "1" then $latest_idx else null end) as $anchor_idx |
+(if $sliced then $nodes1[$anchor_idx] else null end) as $anchor |
+# Located by the whole node, not by id: a top-level comment carries no id in
+# this query, and matching null against null would place a --latest comment
+# anchor at the first id-less node in the timeline.
+(if $sliced then ([$nodes0 | to_entries[] | select(.value == $anchor) | .key] | first) else 0 end) as $anchor_pos |
+(($tmap["orphan"] // [])
+ | if $sliced then map(select([.comments.nodes[]? | .createdAt // empty] | any(. >= ($anchor | ts)))) else . end
+ | thread_window) as $orphans |
+([$nodes0 | to_entries[]
+  | select(.key >= $anchor_pos)
+  | .value | select(.__typename == "PullRequestReview" and .submittedAt != null and isbot and ($BOTS | not))
+  | .id] as $ids
+ | [$ids[] as $id | ($tmap[$id] // [])[]]
+ | thread_window) as $held |
+
+"PR #\($num) \($meta.title) [\($meta.state)\(if $meta.isDraft then " draft" else "" end) base:\($meta.baseRefName)]",
+("reviews: \(if $BOTS then ($revsall | length) else ($revsall | length) - $revbots end)\(botmark($revbots; $BOTS))"
+ + " · inline threads: \($threads | length) (\($topen) open)"
+ + " · top-level comments: \(if $BOTS then ($comsall | length) else ($comsall | length) - $combots end)\(botmark($combots; $BOTS))\(hiddenmark($comhidden))"),
+(if $slr == "1" and $slr_idx == null then "note: no matching earlier review — showing \($fallback_view) instead"
+ elif $latest == "1" and $latest_idx == null then "note: no matching review or comment — showing \($fallback_view) instead"
+ else empty end),
+"",
+# Shown wherever the timeline is shown — including under --since and
+# --since-last-review, where it is the context those narrowed views otherwise
+# lack. Not under --unresolved, which by contract renders reviews and threads
+# and nothing else; the lean query it takes does not even fetch it.
+(if ($UNRES | not) and ($meta | has_body)
+ then ($meta | r_body($TOC)), (if $TOC then empty else "" end)
+ else empty end),
+(if $UNRES then
+   ([$items[]
+     | select(.__typename == "PullRequestReview")
+     | select((($tmap[.id] // []) | map(select(.isResolved | not)) | length) > 0)]) as $revs
+   # "(no unresolved threads)" may only be said when every place an open
+   # thread could render is empty — the open count in the header is a promise.
+   # A slice is one more place they cannot: a review before the anchor is
+   # outside it, and --latest usually anchors on a comment, which this view
+   # does not render at all. So under a slice the line says what it withheld
+   # instead of claiming nothing is open.
+   | if ($revs | length) == 0 and ($orphans | length) == 0 and ($held | length) == 0
+     then (if $sliced and $topen > 0
+           then "(no unresolved threads after the anchor; \($topen) open before it)"
+           else "(no unresolved threads)" end)
+     else
+       ($revs[] | r_item($tmap; $TOC; true), (if $TOC then empty else "" end)),
+       ($orphans | r_thread_block("threads with no parent review:"; $TOC)),
+       ($held | r_thread_block("threads in filtered bot reviews:"; $TOC))
+     end
+ else
+   (if ($items | length) == 0 then "(no timeline items)"
+    else ($items[] | r_item($tmap; $TOC; false), (if $TOC then empty else "" end)) end),
+   # Both blocks are already cut to the slice when there is one, and the
+   # fallback (no review matched) is the full timeline, which shows both.
+   ($orphans | r_thread_block("threads with no parent review:"; $TOC)),
+   ($held | r_thread_block("threads in filtered bot reviews:"; $TOC))
+ end)
+
+end end
+'
+
+jq -rn \
+  --slurpfile tl "$TL_FILE" \
+  --slurpfile th "$TH_FILE" \
+  --arg num "$NUM" \
+  --arg rtype "$RTYPE" \
+  --arg repo "$REPO" \
+  --arg toc "$TOC" \
+  --arg unresolved "$UNRESOLVED" \
+  --arg since "$SINCE" \
+  --arg slr "$SLR" \
+  --arg slr_author "$SLR_AUTHOR" \
+  --arg latest "$LATEST" \
+  --arg latest_author "$LATEST_AUTHOR" \
+  --arg bots "$BOTS" \
+  --arg hidden "$HIDDEN" \
+  --arg merges "$MERGES" \
+  --arg events "$EVENTS" \
+  "$JQ_PROG"

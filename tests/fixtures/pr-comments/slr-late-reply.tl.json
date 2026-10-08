@@ -1,0 +1,53 @@
+[
+  {
+    "data": {
+      "repository": {
+        "pullRequest": {
+          "title": "fix(parser): handle empty input",
+          "state": "OPEN",
+          "isDraft": false,
+          "baseRefName": "main",
+          "timelineItems": {
+            "pageInfo": { "hasNextPage": false, "endCursor": null },
+            "nodes": [
+              {
+                "__typename": "PullRequestCommit",
+                "commit": {
+                  "abbreviatedOid": "1231231",
+                  "messageHeadline": "fix(parser): handle empty input",
+                  "committedDate": "2026-08-05T08:00:00Z",
+                  "parents": { "totalCount": 1 }
+                }
+              },
+              {
+                "__typename": "PullRequestReview",
+                "id": "PRR_s1",
+                "author": { "login": "alice", "__typename": "User" },
+                "submittedAt": "2026-08-05T10:00:00Z",
+                "state": "CHANGES_REQUESTED",
+                "body": "Blocker inline."
+              },
+              {
+                "__typename": "PullRequestCommit",
+                "commit": {
+                  "abbreviatedOid": "4564564",
+                  "messageHeadline": "fix(parser): guard the empty case",
+                  "committedDate": "2026-08-06T09:00:00Z",
+                  "parents": { "totalCount": 1 }
+                }
+              },
+              {
+                "__typename": "PullRequestReview",
+                "id": "PRR_s2",
+                "author": { "login": "bob", "__typename": "User" },
+                "submittedAt": "2026-08-07T11:00:00Z",
+                "state": "APPROVED",
+                "body": "LGTM."
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]

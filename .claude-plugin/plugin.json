@@ -1,0 +1,14 @@
+{
+  "name": "gh-comments",
+  "displayName": "gh-comments",
+  "version": "1.0.0",
+  "description": "Read a GitHub pull request's or issue's discussion as compact, grep-friendly text: reviews with their inline threads and resolution state, comments, commits and timeline events, in one paginated fetch.",
+  "author": {
+    "name": "romansod",
+    "url": "https://github.com/romansod"
+  },
+  "homepage": "https://github.com/romansod/gh-comments",
+  "repository": "https://github.com/romansod/gh-comments",
+  "license": "MIT",
+  "keywords": ["github", "pull-request", "code-review", "issues", "gh-extension"]
+}

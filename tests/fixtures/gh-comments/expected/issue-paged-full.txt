@@ -1,0 +1,14 @@
+issue #12 perf: the render is slow on long threads [OPEN]
+comments: 3 (+1 bot filtered) · cross-refs: 0 · events: 0 (+1 housekeeping filtered)
+
+body [alice 2026-08-01 10:00]
+  Rendering takes ~4s on issues with hundreds of comments.
+
+comment [alice 2026-08-01 10:05]
+  First page, first comment.
+
+comment [bob 2026-08-01 10:07]
+  First page, second comment.
+
+comment [carol 2026-08-02 10:01]
+  Second page, last comment.

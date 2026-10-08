@@ -1,0 +1,7 @@
+PR #9 feat(retry): apply backoff cap [OPEN base:main]
+reviews: 0 · inline threads: 0 (0 open) · top-level comments: 2
+
+body [bob 2026-08-13 11:00] Pasted from the design doc, so this description arrives as **rich text… [+140 chars]
+commit  0badf00 feat(retry): apply backoff cap
+comment [reviewer-bart 2026-08-14 09:00] Found **two issues** in the retry logic: - The backoff cap is never ap… [+167 chars]
+comment [romansod 2026-08-14 10:00] Plain markdown comment with an HTML repro snippet that must survive un… [+234 chars]

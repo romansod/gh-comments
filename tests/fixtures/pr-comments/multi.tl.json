@@ -1,0 +1,101 @@
+[
+ {
+  "data": {
+   "repository": {
+    "pullRequest": {
+     "title": "feat(api): cursor pagination",
+     "state": "OPEN",
+     "isDraft": false,
+     "baseRefName": "main",
+     "author": {
+      "login": "alice",
+      "__typename": "User"
+     },
+     "createdAt": "2026-08-10T08:30:00Z",
+     "body": "Rewrites the retry loop around a single deadline instead of a per-attempt timeout.",
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": null
+      },
+      "nodes": [
+       {
+        "__typename": "PullRequestCommit",
+        "commit": {
+         "abbreviatedOid": "c0ffee1",
+         "messageHeadline": "feat(api): add pagination cursors",
+         "committedDate": "2026-08-10T09:00:00Z",
+         "parents": {
+          "totalCount": 1
+         }
+        }
+       },
+       {
+        "__typename": "PullRequestReview",
+        "id": "PRR_r1",
+        "author": {
+         "login": "alice",
+         "__typename": "User"
+        },
+        "submittedAt": "2026-08-10T12:00:00Z",
+        "state": "CHANGES_REQUESTED",
+        "body": "First pass \u2014 two blockers inline."
+       },
+       {
+        "__typename": "PullRequestCommit",
+        "commit": {
+         "abbreviatedOid": "d00dad1",
+         "messageHeadline": "fix(api): dedupe boundary row in cursor page",
+         "committedDate": "2026-08-11T10:00:00Z",
+         "parents": {
+          "totalCount": 1
+         }
+        }
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-11T11:00:00Z",
+        "body": "Drive-by: consider capping page size at 100."
+       },
+       {
+        "__typename": "PullRequestReview",
+        "id": "PRR_r2",
+        "author": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "submittedAt": "2026-08-11T14:00:00Z",
+        "state": "APPROVED",
+        "body": "LGTM once alice's items are closed out."
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "alice",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-12T09:00:00Z",
+        "body": "The cursor-skip finding is still open \u2014 an insert between pages can still skip a row."
+       },
+       {
+        "__typename": "PullRequestCommit",
+        "commit": {
+         "abbreviatedOid": "e11e11e",
+         "messageHeadline": "fix(api): make cursor stable under concurrent inserts",
+         "committedDate": "2026-08-12T10:00:00Z",
+         "parents": {
+          "totalCount": 1
+         }
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

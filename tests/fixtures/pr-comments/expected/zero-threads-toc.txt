@@ -1,0 +1,7 @@
+PR #7 docs: clarify retry semantics [OPEN base:main]
+reviews: 1 · inline threads: 0 (0 open) · top-level comments: 1
+
+body [carol 2026-08-15 13:00]
+commit  f00f001 docs: clarify retry semantics
+review  [carol 2026-08-13 09:00] APPROVED, 0 threads (0 open) Docs look good.
+comment [dave 2026-08-13 10:00] Thanks — merging once CI is green.

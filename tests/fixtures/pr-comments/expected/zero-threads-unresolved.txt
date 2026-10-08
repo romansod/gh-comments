@@ -1,0 +1,4 @@
+PR #7 docs: clarify retry semantics [OPEN base:main]
+reviews: 1 · inline threads: 0 (0 open) · top-level comments: 1
+
+(no unresolved threads)

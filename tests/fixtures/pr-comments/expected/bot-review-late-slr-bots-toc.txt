@@ -1,0 +1,9 @@
+PR #42 feat(api): cursor pagination (bot-reviewed) [OPEN base:main]
+reviews: 3 (incl. 2 bots) · inline threads: 5 (4 open) · top-level comments: 2
+
+body [alice 2026-08-10 08:30] Rewrites the retry loop around a single deadline instead of a per-atte… [+12 chars]
+review  [copilot-pull-request-reviewer 2026-08-12 09:30] COMMENTED, 1 thread (1 open) One more finding inline — the page-size cap is unbounded.
+thread  src/api/limits.ts:12 [B-1] OPEN @d00dad1
+commit  e11e11e fix(api): make cursor stable under concurrent inserts
+threads with no parent review:
+thread  src/api/types.ts:4 OPEN @e11e11e

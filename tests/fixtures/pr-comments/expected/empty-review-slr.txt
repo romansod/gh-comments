@@ -1,0 +1,7 @@
+PR #43 feat(api): cursor pagination [OPEN base:main]
+reviews: 3 · inline threads: 2 (1 open) · top-level comments: 2
+
+body [alice 2026-08-10 08:30]
+  Rewrites the retry loop around a single deadline instead of a per-attempt timeout.
+
+review  [bob 2026-08-12 11:00] COMMENTED, 0 threads (0 open)

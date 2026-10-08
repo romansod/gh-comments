@@ -1,0 +1,54 @@
+[
+ {
+  "data": {
+   "repository": {
+    "issueOrPullRequest": {
+     "__typename": "Issue",
+     "number": 9,
+     "title": "bug: rich-text pastes render as raw HTML",
+     "state": "OPEN",
+     "stateReason": null,
+     "author": {
+      "login": "alice",
+      "__typename": "User"
+     },
+     "createdAt": "2026-08-14T09:00:00Z",
+     "body": "The renderer drops everything after the first page of a paginated issue timeline, and the counts header still reports the full total, so the output reads as complete when it is not. Reproduced on three repos of different sizes; the cutoff is always exactly one hundred timeline items, which is the page size.",
+     "labels": {
+      "totalCount": 0,
+      "nodes": []
+     },
+     "assignees": {
+      "nodes": []
+     },
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": "Y3Vyc29yOnYyOpHR"
+      },
+      "nodes": [
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-14T09:30:00Z",
+        "body": "<div style=\"-webkit-text-stroke-width: 0px; white-space: normal; caret-color: rgb(0, 0, 0); font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px;\"><p style=\"margin: 0px 0px 12px; line-height: 1.5;\">Repro on <b style=\"font-weight: 600;\">two</b> repos:</p><ul style=\"margin: 0px 0px 12px; padding: 0px 0px 0px 24px;\"><li style=\"margin: 0px 0px 4px;\">Timeline stops at <a href=\"https://example.com/page-2\" style=\"color: rgb(9, 105, 218);\">page 2</a></li><li style=\"margin: 0px 0px 4px;\">Bot noise is counted as <code style=\"font-family: ui-monospace, monospace;\">comments</code></li></ul><p style=\"margin: 0px;\">Priority: <b style=\"font-weight: 600;\">P2</b> &amp; <b style=\"font-weight: 600;\">P3</b> &mdash;&nbsp;happy to test a fix.</p></div>"
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "carol",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-14T10:00:00Z",
+        "body": "Plain markdown comment with an HTML repro snippet that must survive untouched:\n\n```html\n<div style=\"color: red\">boom</div>\n```\n\nThe `style` attribute above is content, not paste formatting \u2014 padding this body well past the two-hundred-character detector floor so only the code-fence guard is protecting it."
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

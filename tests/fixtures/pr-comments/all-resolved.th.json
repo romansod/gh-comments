@@ -1,0 +1,58 @@
+[
+  {
+    "data": {
+      "repository": {
+        "pullRequest": {
+          "reviewThreads": {
+            "pageInfo": { "hasNextPage": false, "endCursor": null },
+            "nodes": [
+              {
+                "isResolved": true,
+                "isOutdated": false,
+                "path": "src/db/build.ts",
+                "line": 21,
+                "originalLine": 21,
+                "comments": {
+                  "nodes": [
+                    {
+                      "author": { "login": "erin", "__typename": "User" },
+                      "createdAt": "2026-08-13T13:00:00Z",
+                      "body": "Nit: prefer an early return here.",
+                      "pullRequestReview": { "id": "PRR_ar1" },
+                      "originalCommit": { "abbreviatedOid": "ab1ab1a" }
+                    },
+                    {
+                      "author": { "login": "frank", "__typename": "User" },
+                      "createdAt": "2026-08-13T14:05:00Z",
+                      "body": "Done in cd2cd2c.",
+                      "pullRequestReview": { "id": "PRR_replywrap2" },
+                      "originalCommit": { "abbreviatedOid": "ab1ab1a" }
+                    }
+                  ]
+                }
+              },
+              {
+                "isResolved": true,
+                "isOutdated": true,
+                "path": "src/db/build.ts",
+                "line": null,
+                "originalLine": 88,
+                "comments": {
+                  "nodes": [
+                    {
+                      "author": { "login": "erin", "__typename": "User" },
+                      "createdAt": "2026-08-13T13:00:30Z",
+                      "body": "Nit: rename qb to builder.",
+                      "pullRequestReview": { "id": "PRR_ar1" },
+                      "originalCommit": { "abbreviatedOid": "ab1ab1a" }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]

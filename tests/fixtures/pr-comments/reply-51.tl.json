@@ -1,0 +1,36 @@
+[
+  {
+    "data": {
+      "repository": {
+        "pullRequest": {
+          "title": "fix(auth): rotate session keys",
+          "state": "OPEN",
+          "isDraft": false,
+          "baseRefName": "main",
+          "timelineItems": {
+            "pageInfo": { "hasNextPage": false, "endCursor": null },
+            "nodes": [
+              {
+                "__typename": "PullRequestCommit",
+                "commit": {
+                  "abbreviatedOid": "5e55e55",
+                  "messageHeadline": "fix(auth): rotate session keys",
+                  "committedDate": "2026-08-14T08:00:00Z",
+                  "parents": { "totalCount": 1 }
+                }
+              },
+              {
+                "__typename": "PullRequestReview",
+                "id": "PRR_big1",
+                "author": { "login": "alice", "__typename": "User" },
+                "submittedAt": "2026-08-14T09:00:00Z",
+                "state": "CHANGES_REQUESTED",
+                "body": "Rotation window looks racy — long thread inline."
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]

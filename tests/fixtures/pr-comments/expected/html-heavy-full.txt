@@ -1,0 +1,27 @@
+PR #9 feat(retry): apply backoff cap [OPEN base:main]
+reviews: 0 · inline threads: 0 (0 open) · top-level comments: 2
+
+body [bob 2026-08-13 11:00]
+  Pasted from the design doc, so this description arrives as **rich text** rather than markdown:
+
+  - Cap the backoff at `30s`
+  - Document it in [retry.md](https://example.com/retry-md)
+  Risk: **low** — behind a flag.
+
+commit  0badf00 feat(retry): apply backoff cap
+
+comment [reviewer-bart 2026-08-14 09:00]
+  Found **two issues** in the retry logic:
+
+  - The backoff cap is never applied — see [retry.ts line 42](https://example.com/retry-l42)
+  - Jitter calls `Math.random()` twice per attempt
+  Severity: **P2** & **P3** — will re-check after the fix.
+
+comment [romansod 2026-08-14 10:00]
+  Plain markdown comment with an HTML repro snippet that must survive untouched:
+
+  ```html
+  <div style="color: red">boom</div>
+  ```
+
+  The `style` attribute above is content, not paste formatting — padding this body well past the two-hundred-character detector floor so only the code-fence guard is protecting it.

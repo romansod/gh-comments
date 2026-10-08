@@ -1,0 +1,15 @@
+{
+  "name": "gh-comments",
+  "description": "The gh-comments plugin: two skills (pr-comments, issue-comments) and the gh-comments command they run.",
+  "owner": {
+    "name": "romansod",
+    "url": "https://github.com/romansod"
+  },
+  "plugins": [
+    {
+      "name": "gh-comments",
+      "source": "./",
+      "description": "Read a GitHub pull request's or issue's discussion as compact, grep-friendly text, with review threads and their resolution state."
+    }
+  ]
+}

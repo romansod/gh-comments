@@ -1,0 +1,57 @@
+[
+ {
+  "data": {
+   "repository": {
+    "pullRequest": {
+     "title": "feat(retry): apply backoff cap",
+     "state": "OPEN",
+     "isDraft": false,
+     "baseRefName": "main",
+     "author": {
+      "login": "bob",
+      "__typename": "User"
+     },
+     "createdAt": "2026-08-13T11:00:00Z",
+     "body": "<div style=\"-webkit-text-stroke-width: 0px; white-space: normal; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px;\"><p style=\"margin: 0px 0px 12px; line-height: 1.5;\">Pasted from the design doc, so this description arrives as <b style=\"font-weight: 600;\">rich text</b> rather than markdown:</p><ul style=\"margin: 0px 0px 12px; padding: 0px 0px 0px 24px;\"><li style=\"margin: 0px 0px 4px;\">Cap the backoff at <code style=\"font-family: ui-monospace, monospace;\">30s</code></li><li style=\"margin: 0px 0px 4px;\">Document it in <a href=\"https://example.com/retry-md\" style=\"color: rgb(9, 105, 218);\">retry.md</a></li></ul><p style=\"margin: 0px;\">Risk: <b style=\"font-weight: 600;\">low</b> &mdash;&nbsp;behind a flag.</p></div>",
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": null
+      },
+      "nodes": [
+       {
+        "__typename": "PullRequestCommit",
+        "commit": {
+         "abbreviatedOid": "0badf00",
+         "messageHeadline": "feat(retry): apply backoff cap",
+         "committedDate": "2026-08-14T08:00:00Z",
+         "parents": {
+          "totalCount": 1
+         }
+        }
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "reviewer-bart",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-14T09:00:00Z",
+        "body": "<div style=\"-webkit-text-stroke-width: 0px; white-space: normal; caret-color: rgb(0, 0, 0); font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px;\"><p style=\"margin: 0px 0px 12px; -webkit-text-stroke-width: 0px; white-space: normal; line-height: 1.5;\">Found <b style=\"font-weight: 600;\">two issues</b> in the retry logic:</p><ul style=\"margin: 0px 0px 12px; padding: 0px 0px 0px 24px; -webkit-text-stroke-width: 0px;\"><li style=\"margin: 0px 0px 4px; white-space: normal;\">The backoff cap is never applied \u2014 see <a href=\"https://example.com/retry-l42\" style=\"color: rgb(9, 105, 218); text-decoration: none;\">retry.ts line 42</a></li><li style=\"margin: 0px 0px 4px; white-space: normal;\">Jitter calls <code style=\"font-family: ui-monospace, monospace; background: rgb(243, 244, 246);\">Math.random()</code> twice per attempt</li></ul><p style=\"margin: 0px; -webkit-text-stroke-width: 0px; white-space: normal;\">Severity: <b style=\"font-weight: 600;\">P2</b> &amp; <b style=\"font-weight: 600;\">P3</b> &mdash;&nbsp;will re-check after the fix.</p></div>"
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "romansod",
+         "__typename": "User"
+        },
+        "createdAt": "2026-08-14T10:00:00Z",
+        "body": "Plain markdown comment with an HTML repro snippet that must survive untouched:\n\n```html\n<div style=\"color: red\">boom</div>\n```\n\nThe `style` attribute above is content, not paste formatting \u2014 padding this body well past the two-hundred-character detector floor so only the code-fence guard is protecting it."
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

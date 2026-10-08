@@ -1,0 +1,32 @@
+issue #21 design: support GitHub issue discussion alongside PR comments [OPEN reopened labels:design,enhancement assignees:romansod]
+comments: 3 (+1 bot filtered) (1 hidden) · cross-refs: 1 · events: 3 (+4 housekeeping filtered)
+
+body [romansod 2026-08-16 16:32]
+  ## Problem
+  `r-pr-comments` gives a reliable view of PR discussion but rejects an issue
+  number. We want the same for issues without duplicating the renderer.
+
+  ## Options
+  1. A second script.
+  2. Rename to `r-gh-comments`.
+  3. One implementation, both entry points.
+
+comment [alice 2026-08-16 18:00]
+  Option 3, and let the API resolve the type — `issueOrPullRequest`
+  means the number is never ambiguous.
+
+renamed [romansod 2026-08-17 10:00] "issue comments?" → "design: support GitHub issue discussion alongside PR comments"
+
+comment [mallory-spam-bot-01 2026-08-18 10:00] (hidden: spam)
+
+xref [bob 2026-08-18 12:00] #44 PR MERGED (closes) "fix(r-pr-comments): reach jq through files so large PRs don't blow ARG_MAX"
+
+closed [bob 2026-08-19 08:00] as completed
+
+reopened [romansod 2026-08-20 09:30]
+
+comment [carol 2026-08-21 14:20]
+  Reopening: #44 only fixed the ARG_MAX crash.
+
+  The issue-side render
+  is still missing.

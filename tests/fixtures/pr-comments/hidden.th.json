@@ -1,0 +1,109 @@
+[
+ {
+  "data": {
+   "repository": {
+    "pullRequest": {
+     "reviewThreads": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": null
+      },
+      "nodes": [
+       {
+        "isResolved": false,
+        "isOutdated": false,
+        "path": "src/widget/retry.ts",
+        "line": 42,
+        "originalLine": 42,
+        "comments": {
+         "nodes": [
+          {
+           "author": {
+            "login": "reviewer-bart",
+            "__typename": "User"
+           },
+           "createdAt": "2026-08-14T21:26:00Z",
+           "body": "<!-- finding:B-M1 -->\nProbe exceptions are swallowed here, so a throwing probe reads as success.",
+           "pullRequestReview": {
+            "id": "PRR_review1"
+           },
+           "originalCommit": {
+            "abbreviatedOid": "1a2b3c4"
+           },
+           "isMinimized": false,
+           "minimizedReason": null
+          },
+          {
+           "author": {
+            "login": "romansod",
+            "__typename": "User"
+           },
+           "createdAt": "2026-08-14T23:41:00Z",
+           "body": "Fixed in e5f6a7b — the probe now rethrows.",
+           "pullRequestReview": {
+            "id": "PRR_replywrap1"
+           },
+           "originalCommit": {
+            "abbreviatedOid": "1a2b3c4"
+           },
+           "isMinimized": true,
+           "minimizedReason": "RESOLVED"
+          }
+         ]
+        }
+       },
+       {
+        "isResolved": true,
+        "isOutdated": true,
+        "path": "src/widget/probe.ts",
+        "line": null,
+        "originalLine": 17,
+        "comments": {
+         "nodes": [
+          {
+           "author": {
+            "login": "reviewer-bart",
+            "__typename": "User"
+           },
+           "createdAt": "2026-08-14T21:26:30Z",
+           "body": "<!-- finding:B-M2 -->\nEmpty result set passes the assertion gate.",
+           "pullRequestReview": {
+            "id": "PRR_review1"
+           },
+           "originalCommit": {
+            "abbreviatedOid": "1a2b3c4"
+           }
+          }
+         ]
+        }
+       },
+       {
+        "isResolved": false,
+        "isOutdated": false,
+        "path": "README.md",
+        "line": 3,
+        "originalLine": 3,
+        "comments": {
+         "nodes": [
+          {
+           "author": {
+            "login": "reviewer-bart",
+            "__typename": "User"
+           },
+           "createdAt": "2026-08-15T10:00:00Z",
+           "body": "Typo: frobnicator, not frobnicater.",
+           "pullRequestReview": null,
+           "originalCommit": {
+            "abbreviatedOid": "bbb2222"
+           }
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

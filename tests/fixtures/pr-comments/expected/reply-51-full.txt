@@ -1,0 +1,12 @@
+PR #10 fix(auth): rotate session keys [OPEN base:main]
+reviews: 1 · inline threads: 1 (1 open) · top-level comments: 0
+
+commit  5e55e55 fix(auth): rotate session keys
+
+review  [alice 2026-08-14 09:00] CHANGES_REQUESTED, 1 thread (1 open)
+  Rotation window looks racy — long thread inline.
+thread  src/auth/rotate.ts:30 [S-1] OPEN @5e55e55 [TRUNCATED: showing 2 of 53 replies]
+    [alice 2026-08-14 09:00]
+      Two requests can rotate the same key concurrently.
+    [romansod 2026-08-14 09:30]
+      Looking — will add a mutex around the window.
