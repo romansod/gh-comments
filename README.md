@@ -133,7 +133,7 @@ when you want a wrong number to be an error rather than a different render.
 With no number, the current branch's open PR is used.
 
 ```
-  -R, --repo <owner/name>       Target repo (default: repo of the cwd)
+  -R, --repo <owner/name>       Target repo (default: repo of the cwd); needs a number
   --pr, --issue                 Pin the resource type instead of resolving it
   --toc                         Skeleton only: one line per item, no bodies
   --since <iso-date>            Only items at/after this date (UTC): YYYY-MM-DD,

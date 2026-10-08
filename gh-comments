@@ -11,6 +11,10 @@ VERSION=1.0.0
 # resolves the symlink and would report the implementation's name instead of
 # the one the user ran. `:r` drops an extension such a symlink may carry.
 PROG=${0:t:r}
+# gh sets GH_EXTENSION=1 when it runs an extension, so someone who typed
+# `gh comments` is addressed as that — a bare `gh-comments` is usually not
+# on their PATH.
+[[ -n ${GH_EXTENSION:-} ]] && PROG="gh ${PROG#gh-}"
 # The resource type is resolved from the API unless --pr / --issue pins it.
 TYPE=auto
 TYPE_PINNED_BY=""
@@ -41,7 +45,7 @@ page carries an explicit [TRUNCATED: ...] marker instead of dropping them
 silently. Rich-text HTML pastes are converted to markdown.
 
 Flags:
-  -R, --repo <owner/name>       Target repo (default: repo of the cwd)
+  -R, --repo <owner/name>       Target repo (default: repo of the cwd); needs a number
   --pr, --issue                 Pin the resource type instead of resolving it
   --toc                         Skeleton only: one line per item, no bodies
   --since <iso-date>            Only items at/after this date (UTC): YYYY-MM-DD,
@@ -110,6 +114,9 @@ EOF
 }
 
 NUM="" REPO="" TOC=0 UNRESOLVED=0 SINCE="" SLR=0 SLR_AUTHOR="" BOTS=0 MERGES=0 EVENTS=0 HIDDEN=0
+# The arguments minus the pin, for the wrong-type hint: it suggests the same
+# command again without --pr / --issue, so -R and the view flags survive.
+typeset -a UNPINNED=("${(@)argv:#(--pr|--issue)}")
 LATEST=0 LATEST_AUTHOR=""
 FIXTURES_TL="" FIXTURES_TH=""
 # need_value <flag> <form> <count> [<next>] — a flag that takes a value must
@@ -118,7 +125,7 @@ FIXTURES_TL="" FIXTURES_TH=""
 # with a line number into the script.
 need_value() {
   if (( $3 < 2 )) || [[ -z "${4:-}" || "${4:-}" == -* ]]; then
-    echo "$PROG: $1 needs $2" >&2
+    print -r -- "$PROG: $1 needs $2" >&2
     exit 1
   fi
 }
@@ -148,15 +155,15 @@ while (( $# )); do
       # is not itself a flag, so `--fixtures tl.json 21` still reads 21 as the
       # number rather than swallowing it.
       if (( $# < 2 )) || [[ ! -r "$2" ]]; then
-        echo "$PROG: --fixtures needs a readable timeline JSON file (plus a threads file for a PR)" >&2
+        print -r -- "$PROG: --fixtures needs a readable timeline JSON file (plus a threads file for a PR)" >&2
         exit 1
       fi
       FIXTURES_TL="$2"; shift 2
       if (( $# >= 1 )) && [[ "$1" != -* && -r "$1" ]]; then FIXTURES_TH="$1"; shift; fi
       ;;
-    -*) echo "$PROG: unknown flag: $1" >&2; exit 1 ;;
+    -*) print -r -- "$PROG: unknown flag: $1" >&2; exit 1 ;;
     *)
-      if [[ -n "$NUM" ]]; then echo "$PROG: unexpected argument: $1" >&2; exit 1; fi
+      if [[ -n "$NUM" ]]; then print -r -- "$PROG: unexpected argument: $1" >&2; exit 1; fi
       NUM="$1"; shift ;;
   esac
 done
@@ -172,7 +179,7 @@ done
 # with; an offset such as `+02:00` is refused, since it cannot be compared
 # lexically at all.
 if [[ -n "$SINCE" && ! "$SINCE" =~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])(T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?Z?)?$' ]]; then
-  echo "$PROG: --since needs an ISO date, UTC (YYYY-MM-DD, optionally THH:MM[:SS][Z]); got: $SINCE" >&2
+  print -r -- "$PROG: --since needs an ISO date, UTC (YYYY-MM-DD, optionally THH:MM[:SS][Z]); got: $SINCE" >&2
   exit 1
 fi
 # Every GitHub timestamp is `YYYY-MM-DDTHH:MM:SSZ`, and the comparison is a
@@ -185,46 +192,165 @@ SINCE=${SINCE%Z}
 # to that question cannot both be honoured, so asking for both is an error
 # rather than a silent preference.
 if (( SLR && LATEST )); then
-  echo "$PROG: --latest and --since-last-review are exclusive — each picks the item to slice from" >&2
+  print -r -- "$PROG: --latest and --since-last-review are exclusive — each picks the item to slice from" >&2
   exit 1
 fi
 
+# refuse_type_flags <type> <because> — flags that only the other resource
+# type can honour are an error, never a no-op: silently ignoring one would
+# report a filtered view as a complete one. Every offender is listed, so
+# one rerun is enough. Called here when --pr / --issue already settles the
+# type, so the refusal costs no fetch, and again once a resolved type is in.
+typeset -A ARTICLE=(pr "a pull request" issue "an issue")
+refuse_type_flags() {
+  local type=$1 because=$2
+  local -a bad=()
+  if [[ $type == issue ]]; then
+    (( UNRESOLVED )) && bad+=(--unresolved)
+    (( SLR )) && bad+=(--since-last-review)
+    (( LATEST )) && bad+=(--latest)
+    (( MERGES )) && bad+=(--merges)
+    if (( ${#bad} )); then
+      print -r -- "$PROG: ${(j:, :)bad} only appl$( (( ${#bad} == 1 )) && print -n ies || print -n y ) to pull requests; $because" >&2
+      exit 1
+    fi
+  elif (( EVENTS )); then
+    print -r -- "$PROG: --events only applies to issues; $because" >&2
+    exit 1
+  fi
+}
 if [[ -n "$NUM" && "$NUM" != <-> ]]; then
-  echo "$PROG: not a PR or issue number: $NUM" >&2
+  print -r -- "$PROG: not a PR or issue number: $NUM" >&2
   usage >&2
   exit 1
 fi
-if [[ -z "$NUM" ]]; then
-  if [[ -n "$FIXTURES_TL" ]]; then
-    echo "$PROG: a number is required with --fixtures" >&2
-    exit 1
-  fi
-  if [[ "$TYPE" == issue ]]; then
-    echo "$PROG: an issue number is required — there is no \"current branch's issue\"" >&2
-    exit 1
-  fi
-  NUM=$(gh pr view --json number --jq .number 2>/dev/null) || NUM=""
-  if [[ -z "$NUM" ]]; then
-    echo "$PROG: no number given and no PR found for the current branch" >&2
-    exit 1
-  fi
-  # A branch resolves to a PR, so the type stops being an open question.
-  TYPE=pr TYPE_PINNED_BY="the current branch's PR"
-  echo "note: no number given — using the current branch's PR #$NUM" >&2
+if [[ -z "$NUM" && -n "$FIXTURES_TL" ]]; then
+  print -r -- "$PROG: a number is required with --fixtures" >&2
+  exit 1
 fi
+if [[ -z "$NUM" && "$TYPE" == issue ]]; then
+  print -r -- "$PROG: an issue number is required — there is no \"current branch's issue\"" >&2
+  exit 1
+fi
+# "No number" means the current branch's PR, and that PR is in the cwd's
+# repo; -R names a different one. Asking for both is ambiguous — resolved
+# in the cwd's repo and fetched from -R's it is a different PR or nothing,
+# and gh itself refuses `pr view -R` with no argument — so it is refused
+# rather than guessed at. REPO is only -R's value this early, so its
+# presence is the flag having been given.
+typeset -i REPO_GIVEN=0
+[[ -n "$REPO" ]] && REPO_GIVEN=1
+if [[ -z "$NUM" ]] && (( REPO_GIVEN )); then
+  print -r -- "$PROG: -R needs a number: the current branch's PR is in the cwd's repo, not in $REPO" >&2
+  exit 1
+fi
+# After every number check — malformed or missing — so a number problem is
+# the first thing reported and one rerun is enough.
+if [[ "$TYPE" != auto ]]; then
+  refuse_type_flags "$TYPE" "the type is pinned to ${ARTICLE[$TYPE]} by $TYPE_PINNED_BY"
+fi
+# The query takes owner and name apart, so the host- and URL-qualified forms
+# gh accepts for its own -R (github.com/o/n, https://github.com/o/n) are
+# refused here rather than split wrong and reported as a missing number —
+# and here, before the tool check, since argv alone decides it.
+if (( REPO_GIVEN )) && [[ ! "$REPO" =~ '^[^/:[:space:]]+/[^/:[:space:]]+$' ]]; then
+  print -r -- "$PROG: -R needs <owner/name>; got: $REPO" >&2
+  exit 1
+fi
+
+# The tools are checked after every refusal the parser can make on its own,
+# so --help, --version and a usage error need neither, and before the first
+# call to either — the branch lookup below is one — so a missing tool is a
+# sentence naming it rather than zsh's "command not found" with a line
+# number into this file. Both are named at once, so one rerun is enough. gh
+# is needed only to fetch: a --fixtures render has no use for it, and the
+# suite runs offline.
+typeset -a MISSING=()
+command -v jq >/dev/null 2>&1 || MISSING+=(jq)
+if [[ -z "$FIXTURES_TL" ]] && ! command -v gh >/dev/null 2>&1; then
+  MISSING+=("gh (the GitHub CLI)")
+fi
+if (( ${#MISSING} )); then
+  print -r -- "$PROG: needs ${(j: and :)MISSING} on PATH" >&2
+  exit 1
+fi
+
+# ── gh's stderr ──────────────────────────────────────────────────────────────
+#
+# Every gh call from here on writes its stderr to one file, read only when
+# the call fails. The two streams are never merged into an answer: gh writes
+# its debug log to stderr on success under GH_DEBUG or DEBUG=1, and a lookup
+# that merged them once read a working run as a failure. The EXIT trap is
+# installed now, before the first temp file; it also covers the payload
+# files made later (see there for why the signal traps must exit).
+GH_ERR=$(mktemp) TL_FILE="" TH_FILE=""
+trap 'rm -f "$GH_ERR" ${TL_FILE:+"$TL_FILE"} ${TH_FILE:+"$TH_FILE"}' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 if [[ -z "$REPO" ]]; then
   if [[ -n "$FIXTURES_TL" ]]; then
     REPO="fixtures/fixtures"
   else
-    REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
-      echo "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
+    if ! REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>"$GH_ERR"); then
+      # "Not in a GitHub repo" is right only for gh's no-repo wordings (not
+      # a git repository, no remotes, no remote on a GitHub host). Anything
+      # else — an expired token, no network — is gh's own error to show, as
+      # the fetch branch does.
+      REPO_ERR=$(<"$GH_ERR")
+      if [[ "$REPO_ERR" == *"not a git repository"* || "$REPO_ERR" == *"no git remotes"* \
+            || "$REPO_ERR" == *"none of the git remotes"* ]]; then
+        # With no number the way out is a number *and* -R: -R alone is
+        # refused above, so the hint has to ask for both.
+        if [[ -z "$NUM" ]]; then
+          print -r -- "$PROG: no number given and not in a GitHub repo — pass <number> -R <owner/name>" >&2
+        else
+          print -r -- "$PROG: not in a GitHub repo — pass -R <owner/name>" >&2
+        fi
+      else
+        print -r -- "$PROG: gh error:" >&2
+        [[ -n "$REPO_ERR" ]] && print -r -- "$REPO_ERR" >&2
+      fi
       exit 1
-    }
+    fi
   fi
+fi
+# The same check for the resolved value: gh's nameWithOwner is always
+# owner/name, but the split below must never see anything else — and
+# [^/:] alone would match a newline, so a value with more than one line
+# (stderr merged into an answer, say) is refused by name here.
+if [[ ! "$REPO" =~ '^[^/:[:space:]]+/[^/:[:space:]]+$' ]]; then
+  print -r -- "$PROG: -R needs <owner/name>; got: $REPO" >&2
+  exit 1
 fi
 OWNER=${REPO%%/*}
 NAME=${REPO##*/}
+
+# The branch lookup runs only without -R (refused above), so it and the
+# fetch agree on the repo: gh resolves both from the cwd. It takes no -R
+# on purpose — `gh pr view -R <repo>` with no argument is refused by gh.
+if [[ -z "$NUM" ]]; then
+  # As for the repo above: "no PR found" is the diagnosis only for gh's own
+  # no-PR wordings (no pull requests found for the branch, no current
+  # branch to look up); any other failure is gh's error to show, not an
+  # empty result. An answer that is not a number is treated the same way.
+  if ! NUM=$(gh pr view --json number --jq .number 2>"$GH_ERR") || [[ "$NUM" != <-> ]]; then
+    LOOKUP_ERR=$(<"$GH_ERR")
+    if [[ "$LOOKUP_ERR" == *"no pull requests found"* || "$LOOKUP_ERR" == *"could not determine current branch"* ]]; then
+      print -r -- "$PROG: no number given and no PR found for the current branch in $REPO" >&2
+    else
+      print -r -- "$PROG: gh error:" >&2
+      [[ -n "$LOOKUP_ERR" ]] && print -r -- "$LOOKUP_ERR" >&2
+      [[ -n "$NUM" ]] && print -r -- "$NUM" >&2
+    fi
+    exit 1
+  fi
+  # A branch resolves to a PR, so the type stops being an open question —
+  # and an issue-only flag can be refused here, before the fetch.
+  TYPE=pr TYPE_PINNED_BY="the current branch's PR"
+  refuse_type_flags pr "#$NUM, the current branch's PR, is a pull request"
+  echo "note: no number given — using the current branch's PR #$NUM" >&2
+fi
 
 # ── Query construction ───────────────────────────────────────────────────────
 #
@@ -373,16 +499,14 @@ TH_QUERY='query($owner:String!,$name:String!,$num:Int!,$endCursor:String){
 # jq", exit 127, zero output) — and did so *after* both fetches had been paid
 # for. --slurpfile slurps a stream of JSON values into an array, which is
 # exactly what `jq -s .` produced, so the jq program needs no changes.
-# Cleanup needs all three traps, and the signal ones have to exit. A single
-# `trap ... EXIT INT TERM` deletes the payloads and then *keeps running*, since
-# zsh resumes execution after a non-exiting signal handler — the script limps
-# on into the error branch and reads files that no longer exist. But EXIT alone
-# does not fire on SIGTERM at all, so it leaks all three files. Handlers that
-# exit get both: the exit runs the EXIT trap, and the script actually stops.
-TL_FILE=$(mktemp) TH_FILE=$(mktemp) GH_ERR=""
-trap 'rm -f "$TL_FILE" "$TH_FILE" ${GH_ERR:+"$GH_ERR"}' EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+# Cleanup needs all three traps (installed above, with the stderr file), and
+# the signal ones have to exit. A single `trap ... EXIT INT TERM` deletes the
+# payloads and then *keeps running*, since zsh resumes execution after a
+# non-exiting signal handler — the script limps on into the error branch and
+# reads files that no longer exist. But EXIT alone does not fire on SIGTERM
+# at all, so it leaks all three files. Handlers that exit get both: the exit
+# runs the EXIT trap, and the script actually stops.
+TL_FILE=$(mktemp) TH_FILE=$(mktemp)
 
 # resolved_type <file> — what the timeline payload actually holds. The union's
 # __typename is authoritative when present; the wrapping field name is the
@@ -434,11 +558,21 @@ else
   # second stderr capture guarding a latency win nobody asked for. Left
   # sequential deliberately: the win is wall-clock, not context, and not
   # worth the handlers it needs.
-  GH_ERR=$(mktemp)
-  if ! gh api graphql --paginate -F owner="$OWNER" -F name="$NAME" -F num="$NUM" -f query="$TL_QUERY" > "$TL_FILE" 2>"$GH_ERR"; then
-    # gh may report the failure on either stream, so both are searched.
-    if ! grep -q "Could not resolve" "$GH_ERR" "$TL_FILE"; then
-      echo "$PROG: gh error:" >&2
+  # owner and name are strings whatever they look like: -F would read
+  # `2048` as a number (a String! variable then refuses it) and `@x` as a
+  # file to send. -f passes them as typed. The number is a number.
+  if ! gh api graphql --paginate -f owner="$OWNER" -f name="$NAME" -F num="$NUM" -f query="$TL_QUERY" > "$TL_FILE" 2>"$GH_ERR"; then
+    # gh may report the failure on either stream. The match is structural:
+    # the errors[] entry the union field returns on stdout, NOT_FOUND at its
+    # own path, or gh's one-line summary on stderr — never the payload as
+    # text, which holds every page fetched before the failure, bodies
+    # included, and a body can quote this very sentence. A repository that
+    # does not resolve has a different path and says "Could not resolve to
+    # a Repository": that is gh's own message to show, not a claim that the
+    # number is wrong.
+    if ! { grep -q '^gh: Could not resolve to an issue or pull request' "$GH_ERR" \
+           || jq -es 'any(.[] | .errors[]?; .type == "NOT_FOUND" and .path == ["repository","issueOrPullRequest"])' "$TL_FILE" >/dev/null 2>&1; }; then
+      print -r -- "$PROG: gh error:" >&2
       # gh writes a one-line summary to stderr *and* the full errors[] body
       # (type/path/locations) to stdout; show both, since either can carry the
       # detail the other lacks. The JSON body arrives with no trailing newline,
@@ -453,18 +587,24 @@ else
     fi
     # `issueOrPullRequest` resolves both sequences, so a number that fails to
     # resolve is not a PR *or* an issue — it does not exist in this repo.
-    echo "$PROG: #$NUM not found in $REPO" >&2
+    print -r -- "$PROG: #$NUM not found in $REPO" >&2
     # Diagnose, don't silently switch targets: N is often the issue number
     # embedded in the branch name, while the branch's PR is something else.
-    BRANCH_PR=$(gh pr view --json number,title --jq '"#\(.number): \(.title)"' 2>/dev/null) || BRANCH_PR=""
-    [[ -n "$BRANCH_PR" ]] && echo "  the current branch's PR is $BRANCH_PR — rerun with that number" >&2
+    # Not when the branch's PR *is* the number that failed: that hint would
+    # send the user back to the same command. And not under -R: the branch's
+    # PR is in the cwd's repo, not the one the number was not found in.
+    BRANCH_PR=""
+    if (( ! REPO_GIVEN )); then
+      BRANCH_PR=$(gh pr view --json number,title --jq '"#\(.number): \(.title)"' 2>/dev/null) || BRANCH_PR=""
+    fi
+    [[ -n "$BRANCH_PR" && "$BRANCH_PR" != "#$NUM:"* ]] && print -r -- "  the current branch's PR is $BRANCH_PR — rerun with that number" >&2
     exit 1
   fi
 fi
 
 RTYPE=$(resolved_type "$TL_FILE")
 if [[ "$RTYPE" == none || "$RTYPE" == unknown ]]; then
-  echo "$PROG: #$NUM not found in $REPO" >&2
+  print -r -- "$PROG: #$NUM not found in $REPO" >&2
   exit 1
 fi
 
@@ -472,35 +612,28 @@ fi
 # whole point of `gh-comments 43 --pr` is that 43 had better be a PR.
 if [[ "$TYPE" != auto && "$TYPE" != "$RTYPE" ]]; then
   TITLE=$(target_title "$TL_FILE")
-  typeset -A ARTICLE=(pr "a pull request" issue "an issue")
-  echo "$PROG: #$NUM is ${ARTICLE[$RTYPE]}, not ${ARTICLE[$TYPE]}${TITLE:+: \"$TITLE\"}" >&2
-  echo "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG $NUM" >&2
+  # Every diagnostic is print -r, not echo: a title or an argument can
+  # carry a backslash, which the echo builtin would read as an escape.
+  print -r -- "$PROG: #$NUM is ${ARTICLE[$RTYPE]}, not ${ARTICLE[$TYPE]}${TITLE:+: \"$TITLE\"}" >&2
+  # The suggested command has to work: a view flag the resolved type would
+  # refuse on the rerun is dropped from it too.
+  typeset -a HINT=("${(@)UNPINNED}")
+  if [[ "$RTYPE" == issue ]]; then
+    HINT=("${(@)HINT:#(--unresolved|--since-last-review|--since-last-review=*|--latest|--latest=*|--merges)}")
+  else
+    HINT=("${(@)HINT:#--events}")
+  fi
+  print -r -- "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG ${(j: :)${(@q-)HINT}}" >&2
   exit 1
 fi
 
-# Flags that only one resource type can honour. Silently ignoring them would
-# report a filtered view as a complete one.
-if [[ "$RTYPE" == issue ]]; then
-  typeset -a BAD=()
-  (( UNRESOLVED )) && BAD+=(--unresolved)
-  (( SLR )) && BAD+=(--since-last-review)
-  (( LATEST )) && BAD+=(--latest)
-  (( MERGES )) && BAD+=(--merges)
-  if (( ${#BAD} )); then
-    echo "$PROG: ${(j:, :)BAD} only appl$( (( ${#BAD} == 1 )) && print -n ies || print -n y ) to pull requests; #$NUM is an issue" >&2
-    exit 1
-  fi
-else
-  if (( EVENTS )); then
-    echo "$PROG: --events only applies to issues; #$NUM is a pull request" >&2
-    exit 1
-  fi
-fi
+# Flags that only one resource type can honour, now that the type is known.
+refuse_type_flags "$RTYPE" "#$NUM is ${ARTICLE[$RTYPE]}"
 
 if [[ "$RTYPE" == pr ]]; then
   if [[ -n "$FIXTURES_TL" ]]; then
     if [[ -z "$FIXTURES_TH" ]]; then
-      echo "$PROG: --fixtures needs a threads payload for a PR: --fixtures <tl.json> <th.json>" >&2
+      print -r -- "$PROG: --fixtures needs a threads payload for a PR: --fixtures <tl.json> <th.json>" >&2
       exit 1
     fi
   else
@@ -508,7 +641,7 @@ if [[ "$RTYPE" == pr ]]; then
     # gets here and the curated diagnosis above stays the whole report. This
     # call has no diagnosis of its own and rides set -e: a half-fetched PR must
     # never render as a complete one.
-    gh api graphql --paginate -F owner="$OWNER" -F name="$NAME" -F num="$NUM" -f query="$TH_QUERY" > "$TH_FILE"
+    gh api graphql --paginate -f owner="$OWNER" -f name="$NAME" -F num="$NUM" -f query="$TH_QUERY" > "$TH_FILE"
   fi
 fi
 
@@ -522,6 +655,26 @@ def htmlheavy:
   (length > 200)
   and ((test("```")) | not)
   and ((gsub("<[^>]*>"; "") | length) < (length * 0.6));
+# A numeric entity names any code point, including ones no text should
+# carry: `&#0;` would put a NUL in the dump and grep would call the file
+# binary. NUL, the other C0 controls bar tab and newline, surrogates and
+# anything past U+10FFFF become U+FFFD. A carriage return goes the way a
+# literal one does in clean (dropped). 128-159 are read as windows-1252,
+# as HTML itself does: Word-style pastes spell curly quotes and dashes as
+# &#146; and &#150;, and read literally those are C1 terminal controls.
+# &#160; is a plain space, as &nbsp; is, so the dump greps. Hex entities
+# are decoded by hand, since tonumber reads decimal only. (No apostrophes
+# in these comments: the program is a single-quoted shell string.)
+def cp1252: [8364,65533,8218,402,8222,8230,8224,8225,710,8240,352,8249,338,65533,381,65533,
+             65533,8216,8217,8220,8221,8226,8211,8212,732,8482,353,8250,339,65533,382,376];
+def codepoint:
+  if . == 13 then ""
+  else (if . == 160 then 32
+        elif . >= 128 and . <= 159 then cp1252[. - 128]
+        elif . == 0 or (. < 32 and . != 9 and . != 10) or (. >= 55296 and . <= 57343) or . > 1114111
+        then 65533 else . end) | [.] | implode end;
+def hexnum: ascii_downcase | explode
+  | reduce .[] as $c (0; . * 16 + (if $c >= 97 then $c - 87 else $c - 48 end));
 def html2md:
   gsub("<style\\b[^>]*>[\\s\\S]*?</style>"; "")
   | gsub("<script\\b[^>]*>[\\s\\S]*?</script>"; "")
@@ -539,13 +692,13 @@ def html2md:
   | gsub("</li>"; "")
   | gsub("</(ul|ol|tr)>"; "\n")
   | gsub("<[^>]*>"; "")
-  | gsub("&nbsp;"; " ")
-  | gsub("&lt;"; "<") | gsub("&gt;"; ">")
-  | gsub("&quot;"; "\"") | gsub("&apos;"; "'\''")
-  | gsub("&mdash;"; "—") | gsub("&ndash;"; "–") | gsub("&hellip;"; "…") | gsub("&bull;"; "•")
-  | gsub("&ldquo;|&rdquo;"; "\"") | gsub("&lsquo;|&rsquo;"; "'\''")
-  | gsub("&#(?<d>[0-9]+);"; "\([(.d | tonumber)] | implode)")
-  | gsub("&amp;"; "&")
+  # Every entity in one pass: a decoded `&` (from &#38; or &amp;) is never
+  # rescanned, so `&#38;amp;` stays the literal `&amp;` the author wrote.
+  | gsub("&(?<n>nbsp|lt|gt|quot|apos|mdash|ndash|hellip|bull|ldquo|rdquo|lsquo|rsquo|amp);|&#(?<d>[0-9]+);|&#[xX](?<h>[0-9a-fA-F]+);";
+         if .d != null then (.d | tonumber | codepoint)
+         elif .h != null then (.h | hexnum | codepoint)
+         else ({nbsp: " ", lt: "<", gt: ">", quot: "\"", apos: "'\''", mdash: "—", ndash: "–",
+                hellip: "…", bull: "•", ldquo: "\"", rdquo: "\"", lsquo: "'\''", rsquo: "'\''", amp: "&"}[.n]) end)
   | gsub("[ \\t]+\\n"; "\n") | gsub("\\n[ \\t]+"; "\n")
   | gsub("\\n{3,}"; "\n\n");
 def clean: (. // "") | strip_hc | gsub("\r"; "")

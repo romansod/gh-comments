@@ -41,6 +41,10 @@
 #
 # Below the goldens, non-golden cases assert exit codes and substrings:
 #
+#   bot filtering    bot-authored closed/xref events survive the default view
+#                    while the bot comment and the bot label stay gated
+#   header           a short labels(first:20) page grows a (+N more) marker;
+#                    a complete one does not
 #   auto-detection   the same PR fixture rendered with no --pr must equal the
 #                    --pr suite's golden, byte for byte
 #   type refusals    a pinned type that does not match is an error, never a
@@ -51,6 +55,12 @@
 #   stubbed gh       call counts and query shape per resolved type — an issue
 #                    must not pay for the reviewThreads fetch
 #   argument validation  the flag parser's refusals
+#   missing tools    jq or gh absent from PATH is one sentence naming every
+#                    missing tool, refused before the branch lookup runs gh;
+#                    a --fixtures render needs only jq
+#   invoked name     a symlink's name, and `gh comments` under GH_EXTENSION=1,
+#                    prefix every diagnostic and the rerun hint; --version
+#                    keeps the product name
 #
 # issue-basic's body carries an HTML comment on its own line: `clean` strips it
 # and then closes the gap it left, so the golden shows one paragraph break
@@ -296,12 +306,42 @@ refuse type-pr-on-issue \
 refuse type-issue-on-pr \
   'is a pull request, not an issue' \
   1001 --issue --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
-# The hint under a wrong-type refusal names the command that was run, read
-# from the invoked name — see prog-from-invoked-name below for the symlink
-# side of that.
-refuse type-hint-names-command 'rerun as: gh-comments 21' \
+# The hint under a wrong-type refusal is the same command without the pin:
+# the invoked name (see prog-from-invoked-name below for the symlink side of
+# that) and every other argument, so -R and the view flags survive and the
+# suggestion targets the repo the user named.
+refuse type-hint-names-command "rerun as: gh-comments 21 --fixtures $fx/issue-basic.tl.json" \
   21 --pr --fixtures "$fx/issue-basic.tl.json"
+refuse type-hint-keeps-flags "rerun as: gh-comments 21 -R acme/widget --toc --fixtures $fx/issue-basic.tl.json" \
+  21 -R acme/widget --pr --toc --fixtures "$fx/issue-basic.tl.json"
+# An argument with a space is quoted in the hint, so the suggested command
+# runs as one.
+hint_quotes() {
+  local name=type-hint-quotes-spaces tmp out
+  local -i rc=0
+  tmp=$(mktemp -d) || {
+    t_fail "$name" "" "tests/test-gh-comments.zsh" "mktemp -d failed"
+    (( fails += 1 )); return 0
+  }
+  mkdir "$tmp/with space" && cp "$fx/issue-basic.tl.json" "$tmp/with space/tl.json"
+  out=$(zsh "$script" 21 --pr --fixtures "$tmp/with space/tl.json" 2>&1) || rc=$?
+  (( rc == 1 )) || problems+=("exit $rc (want 1)")
+  [[ "$out" == *"rerun as: gh-comments 21 --fixtures '$tmp/with space/tl.json'"* ]] \
+    || problems+=("the path with a space is not quoted: ${out##*rerun as: }")
+  report "$name" "refusals" $rc "$out"
+  rm -rf "$tmp"
+  return 0
+}
+hint_quotes
+# ...but not a flag the resolved type would refuse on the rerun.
+refuse type-hint-drops-wrong-type-flags "rerun as: gh-comments 21 --toc --fixtures $fx/issue-basic.tl.json" \
+  21 --pr --unresolved --latest=alice --toc --fixtures "$fx/issue-basic.tl.json"
+refuse type-hint-drops-events "rerun as: gh-comments 1001 --fixtures $prfx/basic.tl.json $prfx/basic.th.json" \
+  1001 --issue --events --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
 
+# A missing number is reported before a flag the pinned type refuses, like
+# a malformed one: one rerun fixes the command line.
+refuse type-pinned-flag-after-missing-number "an issue number is required" --issue --unresolved
 refuse flag-unresolved-on-issue "--unresolved only applies to pull requests; #21 is an issue" \
   21 --unresolved --fixtures "$fx/issue-basic.tl.json"
 refuse flag-slr-on-issue "--since-last-review only applies to pull requests; #21 is an issue" \
@@ -431,6 +471,20 @@ fragment_case gh-query-fragments-auto     1 1 pr    7 --toc
 fragment_case gh-query-fragments-pinned-pr    1 0 pr    7 --pr --toc
 fragment_case gh-query-fragments-pinned-issue 0 1 issue 21 --issue --toc
 
+# gh-pinned-flag-refused-before-fetch — with the type pinned, a flag the
+# pinned type cannot honour is decidable from argv alone, so it is refused
+# before the timeline is paid for.
+for spec in "issue --issue 21 --unresolved|--unresolved only applies to pull requests; the type is pinned to an issue by --issue" \
+            "pr --pr 7 --events|--events only applies to issues; the type is pinned to a pull request by --pr"; do
+  gh_reset
+  gh_case ${=${spec%%|*}}
+  (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+  [[ "$gh_out" == "gh-comments: ${spec#*|}" ]] || problems+=("output was: $gh_out")
+  (( $(grep -c '^graphql:' "$stublog") == 0 )) \
+    || problems+=("fetched before refusing: $(tr '\n' ' ' < "$stublog")")
+  report "gh-pinned-flag-refused-before-fetch-${${spec%% *}}" "stubbed gh" $gh_rc "$gh_out"
+done
+
 # gh-notfound — the union resolves both sequences, so a number it cannot
 # resolve is neither a PR nor an issue. The wording has to stop saying "PR".
 gh_reset
@@ -528,6 +582,59 @@ argcase arg-since-empty          1 "--since needs <iso-date>" 21 --since=
 # Two answers to "which item do I slice from" cannot both be honoured.
 argcase arg-latest-with-slr      1 "--latest and --since-last-review are exclusive" 21 --latest --since-last-review
 
+# missing-* — a tool the script needs but PATH lacks is one sentence naming
+# every missing tool, not zsh's "command not found" with a line number. PATH
+# is rebuilt from scratch with only what the script needs besides the tool
+# under test, so the absence is real rather than a shadowing stub, and the
+# probes run `zsh -f`, so a ~/.zshenv that exports PATH cannot put the tool
+# back. gh is needed only to fetch: a --fixtures render must not demand it,
+# and the no-number branch lookup must be refused before it runs gh.
+typeset -g miss_dir=""
+miss_path() {  # miss_path <tool>... — a PATH holding the script's needs plus <tool>s
+  local t
+  miss_dir=$(mktemp -d) || return 1
+  for t in zsh mktemp grep cat tail rm "$@"; do
+    ln -s "$(command -v $t)" "$miss_dir/$t" || return 1
+  done
+  return 0
+}
+# miss_case <name> <want-rc> <want-output> <tools-present>... -- <args>...
+miss_case() {
+  local name=$1 want=$3 out; local -i want_rc=$2 rc=0; shift 3
+  local -a tools=()
+  while (( $# )) && [[ $1 != -- ]]; do tools+=("$1"); shift; done
+  shift
+  if ! miss_path "${tools[@]}"; then
+    t_fail "$name" "" "tests/test-gh-comments.zsh" "could not build the PATH"
+    (( fails += 1 )); rm -rf "$miss_dir"; return 0
+  fi
+  out=$(cd "$miss_dir" && PATH=$miss_dir zsh -f "$script" "$@" 2>&1) || rc=$?
+  (( rc == want_rc )) || problems+=("exit $rc (want $want_rc)")
+  if (( want_rc == 0 )); then
+    [[ "$out" == "$want"* ]] || problems+=("output does not start with: $want")
+  else
+    # The first line: a usage error goes on to print the usage text.
+    [[ "${out%%$'\n'*}" == "$want" ]] || problems+=("output was: ${out%%$'\n'*}")
+  fi
+  report "$name" "missing tools" $rc "$out"
+  rm -rf "$miss_dir"
+  return 0
+}
+miss_case missing-jq      1 "gh-comments: needs jq on PATH" -- 21 --fixtures "$fx/issue-basic.tl.json"
+# A usage error the parser can make on its own comes before the tool check:
+# the user is told what is wrong with the command, not sent to install gh.
+miss_case parser-before-preflight 1 "gh-comments: not a PR or issue number: abc" -- abc
+miss_case issue-needs-number-before-preflight 1 "gh-comments: an issue number is required — there is no \"current branch's issue\"" -- --issue
+miss_case repo-needs-number-before-preflight 1 "gh-comments: -R needs a number: the current branch's PR is in the cwd's repo, not in acme/widget" -- -R acme/widget
+miss_case repo-form-before-preflight 1 "gh-comments: -R needs <owner/name>; got: widget" -- 7 -R widget
+miss_case missing-both    1 "gh-comments: needs jq and gh (the GitHub CLI) on PATH" -- 21 -R acme/widget
+miss_case missing-gh      1 "gh-comments: needs gh (the GitHub CLI) on PATH" jq -- 21 -R acme/widget
+# With no number the script would look the branch's PR up through gh; the
+# refusal has to come first, or a missing gh reads as "no PR found".
+miss_case missing-gh-no-number 1 "gh-comments: needs gh (the GitHub CLI) on PATH" jq --
+# A --fixtures render needs jq and nothing else.
+miss_case missing-gh-fixtures-render 0 "issue #21 " jq -- 21 --fixtures "$fx/issue-basic.tl.json"
+
 # arg-no-zsh-internals — the positive substrings above would also pass if the
 # usage error were printed *and* the shell still died on its own; this pins
 # that the parser never reaches set -u's message at all.
@@ -555,9 +662,10 @@ no_internals
 # ---------------------------------------------------------------------------
 # The invoked name. Every diagnostic is prefixed with the name the script was
 # run as, so a symlink named r-gh-comments reports as r-gh-comments, with or
-# without an extension on the link — and the wrong-type hint names that same
-# command, never a hard-coded one. --version is the exception: it names the
-# product, since that is what the version is of.
+# without an extension on the link, and a run under `gh comments` reports as
+# that — and the wrong-type hint names that same command, never a hard-coded
+# one. --version is the exception: it names the product, since that is what
+# the version is of.
 # ---------------------------------------------------------------------------
 invoked_name() {
   local name=prog-from-invoked-name tmp link out
@@ -579,6 +687,19 @@ invoked_name() {
     out=$(zsh "$tmp/$link" --version 2>&1) || { rc=$?; problems+=("$link --version exited $rc"); }
     [[ "$out" == "gh-comments "* ]] || problems+=("$link: --version renamed the product: $out")
   done
+  # Under `gh comments` the binary is still gh-comments, but gh sets
+  # GH_EXTENSION=1, and the user typed `gh comments` — so that is the name
+  # the usage line, the prefix and the hint carry.
+  out=$(GH_EXTENSION=1 zsh "$script" --help 2>&1) || { rc=$?; problems+=("GH_EXTENSION --help exited $rc"); }
+  [[ "$out" == "Usage: gh comments "* ]] \
+    || problems+=("under gh: usage does not read gh comments: ${out%%$'\n'*}")
+  out=$(GH_EXTENSION=1 zsh "$script" 21 --pr --fixtures "$fx/issue-basic.tl.json" 2>&1) && problems+=("under gh: did not refuse")
+  [[ "$out" == "gh comments: #21 is an issue, not a pull request"* ]] \
+    || problems+=("under gh: diagnostic prefix: ${out%%$'\n'*}")
+  [[ "$out" == *"rerun as: gh comments 21 --fixtures"* ]] \
+    || problems+=("under gh: the hint does not say gh comments")
+  out=$(GH_EXTENSION=1 zsh "$script" --version 2>&1) || { rc=$?; problems+=("GH_EXTENSION --version exited $rc"); }
+  [[ "$out" == "gh-comments "* ]] || problems+=("under gh: --version renamed the product: $out")
   report "$name" "invoked name" $rc "$out"
   rm -rf "$tmp"
   return 0

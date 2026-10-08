@@ -77,6 +77,15 @@ Some cases pin a documented limitation rather than desired behaviour; they
 are marked `LIMITATION` in the test file's header comment. Changing one is a
 deliberate semantics change and should update the docs with it.
 
+### The gh stub
+
+The non-golden cases talk to a stub `gh` that answers the calls the script
+makes and refuses what real `gh` refuses, as far as it has been taught:
+`pr view -R <repo>` with no positional is one such refusal, learnt after a
+stub that answered it let a broken branch lookup through a green suite.
+A change to the shape of any `gh` call therefore needs one run against the
+real `gh` as well, before the stub is taught the new shape.
+
 ### Fixtures
 
 A fixture holds the exact shape the script fetches: the output of
@@ -96,5 +105,7 @@ repositories and bodies. Scrub a captured payload before committing it.
 1. Bump `VERSION=` in `gh-comments` and `version` in
    `.claude-plugin/plugin.json` together; `make lint` refuses a mismatch.
 2. `claude plugin tag --push` creates and pushes the `gh-comments--v<version>`
-   tag the plugin marketplace reads. Also push a plain `v<version>` tag for
-   `gh extension upgrade`.
+   tag the plugin marketplace reads. Also push a plain `v<version>` tag as
+   the human-readable release marker. `gh extension upgrade` does not read
+   tags: for a script extension it pulls the default branch, so merging to
+   `main` is the release for extension users.

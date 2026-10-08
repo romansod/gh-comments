@@ -1,1 +1,3 @@
 .DS_Store
+# pr-review ensemble audit trails (local to a checkout)
+docs/reviews/pr-*/

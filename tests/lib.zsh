@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
-# lib.zsh — shared reporting for scripts/tests/. Sourced, never executed.
+# lib.zsh — shared reporting for tests/. Sourced, never executed.
 #
-# Kanji-rain styling matching r-claude-statusline.zsh: the same truecolor
-# palette, with 合 pass / 落 fail / 書 golden-written case lines. Colors turn
+# Kanji-rain styling: a truecolor palette with 合 pass / 落 fail / 書
+# golden-written case lines. Colors turn
 # on when stdout is a TTY or FORCE_COLOR / CLICOLOR_FORCE is set (the CI
 # workflow sets FORCE_COLOR=1 — the Actions log renders ANSI).
 #

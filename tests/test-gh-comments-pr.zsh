@@ -21,9 +21,12 @@
 # `body` item renders: basic (markdown), multi (one-liner, so --since and
 # --since-last-review can pin that it survives narrowing), html-heavy (a
 # rich-text paste), and zero-threads (empty string — the header line must
-# still render, bare). The rest deliberately do not: they were captured before
-# those fields were added to the query, and legacy-pr-payload below pins that
-# such a payload renders no `body` line rather than a hollow "body [ghost ]".
+# still render, bare) — and so do the four derived from basic and multi
+# (bot-review, bot-review-late, empty-review, hidden). all-resolved,
+# late-reply, outdated-open, reply-51 and slr-late-reply deliberately do not:
+# they were captured before those fields were added to the query, and
+# legacy-pr-payload below pins (on all-resolved) that such a payload renders
+# no `body` line rather than a hollow "body [ghost ]".
 #   multi         two reviews (CHANGES_REQUESTED + APPROVED with no threads);
 #                 issue comments between reviews — exercises --since and
 #                 --since-last-review[=<user>]
@@ -75,11 +78,19 @@
 #                 bot gate is applied first, so the hidden bot comment counts
 #                 once, as a bot, until --bots puts it back.
 #
-# Not every case is golden. Below the goldens, three sections assert exit
-# codes and substrings instead, because their input is built at runtime:
+# Not every case is golden. Directly below the goldens come the invariant
+# cases, which take no golden and build no input: threads-match-header and
+# slice-matches-full run a rule over every *.th.json in the directory (a new
+# fixture is covered the day it lands), and hidden-bodies-gated,
+# fallback-is-toc, fallback-keeps-narrowing and latest-skips-hidden say out
+# loud what their goldens would otherwise re-record. Then six sections
+# assert exit codes and substrings, because their input is built at runtime:
 #
 #   oversized payload  generates a >1 MB timeline rather than committing one
 #   fixture shapes     the --slurpfile unwrap: array form, bare stream, garbage
+#   html entities      numeric entities decode (decimal and hex), dangerous
+#                      code points are replaced, and `&#38;amp;` is not
+#                      decoded twice
 #   lean timeline      --unresolved fetches a reduced timeline (no commits, no
 #                      issue-comment bodies). One case proves the render cannot
 #                      see the difference, another that the reduced query is
@@ -753,6 +764,47 @@ check_legacy_payload() {
 
 check_legacy_payload
 
+# html-entities — numeric entities in an HTML-heavy paste: decimal and hex
+# both decode, and a code point no text should carry (NUL, a C0 control, a
+# surrogate) is replaced rather than written out — a NUL in the dump makes
+# grep call the whole file binary, which breaks the dump-once-and-grep flow.
+check_html_entities() {
+  local name=html-entities tmp fixture out
+  local -i rc=0 nuls=0
+  tmp=$(mktemp -d) || {
+    t_fail "$name" "" "tests/test-gh-comments-pr.zsh" "mktemp -d failed"
+    (( fails += 1 )); return 0
+  }
+  fixture=$tmp/entities.tl.json
+  # The html-heavy fixture carries one rich-text body; append the entities
+  # to it so the htmlheavy gate still fires.
+  jq -c '(.[0].data.repository.pullRequest.timelineItems.nodes[]
+          | select(.__typename == "IssueComment" and (.body | test("<div")) and (.body | test("```") | not))
+          | .body) += "<p>dash&#8212;hex&#x2014;nul&#0;ctl&#x1;sur&#xD800;big&#1114112;tab&#9;end lit&#38;amp;eral&#x26;amp;lt; cr&#13;lf win&#146;s&#150;x nb&#160;sp&#xA0;x</p>"' \
+    "$fx/html-heavy.tl.json" > "$fixture"
+  out=$(zsh "$script" --pr 9 --fixtures "$fixture" "$fx/html-heavy.th.json" 2>&1) || rc=$?
+  (( rc == 0 )) || problems+=("exit $rc (want 0)")
+  [[ "$out" == *"dash—hex—nul"* ]] || problems+=("decimal or hex entity not decoded")
+  # One pass: the `&` that &#38; / &#x26; decode to must not then eat `amp;`.
+  [[ "$out" == *"lit&amp;eral&amp;lt;"* ]] \
+    || problems+=("a decoded & was rescanned: $(print -r -- "$out" | grep -o 'lit.*lt;' | head -1)")
+  # U+FFFD as its UTF-8 bytes: $'\uFFFD' is a "character not in range"
+  # error under a C locale (zsh 5.8), and the suite must not depend on LANG.
+  local r=$'\xEF\xBF\xBD'
+  [[ "$out" == *"nul${r}ctl${r}sur${r}big${r}tab"$'\t'"end"* ]] \
+    || problems+=("a dangerous code point was not replaced: $(print -r -- "$out" | grep -o 'nul.*end')")
+  # A CR entity is dropped like a literal CR; 128-159 read as windows-1252
+  # (curly apostrophe, en dash), not as C1 controls; &#160; is a space.
+  [[ "$out" == *"crlf win’s–x nb sp x"* ]] \
+    || problems+=("CR, C1 or nbsp entity mishandled: $(print -r -- "$out" | grep -o 'crlf.*sp.x' | head -1)")
+  nuls=$(print -r -- "$out" | tr -cd '\000' | wc -c)
+  (( nuls == 0 )) || problems+=("$nuls NUL byte(s) in the output")
+  report "$name" "html entities" $rc "$out"
+  rm -rf "$tmp"
+  return 0
+}
+check_html_entities
+
 # --- lean timeline ---------------------------------------------------------
 # --unresolved fetches a reduced timeline: PULL_REQUEST_COMMIT dropped from
 # itemTypes, `body` dropped from the IssueComment fragment. That has two
@@ -844,8 +896,7 @@ check_lean_identical
 # Every golden case reaches the script through --fixtures, so nothing above
 # exercises the half that fetches and diagnoses: the two graphql calls, the
 # error branches that read them, and the trap that cleans up after. These
-# cases prepend stubs on PATH (the r-git-worktree-status idiom) and pin that
-# behavior. Offline by construction — the stub never reaches the network, and
+# cases prepend stubs on PATH and pin that behavior. Offline by construction — the stub never reaches the network, and
 # CI has no GH_TOKEN, so an escape would fail loudly rather than quietly pass.
 #
 # `mktemp` is stubbed alongside `gh`, for one reason: asserting the payload
@@ -867,16 +918,40 @@ cat > "$stubdir/gh" <<'STUB'
 # fails here instead of silently landing in a fallthrough. The two graphql
 # calls are told apart by their query text: only the threads query mentions
 # reviewThreads.
-emit_log() { print -r -- "$1" >> "${GH_STUB_LOG:-/dev/null}" }
+emit_log() {
+  print -r -- "$1" >> "${GH_STUB_LOG:-/dev/null}"
+  # GH_STUB_NOISY: gh's debug log on stderr, which real gh writes on every
+  # call — successful ones included — under GH_DEBUG or DEBUG=1. The answer
+  # must come from stdout alone.
+  # The lines carry what real ones do — a URL, with its / and : — so a
+  # merged stream cannot slip past the owner/name check by looking plain.
+  [[ -n ${GH_STUB_NOISY:-} ]] && print -ru2 -- "[git remote -v]"$'\n'"* Request to https://api.github.com/graphql ($1)"
+  return 0
+}
 
 case "$1 $2" in
   "repo view")
-    emit_log "repo view"; print -r -- acme/widget; exit 0 ;;
+    # GH_STUB_NO_REPO: the cwd is not a GitHub repo, in gh's wording.
+    # GH_STUB_REPO_ERROR: gh itself failed (no network, a bad token).
+    emit_log "repo view"
+    [[ -n ${GH_STUB_NO_REPO:-} ]] && { print -ru2 -- "no git remotes found"; exit 1; }
+    [[ -n ${GH_STUB_REPO_ERROR:-} ]] && { print -ru2 -- "error connecting to api.github.com"; exit 1; }
+    print -r -- acme/widget; exit 0 ;;
   "pr view")
-    # The branch's-PR hint in the not-found diagnosis. Absent answer file
-    # means "no PR for this branch", which is a nonzero exit from real gh.
-    emit_log "pr view"
-    [[ -r $GH_STUB_FX/branch-pr ]] || exit 1
+    # The branch's-PR hint in the not-found diagnosis and the no-number
+    # lookup. Absent answer file means "no PR for this branch", which is a
+    # nonzero exit from real gh. The argv is logged so a case can see what
+    # the lookup was given. Real gh refuses `pr view -R <repo>` with no
+    # positional, and the script never passes a positional here, so -R is
+    # refused the way gh does — a stub that answered it hid exactly that
+    # regression once.
+    emit_log "pr view ${*[3,-1]}"
+    if [[ " ${*[3,-1]} " == *" -R "* || " ${*[3,-1]} " == *" --repo "* || " ${*[3,-1]} " == *" --repo="* ]]; then
+      print -ru2 -- "argument required when using the --repo flag"; exit 1
+    fi
+    # GH_STUB_PR_VIEW_ERROR: gh itself failed, which is not "no PR".
+    [[ -n ${GH_STUB_PR_VIEW_ERROR:-} ]] && { print -ru2 -- "error connecting to api.github.com"; exit 1; }
+    [[ -r $GH_STUB_FX/branch-pr ]] || { print -ru2 -- 'no pull requests found for branch "feature"'; exit 1; }
     cat "$GH_STUB_FX/branch-pr"; exit 0 ;;
 esac
 
@@ -910,7 +985,7 @@ if [[ $which == th ]]; then
     # the threads call is skipped when the timeline call fails — which is
     # exactly why it stays: it is what went red when the two briefly ran
     # concurrently and gh's raw error printed ahead of the curated diagnosis.
-    notfound-*) print -ru2 -- "gh: Could not resolve to a PullRequest with the number of 999."; exit 1 ;;
+    notfound-*) print -ru2 -- "gh: Could not resolve to an issue or pull request with the number of 999."; exit 1 ;;
     *)       jq -c '.[]' "$GH_STUB_TH"; exit 0 ;;
   esac
 fi
@@ -923,21 +998,37 @@ case "${GH_STUB_MODE:-}" in
   issue-target)
     print -rn -- '{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue","number":43,"title":"ARG_MAX crash on large PRs"}}}}'
     exit 0 ;;
+  issue-backslash)
+    print -rn -- '{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue","number":43,"title":"fix \\t and \\c in the parser"}}}}'
+    exit 0 ;;
 
   # Both streams carry the not-found wording — the shape real gh produces,
   # verified against github.com: a one-line summary on stderr and the full
-  # errors[] array on stdout.
+  # errors[] array on stdout, in the union field's wording.
   notfound-both)
-    print -rn -- '{"data":{"repository":{"pullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","pullRequest"],"message":"Could not resolve to a PullRequest with the number of 999."}]}'
-    print -ru2 -- "gh: Could not resolve to a PullRequest with the number of 999."
+    print -rn -- '{"data":{"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","issueOrPullRequest"],"message":"Could not resolve to an issue or pull request with the number of 999."}]}'
+    print -ru2 -- "gh: Could not resolve to an issue or pull request with the number of 999."
     exit 1 ;;
   # One stream each: the subject greps both, and these pin each half. If it
   # ever greps only one, exactly one of the two cases goes red.
   notfound-stderr)
-    print -ru2 -- "gh: Could not resolve to a PullRequest with the number of 999."
+    print -ru2 -- "gh: Could not resolve to an issue or pull request with the number of 999."
     exit 1 ;;
   notfound-stdout)
-    print -rn -- '{"errors":[{"message":"Could not resolve to a PullRequest with the number of 999."}]}'
+    print -rn -- '{"data":{"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","issueOrPullRequest"],"message":"Could not resolve to an issue or pull request with the number of 999."}]}'
+    exit 1 ;;
+  # A page gh fetched before a later one failed: the target's body quotes
+  # the not-found sentence, and the failure itself is something else. The
+  # diagnosis must come from the error structure, not from the text.
+  notfound-in-body)
+    print -r -- '{"data":{"repository":{"issueOrPullRequest":{"__typename":"PullRequest","body":"gh said: Could not resolve to an issue or pull request with the number of 999."}}}}'
+    print -ru2 -- "gh: HTTP 502 Bad Gateway (fetching page 2)"
+    exit 1 ;;
+  # A repository that does not resolve, in gh's wording (verified live). It
+  # also says "Could not resolve", and must not be read as a bad number.
+  badrepo)
+    print -rn -- '{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","path":["repository"],"message":"Could not resolve to a Repository with the name '"'"'acme/no-such-repo'"'"'."}]}'
+    print -ru2 -- "gh: Could not resolve to a Repository with the name 'acme/no-such-repo'."
     exit 1 ;;
 
   # A summary on stderr AND the structured body on stdout: gh's shape for a
@@ -1041,6 +1132,10 @@ gh_case ok 7 --toc
   || problems+=("expected exactly 2 graphql calls, log has: $(tr '\n' ' ' < "$stublog")")
 grep -qx 'graphql:tl' "$stublog" || problems+=("no timeline query was issued")
 grep -qx 'graphql:th' "$stublog" || problems+=("no threads query was issued")
+# owner and name travel as raw strings (-f): -F would read a digit-only
+# name as a number and a leading @ as a file. Only the number is typed.
+grep -q -- '-f owner=acme -f name=widget -F num=7 ' "$qlog" \
+  || problems+=("owner/name not passed as raw strings: $(grep -o -- '-[fF] owner=[^ ]* -[fF] name=[^ ]* -[fF] num=[^ ]*' "$qlog")")
 gh_leaks
 report gh-live-render "stubbed gh" $gh_rc "$gh_out"
 
@@ -1125,6 +1220,85 @@ for mode in both stderr stdout; do
   report "gh-notfound-$mode" "stubbed gh" $gh_rc "$gh_out"
 done
 
+# gh-notfound-phrase-in-body — a body on an already-fetched page quotes the
+# not-found sentence and a later page fails for another reason: that is a
+# gh error, not a missing number.
+gh_reset
+gh_case notfound-in-body 999 --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *"gh-comments: gh error:"* ]] || problems+=("did not fall through to the gh-error branch")
+[[ "$gh_out" == *"HTTP 502 Bad Gateway"* ]] || problems+=("gh's own error was not shown")
+[[ "$gh_out" != *"not found in acme/widget"* ]] || problems+=("a body quoting the sentence was read as not-found")
+gh_leaks
+report gh-notfound-phrase-in-body "stubbed gh" $gh_rc "$gh_out"
+
+# gh-repo-view-error — gh failing to resolve the cwd's repo for its own
+# reasons (no network, a bad token) is gh's error to show, not "not in a
+# GitHub repo" with advice to pass -R.
+gh_reset
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_REPO_ERROR=1 zsh "$script" --pr 7 --toc 2>&1) || gh_rc=$?
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == "gh-comments: gh error:"$'\n'"error connecting to api.github.com" ]] || problems+=("output was: $gh_out")
+(( $(grep -c '^graphql' "$stublog") == 0 )) || problems+=("fetched after the repo lookup failed")
+gh_leaks
+report gh-repo-view-error "stubbed gh" $gh_rc "$gh_out"
+
+# gh-debug-stderr-ignored-on-success — under GH_DEBUG / DEBUG=1 real gh
+# writes its debug log to stderr on every call, successful ones included.
+# The repo lookup, the branch lookup and the fetches must take their answer
+# from stdout alone: with no number, the run renders. (A merged stream once
+# read the branch lookup's debug lines as a failed lookup.)
+gh_reset
+print -r -- '7' > "$stubfx/branch-pr"
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_NOISY=1 zsh "$script" --pr --toc 2>/dev/null) || gh_rc=$?
+(( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0)")
+[[ "$gh_out" == *"PR #7 docs: clarify retry semantics"* ]] || problems+=("did not render with gh's debug log on stderr")
+# The repo lookup too: the render never prints the repo, so the fetch's
+# argv is where a merged answer would show.
+grep -q -- '-f owner=acme -f name=widget -F num=7 ' "$qlog" \
+  || problems+=("owner/name carried gh's stderr: $(grep -o -- '-f owner=[^ ]* -f name=[^ ]*' "$qlog" | head -1)")
+gh_leaks
+report gh-debug-stderr-ignored-on-success "stubbed gh" $gh_rc "$gh_out"
+
+# gh-branch-lookup-error — with no number, gh failing to look the branch
+# up is gh's error, not "no PR found": that message is kept for gh's own
+# no-PR wording (gh-no-number-no-pr below).
+gh_reset
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_PR_VIEW_ERROR=1 zsh "$script" --pr --toc 2>&1) || gh_rc=$?
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == "gh-comments: gh error:"$'\n'"error connecting to api.github.com" ]] || problems+=("output was: $gh_out")
+(( $(grep -c '^graphql' "$stublog") == 0 )) || problems+=("fetched after the lookup failed")
+gh_leaks
+report gh-branch-lookup-error "stubbed gh" $gh_rc "$gh_out"
+
+# gh-no-number-no-pr — and the real "no PR for this branch" answer.
+gh_reset
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --pr --toc 2>&1) || gh_rc=$?
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == "gh-comments: no number given and no PR found for the current branch in acme/widget" ]] \
+  || problems+=("output was: $gh_out")
+gh_leaks
+report gh-no-number-no-pr "stubbed gh" $gh_rc "$gh_out"
+
+# gh-badrepo-not-a-bad-number — a repository that does not resolve is gh's
+# own error to show, not "#1 not found": the user typed the repo wrong, and
+# the branch-PR hint would send them to check the number instead.
+gh_reset
+print -r -- '#44: reach jq through files' > "$stubfx/branch-pr"
+gh_case badrepo 1 -R acme/no-such-repo --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *"gh-comments: gh error:"* ]] || problems+=("did not fall through to the gh-error branch")
+[[ "$gh_out" == *"Could not resolve to a Repository with the name 'acme/no-such-repo'"* ]] \
+  || problems+=("gh's own message was not shown")
+[[ "$gh_out" != *"not found in acme/no-such-repo"* ]] || problems+=("reported the number as missing")
+[[ "$gh_out" != *"rerun with that number"* ]] || problems+=("hinted at the branch PR for a bad repo")
+gh_leaks
+report gh-badrepo-not-a-bad-number "stubbed gh" $gh_rc "$gh_out"
+
 # gh-notfound-branch-hint — the number exists nowhere in the repo, so the only
 # hint left is the branch's actual PR. That is the common mistake made
 # self-correcting: N was the issue number embedded in the branch name.
@@ -1136,6 +1310,103 @@ gh_case notfound-both 43 --toc
   || problems+=("branch PR hint not reported")
 gh_leaks
 report gh-notfound-branch-hint "stubbed gh" $gh_rc "$gh_out"
+
+# gh-notfound-hint-not-circular — when the branch's PR *is* the number that
+# failed, the hint would send the user back to the same command, so it is
+# left out.
+gh_reset
+print -r -- '#43: reach jq through files' > "$stubfx/branch-pr"
+gh_case notfound-both 43 --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *"#43 not found in acme/widget"* ]] || problems+=("no not-found diagnosis")
+[[ "$gh_out" != *"rerun with that number"* ]] \
+  || problems+=("hinted at the number that just failed")
+gh_leaks
+report gh-notfound-hint-not-circular "stubbed gh" $gh_rc "$gh_out"
+
+# gh-no-number-plain-lookup — with no number the branch's PR is looked up
+# with a bare `gh pr view`: no -R, which gh refuses without a positional
+# (the stub refuses it too), and the fetch then goes to the same repo gh
+# resolved the branch in.
+gh_reset
+print -r -- '7' > "$stubfx/branch-pr"
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --pr --toc 2>&1) || gh_rc=$?
+(( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0)")
+[[ "$gh_out" == *"note: no number given — using the current branch's PR #7"* ]] \
+  || problems+=("did not use the branch's PR")
+[[ "$gh_out" == *"PR #7 docs: clarify retry semantics"* ]] || problems+=("did not render PR #7")
+grep -q -- '^pr view --json number ' "$stublog" \
+  || problems+=("the branch lookup was not a bare pr view: $(grep '^pr view' "$stublog")")
+gh_leaks
+report gh-no-number-plain-lookup "stubbed gh" $gh_rc "$gh_out"
+
+# gh-no-number-with-repo-flag-refused — "no number" means the cwd's branch
+# PR and -R means another repo; the pair is refused before any gh call
+# rather than resolved in one repo and fetched from the other.
+gh_reset
+print -r -- '7' > "$stubfx/branch-pr"
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --pr -R acme/widget --toc 2>&1) || gh_rc=$?
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == "gh-comments: -R needs a number: the current branch's PR is in the cwd's repo, not in acme/widget" ]] \
+  || problems+=("output was: $gh_out")
+[[ ! -s "$stublog" ]] || problems+=("called gh before refusing: $(tr '\n' ' ' < "$stublog")")
+gh_leaks
+report gh-no-number-with-repo-flag-refused "stubbed gh" $gh_rc "$gh_out"
+
+# gh-no-repo-* — outside a GitHub repo the hint asks for what is missing:
+# -R when a number was given, a number and -R when none was, since -R on
+# its own is refused and would send the user from one refusal to the next.
+for spec in "number|gh-comments: not in a GitHub repo — pass -R <owner/name>|7" \
+            "no-number|gh-comments: no number given and not in a GitHub repo — pass <number> -R <owner/name>|"; do
+  gh_reset
+  gh_rc=0
+  gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok GH_STUB_NO_REPO=1 zsh "$script" --pr ${=${spec##*|}} --toc 2>&1) || gh_rc=$?
+  (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+  [[ "$gh_out" == "${${spec#*|}%|*}" ]] || problems+=("output was: $gh_out")
+  (( $(grep -c '^pr view\|^graphql' "$stublog") == 0 )) || problems+=("went on after the repo failed")
+  gh_leaks
+  report "gh-no-repo-${spec%%|*}" "stubbed gh" $gh_rc "$gh_out"
+done
+
+# gh-notfound-no-hint-under-repo-flag — the branch's PR is in the cwd's
+# repo, so under -R it is no answer to "#N is not in <repo>": no hint, and
+# no lookup to pay for.
+gh_reset
+print -r -- '#44: reach jq through files' > "$stubfx/branch-pr"
+gh_case notfound-both 43 -R acme/widget --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *"#43 not found in acme/widget"* ]] || problems+=("no not-found diagnosis")
+[[ "$gh_out" != *"rerun with that number"* ]] || problems+=("hinted at the cwd branch's PR under -R")
+(( $(grep -c '^pr view' "$stublog") == 0 )) || problems+=("looked the branch up under -R")
+gh_leaks
+report gh-notfound-no-hint-under-repo-flag "stubbed gh" $gh_rc "$gh_out"
+
+# gh-no-number-events-refused-before-fetch — the branch lookup settles the
+# type as PR, so an issue-only flag is refused there and no timeline is paid for.
+gh_reset
+print -r -- '7' > "$stubfx/branch-pr"
+gh_rc=0
+gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --events 2>&1) || gh_rc=$?
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == "gh-comments: --events only applies to issues; #7, the current branch's PR, is a pull request" ]] \
+  || problems+=("output was: $gh_out")
+(( $(grep -c '^graphql:' "$stublog") == 0 )) || problems+=("fetched before refusing")
+gh_leaks
+report gh-no-number-events-refused-before-fetch "stubbed gh" $gh_rc "$gh_out"
+
+# gh-wrong-type-title-backslash — a title is third-party text; the
+# diagnostic must print it as is, not read `\t` or `\c` as an escape.
+gh_reset
+gh_case issue-backslash 43 --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *'not a pull request: "fix \t and \c in the parser"'* ]] \
+  || problems+=("the title was mangled: $(print -r -- "$gh_out" | head -1)")
+[[ "$gh_out" == *$'\n'"  the type was pinned by --pr — rerun as: gh-comments 43 --toc"* ]] \
+  || problems+=("the hint line was lost or glued on")
+gh_leaks
+report gh-wrong-type-title-backslash "stubbed gh" $gh_rc "$gh_out"
 
 # gh-issue-number-rejected — the *other* half of that mistake, and the one
 # that changed shape when the union query landed. A number that names an
@@ -1260,13 +1531,28 @@ argcase() {
 
 argcase arg-help              0 "Usage: gh-comments" --help
 argcase arg-bad-pr-number     1 "not a PR or issue number: abc" abc
+# A bad number is reported before a flag the pinned type refuses, so one
+# rerun fixes the command line.
+argcase arg-bad-number-before-pinned-flag 1 "not a PR or issue number: abc" abc --events
+# An argument is printed as is: `\c` would otherwise end the line early and
+# glue the usage text onto the diagnostic.
+argcase arg-bad-number-backslash 1 'not a PR or issue number: a\cb'$'\n'"Usage: gh-comments" 'a\cb'
 argcase arg-unknown-flag      1 "unknown flag: --nope" 7 --nope
 argcase arg-second-pr-number  1 "unexpected argument: 8" 7 8
+# The same for the two diagnostics that quote an argument verbatim.
+argcase arg-unknown-flag-backslash 1 'unknown flag: --x\cy' 7 '--x\cy'
+argcase arg-second-number-backslash 1 'unexpected argument: x\cy' 7 'x\cy'
 # --fixtures validates the timeline operand up front, because every path after
 # it assumes that file is readable. The threads operand is optional at parse
 # time — an issue has none — and refused later, once the payload has said the
 # target is a PR after all.
 argcase arg-fixtures-missing  1 "needs a readable timeline JSON file" 7 --fixtures /nonexistent/a /nonexistent/b
+# The query takes owner and name apart, so the host- and URL-qualified forms
+# gh's own -R accepts are refused up front rather than split wrong.
+argcase arg-repo-url-form     1 "-R needs <owner/name>; got: https://github.com/acme/widget" 7 -R https://github.com/acme/widget
+argcase arg-repo-host-form    1 "-R needs <owner/name>; got: github.com/acme/widget" 7 --repo=github.com/acme/widget
+argcase arg-repo-bare-name    1 "-R needs <owner/name>; got: widget" 7 -R widget
+argcase arg-repo-needs-number 1 "-R needs a number: the current branch's PR is in the cwd's repo, not in acme/widget" -R acme/widget
 argcase arg-fixtures-pr-needs-threads 1 "needs a threads payload for a PR" 7 --fixtures "$fx/zero-threads.tl.json"
 argcase arg-fixtures-no-number 1 "a number is required with --fixtures" \
   --fixtures "$fx/zero-threads.tl.json" "$fx/zero-threads.th.json"
