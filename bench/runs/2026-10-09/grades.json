@@ -1,0 +1,128 @@
+{
+  "_": "Hand-assigned for this run: the ✓ ◐ ✗ – grades and the prose that judges whether an output answers its task. analyze.py reads this file from the run directory it analyzes. Keys name the table rows in analyze.py; a grade is one string for the whole row or an object per target.",
+  "task1": {
+    "grades": {
+      "gh_view_c": "✗",
+      "gh_view+gh_view_c": {
+        "E1": "✓",
+        "E2": "✓",
+        "R1": "✗",
+        "R2": "✗",
+        "O1": "✗"
+      },
+      "gh_view+gh_view_c+rest_rc": {
+        "E1": "✓",
+        "E2": "✓",
+        "R1": "◐",
+        "R2": "◐",
+        "O1": "◐"
+      },
+      "rest_trio": {
+        "E1": "✗",
+        "E2": "✗",
+        "R1": "◐",
+        "R2": "◐",
+        "O1": "◐"
+      },
+      "s_full": "✓",
+      "s_toc": "–"
+    },
+    "note": "Tokens per approach; ✓ complete, ◐ partial, ✗ wrong or missing, – not an answer by itself. `E1`/`E2` have no comments or reviews, so `gh pr view --comments` prints **nothing**, not even the description. On the PRs with reviews it shows review bodies and top-level comments but none of the inline threads. Adding REST `pulls/N/comments` brings the thread comments back as raw JSON with no resolved or open state, so the reader cannot tell settled feedback from live feedback.",
+    "chart": {
+      "gh_view_c": "✗ no inline threads",
+      "gh_view+gh_view_c": "✗ no inline threads",
+      "gh_view+gh_view_c+rest_rc": "◐ no open/resolved",
+      "rest_trio": "◐ no open/resolved",
+      "s_full": "✓ all 17 threads",
+      "s_toc": "– map only"
+    }
+  },
+  "task2": {
+    "grades": {
+      "gh_view_c": "✗",
+      "rest_rc": "✗",
+      "gql_meta": "✓",
+      "s_toc_unres": "✓",
+      "s_toc": "✓"
+    },
+    "note": "REST review comments carry no resolution field, so REST cannot answer this at any cost. On `R1`/`R2` the right answer is \"none: every thread is resolved\". On `O1` it is 7 of 17, one of them in a bot review that the default view filters; it is listed under `threads in filtered bot reviews:`.",
+    "chart": {
+      "rest_rc": "✗ cannot tell",
+      "gh_view_c": "✗ no threads",
+      "s_toc": "✓ 7 of 7",
+      "gql_meta": "✓",
+      "s_toc_unres": "✓ 7 of 7"
+    }
+  },
+  "task3": {
+    "grades": {
+      "gh_view_c+rest_rc": "✗",
+      "gql_open": "✓",
+      "s_unres": "✓"
+    },
+    "note": "Only `O1` has open threads. The naive pair returns all 17 threads with no way to tell the 10 resolved ones apart, so an agent would re-litigate settled feedback."
+  },
+  "task4": {
+    "grades": {
+      "TA": "✓",
+      "TB": "✗",
+      "TC": "✗",
+      "TD": "✓"
+    }
+  },
+  "task5": {
+    "grades": {
+      "gh_view_c": {
+        "R1": "✓",
+        "R2": "✓",
+        "O1": "✗",
+        "E1": "✗",
+        "E2": "✗"
+      },
+      "s_full": "✓",
+      "s_slr": "✓",
+      "s_latest": "✓"
+    },
+    "note": "On all three reviewed PRs the most recent review is an approval with a short body. `--since-last-review` anchors on it everywhere, and so does `--latest` on `R1` and `O1`, since it skips only reviews and comments with no text and \"LGTM\" has text; on `R2` it anchors on the comment posted with the approval. On `O1` the 7 open threads come from earlier reviews, so neither slice shows them; `gh pr view --comments` shows the approval but not those threads either, hence its ✗ there. `--unresolved` is the flag for what is still open regardless of age. `E1`/`E2` have no reviews: both slicing flags print a note and fall back to the TOC, while `gh pr view --comments` prints nothing at all."
+  },
+  "task6": {
+    "grades": {
+      "gh_view+gh_view_c": {
+        "I1": "✓",
+        "I2": "◐",
+        "I3": "◐",
+        "I4": "◐"
+      },
+      "rest_issue+rest_ic": {
+        "I1": "✓",
+        "I2": "◐",
+        "I3": "◐",
+        "I4": "◐"
+      },
+      "rest_issue+rest_tl": "✓",
+      "s_full": "✓",
+      "s_toc": "–"
+    },
+    "note": "◐: no cross-reference events, so neither can say which PRs worked on the issue. `I1` has none, so nothing is missing there. Off a TTY, `gh issue view --comments` prints the comments without the issue body, hence two calls, and on `I2`, which has no comments, it prints nothing."
+  },
+  "task7": {
+    "grades": {
+      "gh_view": "✗",
+      "gh_json_close": {
+        "I1": "✗",
+        "I3": "◐",
+        "I4": "✗"
+      },
+      "rest_tl": "✓",
+      "s_toc": "✓"
+    },
+    "note": "`closedByPullRequestsReferences` is filled only when a PR's closing keyword closed the issue. `I4` was closed by hand after its fix merged, so the cheap JSON names no PR, and only the timeline shows that the fix was reverted after the issue closed. `I3` lists the PR that closed it but not the earlier PR whose review the issue came out of. `I1` was closed by its author after a comment explaining the cause, which only the comments carry. The TOC shows every `xref`, every comment's first line and the `closed` line."
+  },
+  "ladder": {
+    "notes": {
+      "open-threads-o1-rest": "REST can't answer",
+      "open-threads-r1-rest": "REST can't answer",
+      "why-closed-i4-json": "but --json names no PR"
+    }
+  }
+}

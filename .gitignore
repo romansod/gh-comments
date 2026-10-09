@@ -1,3 +1,10 @@
 .DS_Store
 # pr-review ensemble audit trails (local to a checkout)
 docs/reviews/pr-*/
+# token benchmark: raw captures, the token cache, and an unfiled run's
+# TSVs, grades and tables (a filed run under bench/runs/<date>/ is tracked)
+bench/out/
+bench/tokens.json
+bench/*.tsv
+bench/grades.json
+bench/tables.md

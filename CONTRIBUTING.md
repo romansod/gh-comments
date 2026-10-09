@@ -10,6 +10,8 @@ skills/issue-comments/            same, for issues; each has references/output.m
 .claude-plugin/plugin.json        the plugin manifest
 .claude-plugin/marketplace.json   the one-entry marketplace that serves it
 tests/                            run.zsh, lib.zsh, run-pty.py, test-*.zsh, fixtures/
+bench/                            the token benchmark: scripts, targets.json, runs/<date>/
+BENCHMARKS.md                     its results
 ```
 
 The script is the repository root's `gh-comments` because a GitHub CLI
@@ -23,7 +25,8 @@ tool's `PATH`.
 make check      # lint, the suite, then the same suite under a pty
 ```
 
-- `make lint`: `zsh -n` on the script, a syntax check of `tests/run-pty.py`,
+- `make lint`: `zsh -n` on the script and the benchmark scripts, a syntax
+  check of `tests/run-pty.py` and the benchmark's Python,
   a check that `VERSION=` in the script matches `.claude-plugin/plugin.json`,
   and `claude plugin validate --strict .` when the `claude` CLI is on `PATH`
   (CI has none, so run it locally after touching the manifests or skills).
@@ -99,6 +102,15 @@ pins, and list it in the suite's header comment.
 The committed fixtures are synthetic and must stay free of real people's
 content: placeholder logins (`alice`, `bob`, `reviewer-bart`, …), invented
 repositories and bodies. Scrub a captured payload before committing it.
+
+## Benchmark
+
+`bench/` measures the token cost of the command and the skills against raw
+`gh`, REST and GraphQL reads, on live public targets. It needs network,
+`gh` auth and the `claude` CLI, and counting costs money, so neither
+`make check` nor CI runs it. See [bench/README.md](bench/README.md) for how
+to run it and file a run, and rerun it after a change to what the command
+prints or to the skills, then update [BENCHMARKS.md](BENCHMARKS.md).
 
 ## Releasing
 
