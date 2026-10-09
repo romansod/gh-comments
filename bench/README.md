@@ -3,7 +3,7 @@
 Measures what `gh-comments` and its `pr-comments` / `issue-comments` skills
 cost in an agent's context, against the raw `gh`, REST and GraphQL ways of
 reading the same discussion. Costs are in **exact Claude tokens**, counted by
-the model, not bytes ÷ 4, which undercounts this kind of text by about 1.7×.
+the model, not bytes ÷ 4, which undercounts this kind of text by 1.5 to 1.8 times.
 The results and what they mean are in [BENCHMARKS.md](../BENCHMARKS.md).
 
 It is not part of `make check`: every run reads live GitHub data (it needs
@@ -23,14 +23,24 @@ python3 analyze.py        # tables and charts → tables.md
 
 Needs `zsh`, `jq`, `gh`, `python3` and the `claude` CLI.
 
-- `run-cases.zsh` runs this checkout's own `gh-comments`, so a run measures
-  whatever is checked out: `git checkout v1.0.0` first to measure a release.
+- `run-cases.zsh` runs this checkout's own `gh-comments`.
   `GH_COMMENTS=/path/to/gh-comments` measures another executable. PR targets
   run with `--pr`, issues with `--issue`.
+- To measure a release, check its tag out beside this checkout and point the
+  scripts at it, since a tag cut before `bench/` existed has no harness:
+
+  ```bash
+  git worktree add /tmp/gh-comments-v1.0.0 v1.0.0
+  GH_COMMENTS=/tmp/gh-comments-v1.0.0/gh-comments zsh run-cases.zsh
+  zsh run-targets.zsh
+  SKILLS_DIR=/tmp/gh-comments-v1.0.0/skills zsh run-fixed.zsh
+  ```
 - `run-fixed.zsh` reads this checkout's `skills/`, which is exactly what the
-  Claude Code plugin installs. `SKILLS_DIR` measures another copy, such as
-  one an installer stamped with a banner; the banner then gets a row of its
-  own.
+  Claude Code plugin installs. Each description is measured the way a
+  session lists it, under the plugin's namespace (`gh-comments:pr-comments`).
+  `SKILLS_DIR` measures another copy, such as one an installer stamped with a
+  banner; the banner then gets a row of its own. Set `SKILL_PREFIX=` (empty)
+  for a copy listed without the namespace, such as Codex's.
 - `count_tokens.py` sends each distinct output once through
   `claude -p --model claude-opus-5-5` with no tools, and reports the input
   total minus the same call with an empty document. That empty-document

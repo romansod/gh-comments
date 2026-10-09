@@ -55,6 +55,11 @@ def main():
               "(cached counts are net of it and stay valid)", file=sys.stderr)
     cache["_model"], cache["_baseline"] = MODEL, base
     cache["_cost"] = cache.get("_cost", 0) + cost
+    # An earlier run's tokens.tsv must not survive a count that fails part
+    # way: analyze.py would read it as this run's.
+    tsv = os.path.join(HERE, "tokens.tsv")
+    if os.path.exists(tsv):
+        os.remove(tsv)
     files = sorted(f for f in os.listdir(OUT) if f.endswith(".txt"))
     by_hash, todo = {}, {}
     for f in files:

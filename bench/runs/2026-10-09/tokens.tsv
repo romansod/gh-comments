@@ -27,10 +27,10 @@ E2.s_slr	365	172
 E2.s_toc	304	153
 E2.s_toc_unres	156	80
 E2.s_unres	156	80
-FIX.issue_desc	664	246
+FIX.issue_desc	676	252
 FIX.issue_ref	2718	988
 FIX.issue_skillmd	3906	1469
-FIX.pr_desc	740	272
+FIX.pr_desc	752	278
 FIX.pr_ref	4173	1425
 FIX.pr_skillmd	5486	2074
 I1.gh_json_close	115	63

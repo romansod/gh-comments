@@ -5,7 +5,12 @@
 #
 #   FIX.pr_desc, FIX.issue_desc   each description as it appears in the skill
 #                                 listing a session is given: `- <name>: <text>`
-#                                 on one line — paid every session, used or not
+#                                 on one line — paid every session, used or not.
+#                                 A plugin's skills are listed under its
+#                                 namespace (`gh-comments:pr-comments`), so the
+#                                 name carries SKILL_PREFIX, `gh-comments:` by
+#                                 default; set it empty for a copy installed
+#                                 without one, such as Codex's
 #   FIX.pr_skillmd, FIX.issue_skillmd
 #                                 SKILL.md, which is what an invocation loads
 #   FIX.pr_ref, FIX.issue_ref     references/output.md, loaded only when an
@@ -20,6 +25,7 @@ set -euo pipefail
 cd ${0:A:h}
 mkdir -p out
 SK=${SKILLS_DIR:-${0:A:h:h}/skills}
+PFX=${SKILL_PREFIX-gh-comments:}
 
 # desc <SKILL.md> — the folded `description: >` scalar from the frontmatter,
 # joined with single spaces the way a folded YAML scalar reads.
@@ -40,7 +46,7 @@ for k in pr issue; do
   cp "$f" out/FIX.${k}_skillmd.txt
   # No trailing newline: that is how the baseline captured them, and a byte of
   # difference is a cache miss and a spurious delta.
-  print -rn -- "- $k-comments: $(desc "$f")" > out/FIX.${k}_desc.txt
+  print -rn -- "- $PFX$k-comments: $(desc "$f")" > out/FIX.${k}_desc.txt
   r=$SK/$k-comments/references/output.md
   if [[ -r $r ]]; then
     cp "$r" out/FIX.${k}_ref.txt

@@ -101,6 +101,17 @@ FAILED = sorted(r["id"] for r in RUNS if r["exit"] != "0")
 if FAILED:
     sys.exit(f"analyze: {len(FAILED)} capture(s) exited non-zero, fix or rerun them first: "
              + ", ".join(FAILED))
+# tokens.tsv must describe exactly these captures. A count left over from an
+# earlier run, or one that counted captures this run did not make, would
+# otherwise render as this run's numbers. The byte count is the cheap witness
+# that a token count belongs to the capture of the same id.
+CAP = {r["id"]: int(r["bytes"]) for r in RUNS}
+MISMATCH = sorted(i for i in CAP if i not in BYT or BYT[i] != CAP[i])
+EXTRA = sorted(i for i in BYT if i not in CAP and not i.startswith("FIX."))
+if MISMATCH or EXTRA:
+    sys.exit("analyze: tokens.tsv does not match this run's captures; rerun count_tokens.py"
+             + (f"\n  missing or different bytes: {', '.join(MISMATCH)}" if MISMATCH else "")
+             + (f"\n  counted but not captured: {', '.join(EXTRA)}" if EXTRA else ""))
 OK, PART, BAD, NA = "✓", "◐", "✗", "–"
 SKILL_PR, SKILL_IS = TOK["FIX.pr_skillmd"], TOK["FIX.issue_skillmd"]
 
@@ -292,7 +303,7 @@ matrix("Task 6 — read an issue in full", ISS, [
 
 matrix("Task 7 — why was the issue closed, and by what", ["I1", "I3", "I4"], [
     ("`gh issue view`", lambda T: [f"{T}.gh_view"], G("task7", "gh_view")),
-    ("`gh issue view --json state,stateReason,closedByPullRequestsReferences`", lambda T: [f"{T}.gh_json_close"],
+    ("`gh issue view --json state,stateReason,closedAt,closedByPullRequestsReferences`", lambda T: [f"{T}.gh_json_close"],
         G("task7", "gh_json_close")),
     ("REST timeline (raw JSON)", lambda T: [f"{T}.rest_tl"], G("task7", "rest_tl")),
     ("**`gh-comments --toc`**", lambda T: [f"{T}.s_toc"], G("task7", "s_toc")),

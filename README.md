@@ -94,7 +94,7 @@ Measured in exact Claude tokens on the same PR, cli/cli#14104, with
 | hand-written GraphQL | | 930 |
 | `gh-comments` | 8,502, all 17 threads | 475 with `--toc --unresolved`, 7 of 7 |
 
-The Claude Code plugin costs 518 tokens in every session for its two skill
+The Claude Code plugin costs 530 tokens in every session for its two skill
 descriptions, and about 1,500 to 2,100 more when a skill runs. On a PR or
 issue with little discussion, plain `gh` is cheaper once that is counted.
 [BENCHMARKS.md](BENCHMARKS.md) has the method, nine targets and seven tasks,

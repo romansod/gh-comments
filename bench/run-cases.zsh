@@ -3,9 +3,10 @@
 # Bash tool would receive it (non-TTY), plus wall-clock ms and the number of
 # agent tool calls (always 1 here; composites add them up). Writes out/<id>.txt and cases.tsv.
 #
-# The script under test is this checkout's own gh-comments, so a run measures
-# whatever is checked out (`git checkout v1.0.0` to measure a release); set
-# GH_COMMENTS to an executable to measure another. The targets are in
+# The script under test is this checkout's own gh-comments; set GH_COMMENTS
+# to measure another executable, such as a release checked out beside this
+# one (see README.md: a release tag older than bench/ has no bench to run
+# from). The targets are in
 # targets.json. Live GitHub targets drift between runs: a change in a raw `gh`
 # row is GitHub moving, not the script.
 set -uo pipefail
@@ -19,6 +20,10 @@ fi
 [[ -x $S ]] || { print -ru2 -- "run-cases: $S is not an executable gh-comments"; exit 1 }
 cd ${0:A:h}
 mkdir -p out
+# A fresh run starts from no captures, so nothing from an earlier target list
+# is counted with this one. run-targets.zsh and run-fixed.zsh, which run after
+# this, write theirs into the emptied directory.
+rm -f out/*.txt(N) out/*.err(N)
 print -r -- $'id\ttarget\tapproach\tcalls\tms\tbytes\texit' > cases.tsv
 
 run() { # run <target> <approach> <calls> <cmd...>

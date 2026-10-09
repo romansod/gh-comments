@@ -19,8 +19,9 @@ timings, is [`bench/runs/2026-10-09/tables.md`](bench/runs/2026-10-09/tables.md)
   answer at any cost, because review comments carry no resolved state, and
   `gh pr view --comments` shows no inline threads at all.
 - **Reading a whole PR.** `gh-comments` renders all 17 threads of
-  cli/cli#14104, each marked open or resolved, in 8,502 tokens. The raw REST
-  reads cost 67,570 to 78,083 tokens and still lack the resolved state.
+  cli/cli#14104, each marked open or resolved, in 8,502 tokens. Adding the
+  REST review comments to `gh pr view` costs 67,570 tokens, the raw REST reads
+  78,083, and both still lack the resolved state.
 - **Why an issue closed.** The table of contents shows every cross-reference
   and the `closed` line in a few hundred tokens. `gh issue view --json
   closedByPullRequestsReferences` is cheaper but names no PR when an issue was
@@ -29,7 +30,7 @@ timings, is [`bench/runs/2026-10-09/tables.md`](bench/runs/2026-10-09/tables.md)
   cheaper once the skill's own instructions are counted. Reading one
   top-level comment on cli/cli#13946 costs 1,333 tokens with
   `gh pr view --comments` and 4,106 through the skill. The plugin's two skill
-  descriptions also cost 518 tokens in every session, whether or not they are
+  descriptions also cost 530 tokens in every session, whether or not they are
   used.
 - **Bytes ÷ 4 undercounts.** Raw JSON runs at 2.2 bytes per token and this
   kind of text at 2.5 to 2.7, so the common rule of four bytes per token
@@ -72,8 +73,8 @@ The targets are labelled by the shape of their discussion:
 
 | Item | Paid | Bytes | Tokens |
 |---|---|--:|--:|
-| `pr-comments` description | every session, used or not | 740 | 272 |
-| `issue-comments` description | every session, used or not | 664 | 246 |
+| `pr-comments` description | every session, used or not | 752 | 278 |
+| `issue-comments` description | every session, used or not | 676 | 252 |
 | `pr-comments` SKILL.md | each invocation | 5,486 | 2,074 |
 | `issue-comments` SKILL.md | each invocation | 3,906 | 1,469 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,173 | 1,425 |
@@ -175,7 +176,7 @@ On all three reviewed PRs the most recent review is an approval with a short bod
 | Approach | I1 | I3 | I4 |
 |---|--:|--:|--:|
 | `gh issue view` | 612 ✗ | 475 ✗ | 434 ✗ |
-| `gh issue view --json state,stateReason,closedByPullRequestsReferences` | 63 ✗ | 211 ◐ | 63 ✗ |
+| `gh issue view --json state,stateReason,closedAt,closedByPullRequestsReferences` | 63 ✗ | 211 ◐ | 63 ✗ |
 | REST timeline (raw JSON) | 6,640 ✓ | 26,762 ✓ | 15,239 ✓ |
 | **`gh-comments --toc`** | 219 ✓ | 340 ✓ | 277 ✓ |
 
@@ -202,7 +203,7 @@ why closed, cli#14411: --json closedBy vs --toc                 ░░░░░�
 
 ### Break-even: does loading the skill pay for itself?
 
-The two descriptions cost **518 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (2,074 for `pr-comments`, 1,469 for `issue-comments`). Against the realistic naive path for the same task:
+The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (2,074 for `pr-comments`, 1,469 for `issue-comments`). Against the realistic naive path for the same task:
 
 | Task | naive tokens | skill flow + SKILL.md | net per invocation |
 |---|--:|--:|--:|
@@ -233,12 +234,18 @@ The two descriptions cost **518 tokens in every session**, whether or not either
 ## Reproducing
 
 ```bash
-git checkout v1.0.0     # or whatever you want to measure
+git worktree add /tmp/gh-comments-v1.0.0 v1.0.0   # the release to measure
 cd bench
-zsh run-cases.zsh && zsh run-targets.zsh && zsh run-fixed.zsh
-python3 count_tokens.py # calls claude -p; a full count costs a few dollars
+GH_COMMENTS=/tmp/gh-comments-v1.0.0/gh-comments zsh run-cases.zsh
+zsh run-targets.zsh
+SKILLS_DIR=/tmp/gh-comments-v1.0.0/skills zsh run-fixed.zsh
+python3 count_tokens.py   # calls claude -p; a full count costs a few dollars
 python3 analyze.py
 ```
+
+Run the scripts from a checkout that has `bench/`, and point them at the
+release through `GH_COMMENTS` and `SKILLS_DIR`: `v1.0.0` itself predates the
+harness.
 
 It needs `gh` logged in and the `claude` CLI. See
 [`bench/README.md`](bench/README.md) for filing a run and comparing it with

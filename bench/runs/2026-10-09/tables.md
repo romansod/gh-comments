@@ -16,8 +16,8 @@
 
 | Item | Paid | Bytes | Tokens |
 |---|---|--:|--:|
-| `pr-comments` description | every session, used or not | 740 | 272 |
-| `issue-comments` description | every session, used or not | 664 | 246 |
+| `pr-comments` description | every session, used or not | 752 | 278 |
+| `issue-comments` description | every session, used or not | 676 | 252 |
 | `pr-comments` SKILL.md | each invocation | 5,486 | 2,074 |
 | `issue-comments` SKILL.md | each invocation | 3,906 | 1,469 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,173 | 1,425 |
@@ -151,7 +151,7 @@ On all three reviewed PRs the most recent review is an approval with a short bod
 | Approach | I1 | I3 | I4 |
 |---|--:|--:|--:|
 | `gh issue view` | 612 ✗ | 475 ✗ | 434 ✗ |
-| `gh issue view --json state,stateReason,closedByPullRequestsReferences` | 63 ✗ | 211 ◐ | 63 ✗ |
+| `gh issue view --json state,stateReason,closedAt,closedByPullRequestsReferences` | 63 ✗ | 211 ◐ | 63 ✗ |
 | REST timeline (raw JSON) | 6,640 ✓ | 26,762 ✓ | 15,239 ✓ |
 | **`gh-comments --toc`** | 219 ✓ | 340 ✓ | 277 ✓ |
 
@@ -178,7 +178,7 @@ why closed, cli#14411: --json closedBy vs --toc                 ░░░░░�
 
 ### Break-even: does loading the skill pay for itself?
 
-The two descriptions cost **518 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (2,074 for `pr-comments`, 1,469 for `issue-comments`). Against the realistic naive path for the same task:
+The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (2,074 for `pr-comments`, 1,469 for `issue-comments`). Against the realistic naive path for the same task:
 
 | Task | naive tokens | skill flow + SKILL.md | net per invocation |
 |---|--:|--:|--:|
@@ -225,7 +225,7 @@ gql md: GraphQL thread metadata   s *: gh-comments full/--toc/--unresolved/--toc
 | raw JSON (gh api) | 487,213 | 221,433 | 2.20 | 1.8× |
 | gh … view text | 47,407 | 18,212 | 2.60 | 1.5× |
 | gh-comments output | 154,095 | 60,858 | 2.53 | 1.6× |
-| SKILL.md + descriptions | 17,687 | 6,474 | 2.73 | 1.5× |
+| SKILL.md + descriptions | 17,711 | 6,486 | 2.73 | 1.5× |
 
 ```
   raw JSON (gh api)        ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░ 2.20 bytes/token
