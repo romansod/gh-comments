@@ -9,14 +9,15 @@ check:
 	$(MAKE) test-pty || rc=1; \
 	exit $$rc
 
-# A syntax check on the script and the pty runner, a check that the version
+# A syntax check on the script, the pty runner and the benchmark scripts, a check that the version
 # the script reports is the one the plugin manifest declares, and — when the
 # claude CLI is on PATH — a strict validation of the plugin and marketplace
 # manifests. CI has no claude CLI, so the last check runs only locally.
 lint:
 	@command -v jq >/dev/null 2>&1 || { echo "lint: needs jq on PATH" >&2; exit 1; }
 	zsh -n gh-comments
-	python3 -c 'import ast, sys; [ast.parse(open(f).read(), f) for f in sys.argv[1:]]' tests/run-pty.py
+	python3 -c 'import ast, sys; [ast.parse(open(f).read(), f) for f in sys.argv[1:]]' tests/run-pty.py bench/*.py
+	for f in bench/*.zsh; do zsh -n "$$f" || exit 1; done
 	@v=$$(sed -n 's/^VERSION=//p' gh-comments); m=$$(jq -r .version .claude-plugin/plugin.json); \
 	if [ "$$v" != "$$m" ]; then \
 	  echo "lint: version mismatch: gh-comments says $$v, .claude-plugin/plugin.json says $$m" >&2; exit 1; \

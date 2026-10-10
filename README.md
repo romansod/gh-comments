@@ -82,6 +82,24 @@ which PR did; `gh-comments <N>` renders `closed`, `reopened`, `xref` and
 `renamed` lines in order, with label and assignee churn held back unless you
 ask for it.
 
+## How it compares
+
+Measured in exact Claude tokens on the same PR, cli/cli#14104, with
+`gh-comments` v1.0.0:
+
+| Approach | Read the whole discussion | Which threads are still open |
+|---|--:|--:|
+| `gh pr view --comments` | 6,105, no inline threads | 6,105, cannot tell |
+| REST API, raw JSON | 78,083, no open or resolved state | 59,629, cannot tell |
+| hand-written GraphQL | | 930 |
+| `gh-comments` | 8,502, all 17 threads | 475 with `--toc --unresolved`, 7 of 7 |
+
+The Claude Code plugin costs 530 tokens in every session for its two skill
+descriptions, and about 1,500 to 2,100 more when a skill runs. On a PR or
+issue with little discussion, plain `gh` is cheaper once that is counted.
+[BENCHMARKS.md](BENCHMARKS.md) has the method, nine targets and seven tasks,
+and where the tool does and does not pay.
+
 ## Install
 
 Requirements: `zsh`, `jq`, and an authenticated [GitHub CLI](https://cli.github.com)
