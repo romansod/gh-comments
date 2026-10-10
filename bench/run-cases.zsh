@@ -22,8 +22,9 @@ cd ${0:A:h}
 mkdir -p out
 # A fresh run starts from no captures, so nothing from an earlier target list
 # is counted with this one. run-targets.zsh and run-fixed.zsh, which run after
-# this, write theirs into the emptied directory.
-rm -f out/*.txt(N) out/*.err(N)
+# this, write theirs into the emptied directory. The previous count goes too:
+# new captures need a new count, and tokens.json keeps unchanged ones free.
+rm -f out/*.txt(N) out/*.err(N) tokens.tsv
 print -r -- $'id\ttarget\tapproach\tcalls\tms\tbytes\texit' > cases.tsv
 
 run() { # run <target> <approach> <calls> <cmd...>

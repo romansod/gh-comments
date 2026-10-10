@@ -22,9 +22,14 @@
 # copy is the repository as-is, with no banner. SKILLS_DIR measures another
 # copy instead, for example one an installer stamped with a banner.
 set -euo pipefail
+# Resolved before the cd below, so a relative path means what the caller meant.
+if [[ -n ${SKILLS_DIR:-} ]]; then
+  SK=${SKILLS_DIR:A}
+else
+  SK=${0:A:h:h}/skills
+fi
 cd ${0:A:h}
 mkdir -p out
-SK=${SKILLS_DIR:-${0:A:h:h}/skills}
 PFX=${SKILL_PREFIX-gh-comments:}
 
 # desc <SKILL.md> — the folded `description: >` scalar from the frontmatter,

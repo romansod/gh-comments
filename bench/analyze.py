@@ -112,6 +112,13 @@ if MISMATCH or EXTRA:
     sys.exit("analyze: tokens.tsv does not match this run's captures; rerun count_tokens.py"
              + (f"\n  missing or different bytes: {', '.join(MISMATCH)}" if MISMATCH else "")
              + (f"\n  counted but not captured: {', '.join(EXTRA)}" if EXTRA else ""))
+# The fixed costs come from run-fixed.zsh, not from these captures, so the
+# check above cannot see them. run-cases.zsh clears them with everything else.
+NOFIX = [i for i in ("FIX.pr_desc", "FIX.issue_desc", "FIX.pr_skillmd", "FIX.issue_skillmd")
+         if i not in TOK]
+if NOFIX:
+    sys.exit("analyze: tokens.tsv has no fixed costs; run run-fixed.zsh, then count_tokens.py"
+             f"\n  missing: {', '.join(NOFIX)}")
 OK, PART, BAD, NA = "✓", "◐", "✗", "–"
 SKILL_PR, SKILL_IS = TOK["FIX.pr_skillmd"], TOK["FIX.issue_skillmd"]
 
