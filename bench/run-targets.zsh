@@ -9,6 +9,8 @@
 set -uo pipefail
 zmodload zsh/datetime zsh/mathfunc
 cd ${0:A:h}
+# New outputs need a new count, as in run-cases.zsh.
+rm -f tokens.tsv
 print -r -- $'id\ttarget\tapproach\tcalls\tms\tbytes\texit' > targets.tsv
 
 run() { # run <target> <approach> <cmd...>

@@ -30,6 +30,8 @@ else
 fi
 cd ${0:A:h}
 mkdir -p out
+# New outputs need a new count, as in run-cases.zsh.
+rm -f tokens.tsv
 PFX=${SKILL_PREFIX-gh-comments:}
 
 # desc <SKILL.md> — the folded `description: >` scalar from the frontmatter,

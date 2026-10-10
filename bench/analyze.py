@@ -437,7 +437,7 @@ groups = [
     ("raw JSON (gh api)", lambda i: any(k in i for k in (".rest_", ".gql_", ".gh_json", "expert_list"))),
     ("gh … view text", lambda i: ".gh_view" in i),
     ("gh-comments output", lambda i: ".s_" in i or "slice" in i),
-    ("SKILL.md + descriptions", lambda i: i.startswith("FIX")),
+    ("skill files", lambda i: i.startswith("FIX")),  # descriptions, SKILL.md, references
 ]
 P("| Content | Bytes | Tokens | Bytes/token | bytes ÷ 4 undercounts by |")
 P("|---|--:|--:|--:|--:|")

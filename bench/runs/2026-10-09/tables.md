@@ -225,13 +225,13 @@ gql md: GraphQL thread metadata   s *: gh-comments full/--toc/--unresolved/--toc
 | raw JSON (gh api) | 487,213 | 221,433 | 2.20 | 1.8× |
 | gh … view text | 47,407 | 18,212 | 2.60 | 1.5× |
 | gh-comments output | 154,095 | 60,858 | 2.53 | 1.6× |
-| SKILL.md + descriptions | 17,711 | 6,486 | 2.73 | 1.5× |
+| skill files | 17,711 | 6,486 | 2.73 | 1.5× |
 
 ```
   raw JSON (gh api)        ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░ 2.20 bytes/token
   gh … view text           ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░ 2.60 bytes/token
   gh-comments output       ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░ 2.53 bytes/token
-  SKILL.md + descriptions  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░ 2.73 bytes/token
+  skill files              ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░ 2.73 bytes/token
   the bytes ÷ 4 rule       ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ 4.00 bytes/token
 ```
 
