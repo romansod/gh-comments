@@ -16,6 +16,66 @@ has no answer short of a hand-written GraphQL query — and a hand-written
 `reviewThreads { path line }` query silently reports no location for every
 outdated thread, because `line` is null there and only `originalLine` has it.
 
+### Example for common question for agent
+
+```
+  "Which review threads on PR #14104 are still open?"
+  ════════════════════════════════════════════════════════════════════════
+
+  WITHOUT gh-comments
+  ───────────────────
+
+  ① gh pr view 14104 --comments
+     ┌──────────────────────────────────────────────┐
+     │ top-level comments + review summaries        │──▶ 6,105 tokens
+     └──────────────────────────────────────────────┘
+        ✗ inline threads are not shown at all
+
+  ② REST: gh api repos/cli/cli/pulls/14104/comments --paginate
+     ┌──────────────────────────────────────────────┐
+     │ every inline comment as raw JSON             │──▶ 59,629 tokens
+     └──────────────────────────────────────────────┘
+        ✗ REST has no resolved/unresolved field
+        ✗ thread replies must be grouped by hand (in_reply_to_id)
+
+  ③ hand-written GraphQL
+     ┌──────────────────────────────────────────────┐
+     │ query reviewThreads {                        │
+     │   isResolved isOutdated path                 │
+     │   line originalLine ◀── line is null on      │──▶ 930 tokens
+     │   comments { … }        outdated threads     │
+     │ }  + pagination cursors                      │
+     └──────────────────────────────────────────────┘
+        ✓ correct, but only if you write, debug
+          and maintain the query yourself
+
+
+  WITH gh-comments
+  ────────────────
+
+     gh comments 14104 --toc --unresolved
+     ┌──────────────────────────────────────────────┐
+     │ 2 paginated GraphQL queries, run for you:    │
+     │   timeline ─┐                                │
+     │   threads  ─┴─▶ joined, filtered, rendered   │──▶ 475 tokens
+     └──────────────────────────────────────────────┘
+        ✓ 7 of 7 open threads, each with file:line
+          and the commit it was anchored to
+
+
+  ════════════════════════════════════════════════════════════════════════
+   approach                 calls   tokens    answers the question?
+   ─────────────────────    ─────   ──────    ─────────────────────
+   gh pr view --comments      1      6,105    ✗ no threads
+   REST inline comments       1     59,629    ✗ no resolved state
+   hand-written GraphQL       1        930    ✓ after you write it
+   gh comments                1¹       475    ✓ out of the box
+  ════════════════════════════════════════════════════════════════════════
+   ¹ one command; it runs 2 GraphQL queries itself
+```
+
+### Example showing internal representation of gh-comments output
+
 On a real PR, [cli/cli#14104](https://github.com/cli/cli/pull/14104), the
 difference looks like this.
 
