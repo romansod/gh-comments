@@ -428,6 +428,25 @@ refuse closer-type-unselected-toc "#47 was closed by a FutureCloser" \
   47 --toc --fixtures "$fx/issue-closer-unknown.tl.json"
 refuse closer-type-unselected-closure "#47 was closed by a FutureCloser" \
   47 --closure --fixtures "$fx/issue-closer-unknown.tl.json"
+# The repository comparison behind `#N` versus `owner/name#N` is
+# case-insensitive, as GitHub names are and -R is typed by hand: a mixed-case
+# -R must still write a same-repository closer and xref as `#N`, and a
+# different repository must still be qualified.
+repo_case() {
+  local name=$1 r=$2 want=$3 unwanted=$4 out; shift 4
+  local -i rc=0
+  out=$(zsh "$script" "$@" -R "$r" --closure 2>&1) || rc=$?
+  (( rc == 0 )) || problems+=("exit $rc (want 0)")
+  [[ "$out" == *"closed ["*"$want"* ]] || problems+=("closed line lacks: $want")
+  [[ "$out" == *"xref ["*"$want"* ]] || problems+=("xref line lacks: $want")
+  [[ "$out" != *"$unwanted"* ]] || problems+=("output carries: $unwanted")
+  report "$name" "refusals" $rc "$out"
+  return 0
+}
+repo_case repo-case-mixed    Fixtures/Fixtures " by #44 PR MERGED" "fixtures/fixtures#44" 41 --fixtures "$fx/issue-closer-pr.tl.json"
+repo_case repo-case-upper    FIXTURES/fixtures " by #44 PR MERGED" "fixtures/fixtures#44" 41 --fixtures "$fx/issue-closer-pr.tl.json"
+repo_case repo-case-other    Fixtures/Fixtures " by other/upstream#17 PR MERGED" " by #17 " 43 --fixtures "$fx/issue-closer-crossrepo.tl.json"
+
 # A payload with no closer field at all (captured before this version asked
 # for it) is refused the same way: nothing was recorded *about* the closer,
 # which is not the same as the API recording none.
