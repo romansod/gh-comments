@@ -71,7 +71,8 @@ The PR-only flags (`--unresolved`, `--since-last-review`, `--latest`,
      gh-comments <N> --issue --closure
      ```
 
-     The `closed` line says `by #N PR MERGED "…"`, `by commit <sha>`,
+     The `closed` line says `by #N PR MERGED "…"`, `by commit <sha>`
+     (`owner/name#N` and `owner/name@<sha>` in another repository),
      `by a project`, or `no closer recorded`. The last means the API holds no closer (closed by
      hand, or by something the token cannot see), not "closed by hand"; the
      comments may still explain it, and the TOC shows them.

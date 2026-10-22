@@ -143,7 +143,8 @@ which PR did; `gh-comments <N>` renders `closed`, `reopened`, `xref` and
 `renamed` lines in order, with label and assignee churn held back unless you
 ask for it. The `closed` line names what closed the issue, which only
 GraphQL's `closer` field records: `by #13927 PR MERGED "…"`, `by commit
-1a2b3c4`, `by a project` for a Projects workflow (naming the project
+1a2b3c4` (`owner/name#N` and `owner/name@1a2b3c4` when the closer lives in
+another repository), `by a project` for a Projects workflow (naming the project
 needs a token scope the query does not ask for), or `no closer recorded`
 when the API holds none (closed by hand, or by something the token cannot
 see). `--closure` is that answer on its

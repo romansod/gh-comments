@@ -19,9 +19,9 @@
 | `pr-comments` description | every session, used or not | 752 | 278 |
 | `issue-comments` description | every session, used or not | 676 | 252 |
 | `pr-comments` SKILL.md | each invocation | 5,486 | 2,074 |
-| `issue-comments` SKILL.md | each invocation | 4,603 | 1,718 |
+| `issue-comments` SKILL.md | each invocation | 4,670 | 1,745 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,173 | 1,425 |
-| `issue-comments` references/output.md | when a marker needs interpreting | 3,437 | 1,248 |
+| `issue-comments` references/output.md | when a marker needs interpreting | 3,505 | 1,273 |
 
 ### Task 1 — read a PR's whole discussion
 
@@ -87,7 +87,7 @@ The skill's documented flow is TOC first, dump to a file, then slice the one ite
 | cli#13946 top-level comment | 1,333 ✓ | 41,606 | 8,147 | **2,032** | 4,106 | 372 | 347 |
 | cli#13946 inline thread | 1,333 ✗ | 41,606 | 8,147 | **1,867** | 3,941 | 816 | 182 |
 | cli#14104 open thread | 6,105 ✗ | 65,734 | 8,502 | **2,412** | 4,486 | 1,104 | 334 |
-| cli#14483 last comment | 772 ✓ | 772 | 905 | **449** | 2,167 | 158 | 37 |
+| cli#14483 last comment | 772 ✓ | 772 | 905 | **449** | 2,194 | 158 | 37 |
 
 ```
 Task 4 — tokens to land one comment (each ▓ ≈ 1k tokens)
@@ -115,7 +115,7 @@ Task 4 — tokens to land one comment (each ▓ ≈ 1k tokens)
   cli#14483 last comment
     naive complete           ▓                             772
     gh-comments full         ▓                             905
-    TOC + slice + SKILL.md   ▓▓                          2,167
+    TOC + slice + SKILL.md   ▓▓                          2,194
     TOC + slice              ▓                             449
     expert list → fetch      ▓                             158
     the comment itself       ▓                              37
@@ -178,7 +178,7 @@ one comment, cli#14483: expert vs TOC+slice                        ░░░░�
 
 ### Break-even: does loading the skill pay for itself?
 
-The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (2,074 for `pr-comments`, 1,718 for `issue-comments`). Against the realistic naive path for the same task:
+The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (2,074 for `pr-comments`, 1,745 for `issue-comments`). Against the realistic naive path for the same task:
 
 | Task | naive tokens | skill flow + SKILL.md | net per invocation |
 |---|--:|--:|--:|
@@ -188,8 +188,8 @@ The two descriptions cost **530 tokens in every session**, whether or not either
 | cli#13946 one inline thread (naive: gh view --comments + REST inline) | 41,606 | 3,941 | saves 37,665 |
 | cli#13946 one top-level comment (naive: gh pr view --comments) | 1,333 | 4,106 | costs 2,773 |
 | cli#14141 read all (naive: gh pr view) | 732 | 2,849 | costs 2,117 |
-| cli#14411 read all (naive: gh issue view ×2) | 1,133 | 3,077 | costs 1,944 |
-| cli#14483 one comment (naive: gh issue view --comments) | 772 | 2,167 | costs 1,395 |
+| cli#14411 read all (naive: gh issue view ×2) | 1,133 | 3,104 | costs 1,971 |
+| cli#14483 one comment (naive: gh issue view --comments) | 772 | 2,194 | costs 1,422 |
 
 ```
 net tokens per invocation (skill flow incl. SKILL.md vs naive)   ▓ saved  ░ spent
@@ -199,8 +199,8 @@ net tokens per invocation (skill flow incl. SKILL.md vs naive)   ▓ saved  ░ 
                               │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓           +37,665  cli#13946 one inline thread
                              ░│                             − 2,773  cli#13946 one top-level comment
                              ░│                             − 2,117  cli#14141 read all
-                             ░│                             − 1,944  cli#14411 read all
-                             ░│                             − 1,395  cli#14483 one comment
+                             ░│                             − 1,971  cli#14411 read all
+                             ░│                             − 1,422  cli#14483 one comment
 ```
 
 ### Heatmap: tokens by target × approach
@@ -225,7 +225,7 @@ gql md: GraphQL thread metadata   s *: gh-comments full/--toc/--unresolved/--toc
 | raw JSON (gh api) | 600,979 | 269,459 | 2.23 | 1.8× |
 | gh … view text | 47,407 | 18,212 | 2.60 | 1.5× |
 | gh-comments output | 160,481 | 63,743 | 2.52 | 1.6× |
-| skill files | 19,127 | 6,995 | 2.73 | 1.5× |
+| skill files | 19,262 | 7,047 | 2.73 | 1.5× |
 
 ```
   raw JSON (gh api)        ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░ 2.23 bytes/token
@@ -256,11 +256,11 @@ Tokens per output, this run against `../2026-10-09`, largest change first. Rows 
 | `I4.rest_tl` | 15,239 | 37,055 | +21,816 (+143%) |
 | `I1.rest_tl` | 6,640 | 22,594 | +15,954 (+240%) |
 | `I3.rest_tl` | 26,762 | 37,018 | +10,256 (+38%) |
+| `FIX.issue_ref` | 988 | 1,273 | +285 (+29%) |
+| `FIX.issue_skillmd` | 1,469 | 1,745 | +276 (+19%) |
 | `I4.s_events` | 640 | 911 | +271 (+42%) |
 | `I4.s_full` | 540 | 811 | +271 (+50%) |
 | `I4.s_toc` | 277 | 548 | +271 (+98%) |
-| `FIX.issue_ref` | 988 | 1,248 | +260 (+26%) |
-| `FIX.issue_skillmd` | 1,469 | 1,718 | +249 (+17%) |
 | `I1.s_events` | 762 | 955 | +193 (+25%) |
 | `I1.s_full` | 712 | 905 | +193 (+27%) |
 | `I1.s_toc` | 219 | 412 | +193 (+88%) |
