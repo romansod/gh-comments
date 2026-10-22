@@ -250,19 +250,30 @@ The two descriptions cost **530 tokens in every session**, whether or not either
 
 ## Reproducing
 
+The published run measured this checkout's own `gh-comments` and `skills/`,
+which is what the scripts run with no variables set:
+
 ```bash
-git worktree add /tmp/gh-comments-v1.0.0 v1.0.0   # the release to measure
 cd bench
-GH_COMMENTS=/tmp/gh-comments-v1.0.0/gh-comments zsh run-cases.zsh
+zsh run-cases.zsh
 zsh run-targets.zsh
-SKILLS_DIR=/tmp/gh-comments-v1.0.0/skills zsh run-fixed.zsh
+zsh run-fixed.zsh
 python3 count_tokens.py   # calls claude -p; a full count costs a few dollars
 python3 analyze.py
 ```
 
-Run the scripts from a checkout that has `bench/`, and point them at the
-release through `GH_COMMENTS` and `SKILLS_DIR`: `v1.0.0` itself predates the
-harness.
+To measure a release instead, check its tag out beside this checkout and
+point the scripts at it. `v1.0.0` predates the harness and has no
+`--closure`, so its four `s_closure` cases exit 1 there and `analyze.py`
+refuses the run until those rows are dropped; it is a baseline for the
+other rows, not a reproduction of these tables:
+
+```bash
+git worktree add /tmp/gh-comments-v1.0.0 v1.0.0
+GH_COMMENTS=/tmp/gh-comments-v1.0.0/gh-comments zsh run-cases.zsh
+zsh run-targets.zsh
+SKILLS_DIR=/tmp/gh-comments-v1.0.0/skills zsh run-fixed.zsh
+```
 
 It needs `gh` logged in and the `claude` CLI. See
 [`bench/README.md`](bench/README.md) for filing a run and comparing it with
