@@ -581,6 +581,14 @@ target_title() {
          | ((.issueOrPullRequest // .pullRequest // .issue // {}).title // "")' "$1" 2>/dev/null || true
 }
 
+# target_state <file> — the state the payload holds for the target, so a
+# refusal about its timeline can be worded against what the header prints.
+target_state() {
+  jq -rn 'input | (if type == "array" then .[0] else . end)
+         | (.data.repository // {})
+         | ((.issueOrPullRequest // .pullRequest // .issue // {}).state // "")' "$1" 2>/dev/null || true
+}
+
 # closer_types <file> — one line per ClosedEvent in an issue payload: the
 # closer's __typename, `null` when the API recorded none, or `absent` when
 # the payload has no closer field at all. Every page is read, since a close
@@ -706,8 +714,16 @@ if [[ "$RTYPE" == issue ]]; then
     print -r -- "$PROG: #$NUM was closed by a ${(j:, :)ODD}; this version renders only a pull request, a commit or a project as the closer" >&2
     exit 1
   fi
+  # No closed event to show. Worded against the state the payload carries:
+  # an OPEN issue has never been closed, while a CLOSED one whose timeline
+  # holds no closed event is reported as exactly that, since "never closed"
+  # would contradict its own header.
   if (( CLOSURE )) && (( ${#CLOSERS} == 0 )); then
-    print -r -- "$PROG: issue #$NUM has never been closed" >&2
+    if [[ "$(target_state "$TL_FILE")" == CLOSED ]]; then
+      print -r -- "$PROG: issue #$NUM is CLOSED, but its timeline holds no closed event; --closure has nothing to show" >&2
+    else
+      print -r -- "$PROG: issue #$NUM has never been closed" >&2
+    fi
     exit 1
   fi
 fi

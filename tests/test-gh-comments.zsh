@@ -419,6 +419,29 @@ refuse type-hint-drops-closure "rerun as: gh-comments 1001 --fixtures $prfx/basi
 # is not this case: issue-closer-reopened-closure above renders it.
 refuse closure-never-closed "issue #7 has never been closed" \
   7 --closure --fixtures "$fx/issue-empty.tl.json"
+# --closure on a payload whose state is CLOSED but whose timeline holds no
+# closed event: the refusal says what was observed, never "never closed",
+# which the header contradicts. An OPEN issue with no closed event is the
+# never-closed case (closure-never-closed above).
+closure_no_event() {
+  local name=closure-closed-without-event tmp out
+  local -i rc=0
+  tmp=$(mktemp -d) || {
+    t_fail "$name" "" "tests/test-gh-comments.zsh" "mktemp -d failed"
+    (( fails += 1 )); return 0
+  }
+  jq '(.[].data.repository.issueOrPullRequest.timelineItems.nodes) |= map(select(.__typename != "ClosedEvent"))' \
+    "$fx/issue-closed.tl.json" > "$tmp/noevent.tl.json"
+  out=$(zsh "$script" 5 --closure --fixtures "$tmp/noevent.tl.json" 2>&1) || rc=$?
+  (( rc == 1 )) || problems+=("exit $rc (want 1)")
+  [[ "$out" == *"is CLOSED, but its timeline holds no closed event"* ]] || problems+=("output lacks the closed-without-event refusal")
+  [[ "$out" != *"has never been closed"* ]] || problems+=("a CLOSED issue was called never closed")
+  report "$name" "refusals" $rc "$out"
+  rm -rf "$tmp"
+  return 0
+}
+closure_no_event
+
 # A closer the query does not select would otherwise read as "no closer
 # recorded", which is the one claim the line must never make by accident.
 # Every view refuses it, since every view prints the closed line.
