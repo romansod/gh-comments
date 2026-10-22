@@ -419,7 +419,7 @@ refuse flag-closure-on-pr "--closure only applies to issues; #1001 is a pull req
 # --events with --closure on an unpinned number never reaches the type
 # refusal: the pair is refused as exclusive from argv alone, whatever the
 # number turns out to be (arg-closure-with-events below). Pinned, the type
-# refusal comes first (gh-pinned-flag-refused-before-fetch), so the flag that
+# refusal comes first (gh-pinned-pr-closure-toc-refused-before-fetch), so the flag that
 # can never work is the one reported.
 refuse type-hint-drops-closure "rerun as: gh-comments 1001 --fixtures $prfx/basic.tl.json $prfx/basic.th.json" \
   1001 --issue --closure --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
@@ -669,7 +669,7 @@ fragment_case gh-query-fragments-auto     1 1 pr    7 --toc
 fragment_case gh-query-fragments-pinned-pr    1 0 pr    7 --pr --toc
 fragment_case gh-query-fragments-pinned-issue 0 1 issue 21 --issue --toc
 
-# gh-pinned-flag-refused-before-fetch — with the type pinned, a flag the
+# gh-pinned-*-refused-before-fetch — with the type pinned, a flag the
 # pinned type cannot honour is decidable from argv alone, so it is refused
 # before the timeline is paid for.
 for spec in "pinned-issue-unresolved|issue --issue 21 --unresolved|--unresolved only applies to pull requests; the type is pinned to an issue by --issue" \
