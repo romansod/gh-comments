@@ -87,7 +87,7 @@ The targets are labelled by the shape of their discussion:
 | `pr-comments` SKILL.md | each invocation | 5,486 | 2,074 |
 | `issue-comments` SKILL.md | each invocation | 4,768 | 1,778 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,173 | 1,425 |
-| `issue-comments` references/output.md | when a marker needs interpreting | 3,799 | 1,365 |
+| `issue-comments` references/output.md | when a marker needs interpreting | 3,896 | 1,394 |
 
 ### Task 1 — read a PR's whole discussion
 

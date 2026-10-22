@@ -21,7 +21,7 @@
 | `pr-comments` SKILL.md | each invocation | 5,486 | 2,074 |
 | `issue-comments` SKILL.md | each invocation | 4,768 | 1,778 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,173 | 1,425 |
-| `issue-comments` references/output.md | when a marker needs interpreting | 3,799 | 1,365 |
+| `issue-comments` references/output.md | when a marker needs interpreting | 3,896 | 1,394 |
 
 ### Task 1 — read a PR's whole discussion
 
@@ -225,7 +225,7 @@ gql md: GraphQL thread metadata   s *: gh-comments full/--toc/--unresolved/--toc
 | raw JSON (gh api) | 600,979 | 269,459 | 2.23 | 1.8× |
 | gh … view text | 47,407 | 18,212 | 2.60 | 1.5× |
 | gh-comments output | 160,481 | 63,743 | 2.52 | 1.6× |
-| skill files | 19,654 | 7,172 | 2.74 | 1.5× |
+| skill files | 19,751 | 7,201 | 2.74 | 1.5× |
 
 ```
   raw JSON (gh api)        ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░ 2.23 bytes/token
@@ -256,7 +256,7 @@ Tokens per output, this run against `../2026-10-09`, largest change first. Rows 
 | `I4.rest_tl` | 15,239 | 37,055 | +21,816 (+143%) |
 | `I1.rest_tl` | 6,640 | 22,594 | +15,954 (+240%) |
 | `I3.rest_tl` | 26,762 | 37,018 | +10,256 (+38%) |
-| `FIX.issue_ref` | 988 | 1,365 | +377 (+38%) |
+| `FIX.issue_ref` | 988 | 1,394 | +406 (+41%) |
 | `FIX.issue_skillmd` | 1,469 | 1,778 | +309 (+21%) |
 | `I4.s_events` | 640 | 911 | +271 (+42%) |
 | `I4.s_full` | 540 | 811 | +271 (+50%) |

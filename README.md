@@ -146,9 +146,10 @@ GraphQL's `closer` field records: `by #13927 PR MERGED "…"`, `by commit
 1a2b3c4` (`owner/name#N` and `owner/name@1a2b3c4` when the closer lives in
 another repository), `by a project` for a Projects workflow (naming the project
 needs a token scope the query does not ask for), `no closer recorded` when
-the API holds none, or `closer not visible to this token` when GitHub
-answered that one field with an error: the issue still renders, and only
-that suffix is withheld. `--closure` is that answer on its
+the API returned null (closed by hand, or a closer GitHub withheld without
+saying so), or `closer not visible to this token` when GitHub answered that
+one field with an access error: the issue still renders, and only the
+closer itself is withheld. `--closure` is that answer on its
 own, the header and the `closed`/`reopened`/PR `xref` lines and nothing
 else:
 
