@@ -8,7 +8,9 @@ agent actually pays to read the output.
 
 Run 2026-10-22 against `gh-comments` at the commit that added the closer
 and `--closure` (v1.0.0 plus that change), on nine public PRs and issues in
-[cli/cli](https://github.com/cli/cli). Tokens were counted with
+[cli/cli](https://github.com/cli/cli); the skill files were re-measured
+after the review fixes that followed changed them, so their fixed costs are
+the branch's final ones. Tokens were counted with
 `claude-opus-5-5`. The harness, the targets and the raw run are in
 [`bench/`](bench/README.md); the full generated report, with a heatmap,
 timings and a per-output delta against the 2026-10-09 run of v1.0.0, is
@@ -83,9 +85,9 @@ The targets are labelled by the shape of their discussion:
 | `pr-comments` description | every session, used or not | 752 | 278 |
 | `issue-comments` description | every session, used or not | 676 | 252 |
 | `pr-comments` SKILL.md | each invocation | 5,486 | 2,074 |
-| `issue-comments` SKILL.md | each invocation | 4,582 | 1,711 |
+| `issue-comments` SKILL.md | each invocation | 4,603 | 1,718 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,173 | 1,425 |
-| `issue-comments` references/output.md | when a marker needs interpreting | 3,300 | 1,203 |
+| `issue-comments` references/output.md | when a marker needs interpreting | 3,437 | 1,248 |
 
 ### Task 1 — read a PR's whole discussion
 
@@ -151,7 +153,7 @@ The skill's documented flow is TOC first, dump to a file, then slice the one ite
 | cli#13946 top-level comment | 1,333 ✓ | 41,606 | 8,147 | **2,032** | 4,106 | 372 | 347 |
 | cli#13946 inline thread | 1,333 ✗ | 41,606 | 8,147 | **1,867** | 3,941 | 816 | 182 |
 | cli#14104 open thread | 6,105 ✗ | 65,734 | 8,502 | **2,412** | 4,486 | 1,104 | 334 |
-| cli#14483 last comment | 772 ✓ | 772 | 905 | **449** | 2,160 | 158 | 37 |
+| cli#14483 last comment | 772 ✓ | 772 | 905 | **449** | 2,167 | 158 | 37 |
 
 ### Task 5 — address the most recent review
 
@@ -210,7 +212,7 @@ one comment, cli#14483: expert vs TOC+slice                        ░░░░�
 
 ### Break-even: does loading the skill pay for itself?
 
-The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (2,074 for `pr-comments`, 1,711 for `issue-comments`). Against the realistic naive path for the same task:
+The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (2,074 for `pr-comments`, 1,718 for `issue-comments`). Against the realistic naive path for the same task:
 
 | Task | naive tokens | skill flow + SKILL.md | net per invocation |
 |---|--:|--:|--:|
@@ -220,8 +222,8 @@ The two descriptions cost **530 tokens in every session**, whether or not either
 | cli#13946 one inline thread (naive: gh view --comments + REST inline) | 41,606 | 3,941 | saves 37,665 |
 | cli#13946 one top-level comment (naive: gh pr view --comments) | 1,333 | 4,106 | costs 2,773 |
 | cli#14141 read all (naive: gh pr view) | 732 | 2,849 | costs 2,117 |
-| cli#14411 read all (naive: gh issue view ×2) | 1,133 | 3,070 | costs 1,937 |
-| cli#14483 one comment (naive: gh issue view --comments) | 772 | 2,160 | costs 1,388 |
+| cli#14411 read all (naive: gh issue view ×2) | 1,133 | 3,077 | costs 1,944 |
+| cli#14483 one comment (naive: gh issue view --comments) | 772 | 2,167 | costs 1,395 |
 
 ## Caveats
 
