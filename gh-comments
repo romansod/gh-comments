@@ -257,6 +257,13 @@ if [[ -z "$NUM" ]] && (( REPO_GIVEN )); then
   print -r -- "$PROG: -R needs a number: the current branch's PR is in the cwd's repo, not in $REPO" >&2
   exit 1
 fi
+# No number means the current branch's PR, so a flag only an issue can honour
+# is decidable here, from argv alone: refused before the branch lookup is paid
+# for, and before the --closure exclusivity check below, so the flag that can
+# never work on this target is the one reported.
+if [[ -z "$NUM" ]]; then
+  refuse_type_flags pr "no number means the current branch's pull request"
+fi
 # After every number check — malformed or missing — so a number problem is
 # the first thing reported and one rerun is enough.
 if [[ "$TYPE" != auto ]]; then

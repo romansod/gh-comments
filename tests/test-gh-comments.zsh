@@ -673,6 +673,10 @@ argcase arg-since-empty          1 "--since needs <iso-date>" 21 --since=
 
 # Two answers to "which item do I slice from" cannot both be honoured.
 argcase arg-latest-with-slr      1 "--latest and --since-last-review are exclusive" 21 --latest --since-last-review
+# No number means the current branch's PR, so --closure (and --events) can
+# never apply: refused from argv alone, before the branch lookup and before
+# the exclusivity check, so the flag that can never work is the one named.
+argcase arg-closure-no-number    1 "--closure only applies to issues; no number means the current branch's pull request" --closure --toc
 # --closure is a view of its own: every other view flag is refused with it,
 # all of them named, from argv alone (no --fixtures here on purpose).
 argcase arg-closure-with-toc     1 "takes no other view flag; drop --toc" 21 --closure --toc
