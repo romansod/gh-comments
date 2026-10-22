@@ -1383,16 +1383,17 @@ gh_case notfound-both 43 -R acme/widget --toc
 gh_leaks
 report gh-notfound-no-hint-under-repo-flag "stubbed gh" $gh_rc "$gh_out"
 
-# gh-no-number-events-refused-before-fetch — the branch lookup settles the
-# type as PR, so an issue-only flag is refused there and no timeline is paid for.
+# gh-no-number-events-refused-before-fetch — no number means the current
+# branch's PR, so an issue-only flag is refused from argv alone: not only
+# before the timeline, but before the branch lookup itself is paid for.
 gh_reset
 print -r -- '7' > "$stubfx/branch-pr"
 gh_rc=0
 gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --events 2>&1) || gh_rc=$?
 (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
-[[ "$gh_out" == "gh-comments: --events only applies to issues; #7, the current branch's PR, is a pull request" ]] \
+[[ "$gh_out" == "gh-comments: --events only applies to issues; no number means the current branch's pull request" ]] \
   || problems+=("output was: $gh_out")
-(( $(grep -c '^graphql:' "$stublog") == 0 )) || problems+=("fetched before refusing")
+(( $(grep -c '' "$stublog") == 0 )) || problems+=("called gh before refusing: $(tr '\n' ' ' < "$stublog")")
 gh_leaks
 report gh-no-number-events-refused-before-fetch "stubbed gh" $gh_rc "$gh_out"
 
