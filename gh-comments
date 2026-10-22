@@ -393,11 +393,11 @@ if [[ -z "$NUM" ]]; then
     exit 1
   fi
   # A branch resolves to a PR, so the type stops being an open question.
-  # The issue-only flags were already refused from argv, before this lookup
-  # was paid for (the no-number check above); this call is the belt for a
-  # flag added later that only the resolved type can refuse.
+  # Nothing is refused here: the issue-only flags were refused from argv,
+  # before this lookup was paid for (the no-number check above), and that
+  # check reads the same flags this type would, so a second call could
+  # never fire.
   TYPE=pr TYPE_PINNED_BY="the current branch's PR"
-  refuse_type_flags pr "#$NUM, the current branch's PR, is a pull request"
   echo "note: no number given — using the current branch's PR #$NUM" >&2
 fi
 
