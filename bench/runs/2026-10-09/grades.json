@@ -60,7 +60,7 @@
       "gql_open": "✓",
       "s_unres": "✓"
     },
-    "note": "Only `O1` has open threads. The naive pair returns all 17 threads with no way to tell the 10 resolved ones apart, so an agent would re-litigate settled feedback."
+    "note": "Only `O1` has open threads. The naive pair returns all 17 threads with no way to tell the 10 resolved ones apart, so an agent would re-litigate settled feedback. `--unresolved` also prints the body of each review that holds an open thread. On `O1` that is the CHANGES_REQUESTED review, whose body is about half the output and carries two `[Blocker]` findings written as prose, which the GraphQL query never reads. Both are graded ✓ because the task is what the open threads say; an agent addressing the review needs the body as well."
   },
   "task4": {
     "grades": {
@@ -113,16 +113,26 @@
         "I3": "◐",
         "I4": "✗"
       },
-      "rest_tl": "✓",
-      "s_toc": "✓"
+      "rest_tl": {
+        "I1": "✓",
+        "I3": "◐",
+        "I4": "◐"
+      },
+      "s_toc": {
+        "I1": "✓",
+        "I3": "◐",
+        "I4": "◐"
+      }
     },
-    "note": "`closedByPullRequestsReferences` is filled only when a PR's closing keyword closed the issue. `I4` was closed by hand after its fix merged, so the cheap JSON names no PR, and only the timeline shows that the fix was reverted after the issue closed. `I3` lists the PR that closed it but not the earlier PR whose review the issue came out of. `I1` was closed by its author after a comment explaining the cause, which only the comments carry. The TOC shows every `xref`, every comment's first line and the `closed` line."
+    "note": "`closedByPullRequestsReferences` is filled only when a PR's closing keyword closed the issue. `I4` was closed by hand after its fix merged, so the cheap JSON names no PR, and only the timeline shows that the fix was reverted after the issue closed. `I3` lists the PR that closed it but not the earlier PR whose review the issue came out of. `I1` was closed by its author after a comment explaining the cause, which only the comments carry. The TOC shows every `xref`, every comment's first line and the `closed` line. Neither the TOC nor the REST timeline names the closer, though. Only GraphQL's `closer` field records it: REST's `closed` event carries no PR, and `gh-comments` does not fetch `closer`. So both read the same whether a PR's closing keyword closed the issue or a person did. On `I3` they show both PRs but not that #13927 is the one that closed it, and on `I4` the fix and its revert but not that no PR closed it, hence ◐. `I1` has no PR to tell apart."
   },
   "ladder": {
     "notes": {
       "open-threads-o1-rest": "REST can't answer",
       "open-threads-r1-rest": "REST can't answer",
-      "why-closed-i4-json": "but --json names no PR"
+      "why-closed-i4-json": "--json names no PR (✗), --toc no closer (◐)",
+      "why-closed-i4-rest": "same answer: neither names the closer (both ◐)",
+      "open-bodies-o1-gql": "--unresolved adds the review body, with 2 prose blockers"
     }
   }
 }

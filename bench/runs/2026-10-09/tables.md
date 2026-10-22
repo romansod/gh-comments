@@ -70,7 +70,7 @@ cli#14104 — which threads are open
 
 ### Task 3 — what the open threads say
 
-Only `O1` has open threads. The naive pair returns all 17 threads with no way to tell the 10 resolved ones apart, so an agent would re-litigate settled feedback.
+Only `O1` has open threads. The naive pair returns all 17 threads with no way to tell the 10 resolved ones apart, so an agent would re-litigate settled feedback. `--unresolved` also prints the body of each review that holds an open thread. On `O1` that is the CHANGES_REQUESTED review, whose body is about half the output and carries two `[Blocker]` findings written as prose, which the GraphQL query never reads. Both are graded ✓ because the task is what the open threads say; an agent addressing the review needs the body as well.
 
 | Approach | O1 |
 |---|--:|
@@ -146,14 +146,14 @@ On all three reviewed PRs the most recent review is an approval with a short bod
 
 ### Task 7 — why was the issue closed, and by what
 
-`closedByPullRequestsReferences` is filled only when a PR's closing keyword closed the issue. `I4` was closed by hand after its fix merged, so the cheap JSON names no PR, and only the timeline shows that the fix was reverted after the issue closed. `I3` lists the PR that closed it but not the earlier PR whose review the issue came out of. `I1` was closed by its author after a comment explaining the cause, which only the comments carry. The TOC shows every `xref`, every comment's first line and the `closed` line.
+`closedByPullRequestsReferences` is filled only when a PR's closing keyword closed the issue. `I4` was closed by hand after its fix merged, so the cheap JSON names no PR, and only the timeline shows that the fix was reverted after the issue closed. `I3` lists the PR that closed it but not the earlier PR whose review the issue came out of. `I1` was closed by its author after a comment explaining the cause, which only the comments carry. The TOC shows every `xref`, every comment's first line and the `closed` line. Neither the TOC nor the REST timeline names the closer, though. Only GraphQL's `closer` field records it: REST's `closed` event carries no PR, and `gh-comments` does not fetch `closer`. So both read the same whether a PR's closing keyword closed the issue or a person did. On `I3` they show both PRs but not that #13927 is the one that closed it, and on `I4` the fix and its revert but not that no PR closed it, hence ◐. `I1` has no PR to tell apart.
 
 | Approach | I1 | I3 | I4 |
 |---|--:|--:|--:|
 | `gh issue view` | 612 ✗ | 475 ✗ | 434 ✗ |
 | `gh issue view --json state,stateReason,closedAt,closedByPullRequestsReferences` | 63 ✗ | 211 ◐ | 63 ✗ |
-| REST timeline (raw JSON) | 6,640 ✓ | 26,762 ✓ | 15,239 ✓ |
-| **`gh-comments --toc`** | 219 ✓ | 340 ✓ | 277 ✓ |
+| REST timeline (raw JSON) | 6,640 ✓ | 26,762 ◐ | 15,239 ◐ |
+| **`gh-comments --toc`** | 219 ✓ | 340 ◐ | 277 ◐ |
 
 ### The multiplier, revisited
 
@@ -162,16 +162,16 @@ How many times more tokens the alternative costs than the script's narrowest cor
 ```
 open threads, cli#13946: REST inline vs --toc --unresolved              │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓»  473.8×  REST can't answer
 open threads, cli#14104: REST inline vs --toc --unresolved              │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓    125.5×  REST can't answer
-why closed, cli#14411: REST timeline vs --toc                           │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓          55.0×  
+why closed, cli#14411: REST timeline vs --toc                           │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓          55.0×  same answer: neither names the closer (both ◐)
 one inline thread, cli#13946: naive vs TOC+slice                        │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓               22.3×  
 read all, cli#14104: REST trio vs full                                  │▓▓▓▓▓▓▓▓▓▓▓▓                    9.2×  
 read all, cli#13946: gh view + REST inline vs full                      │▓▓▓▓▓▓▓▓▓                       5.4×  
 open threads, cli#14104: hand GraphQL vs --toc --unresolved             │▓▓▓▓                            2.0×  
 read all, cli#14141: gh pr view vs full                                 │▓                               1.2×  
-open bodies, cli#14104: hand GraphQL vs --unresolved                   ░│                                0.8×  
+open bodies, cli#14104: hand GraphQL vs --unresolved                   ░│                                0.8×  --unresolved adds the review body, with 2 prose blockers
 one comment, cli#13946: gh pr view --comments vs TOC+slice            ░░│                                0.7×  
 one comment, cli#14483: expert vs TOC+slice                           ░░│                                0.6×  
-why closed, cli#14411: --json closedBy vs --toc                 ░░░░░░░░│                                0.2×  but --json names no PR
+why closed, cli#14411: --json closedBy vs --toc                 ░░░░░░░░│                                0.2×  --json names no PR (✗), --toc no closer (◐)
                                                             0.1         1           10          100  
                                                             ░ alternative cheaper    ▓ script cheaper (log scale)
 ```
