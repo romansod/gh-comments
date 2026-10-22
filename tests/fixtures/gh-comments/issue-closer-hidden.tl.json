@@ -1,0 +1,77 @@
+[
+ {
+  "data": {
+   "repository": {
+    "issueOrPullRequest": {
+     "__typename": "Issue",
+     "number": 49,
+     "title": "proxy ignores NO_PROXY for loopback",
+     "state": "CLOSED",
+     "stateReason": "COMPLETED",
+     "author": {
+      "login": "alice",
+      "__typename": "User"
+     },
+     "createdAt": "2026-09-18T09:00:00Z",
+     "body": "Requests to 127.0.0.1 go through the proxy although NO_PROXY lists it.",
+     "labels": {
+      "totalCount": 0,
+      "nodes": []
+     },
+     "assignees": {
+      "nodes": []
+     },
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": "Y3Vyc29yOnYyOpHP"
+      },
+      "nodes": [
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-18T10:00:00Z",
+        "isMinimized": false,
+        "minimizedReason": null,
+        "body": "Fixed in the internal proxy repo."
+       },
+       {
+        "__typename": "ClosedEvent",
+        "actor": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-19T08:00:00Z",
+        "stateReason": "COMPLETED",
+        "closer": null
+       }
+      ]
+     }
+    }
+   }
+  },
+  "errors": [
+   {
+    "type": "FORBIDDEN",
+    "path": [
+     "repository",
+     "issueOrPullRequest",
+     "timelineItems",
+     "nodes",
+     1,
+     "closer"
+    ],
+    "locations": [
+     {
+      "line": 14,
+      "column": 120
+     }
+    ],
+    "message": "Resource not accessible by personal access token"
+   }
+  ]
+ }
+]

@@ -73,9 +73,11 @@ The PR-only flags (`--unresolved`, `--since-last-review`, `--latest`,
 
      The `closed` line says `by #N PR MERGED "…"`, `by commit <sha>`
      (`owner/name#N` and `owner/name@<sha>` in another repository),
-     `by a project`, or `no closer recorded`. The last means the API holds no closer (closed by
-     hand, or by something the token cannot see), not "closed by hand"; the
-     comments may still explain it, and the TOC shows them.
+     `by a project`, `no closer recorded`, or `closer not visible to this
+     token`. `no closer recorded` means the API holds none, not "closed by
+     hand"; the comments may still explain it, and the TOC shows them. `not
+     visible` means GitHub refused that one field to this token and the rest
+     of the issue rendered.
    - Structural facts (is it closed, which PR references it, how many people
      weighed in) — the TOC is the answer. Never conclude from a
      `… [+N chars]` preview: it is a cut, not a summary.

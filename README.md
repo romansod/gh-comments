@@ -145,9 +145,10 @@ ask for it. The `closed` line names what closed the issue, which only
 GraphQL's `closer` field records: `by #13927 PR MERGED "…"`, `by commit
 1a2b3c4` (`owner/name#N` and `owner/name@1a2b3c4` when the closer lives in
 another repository), `by a project` for a Projects workflow (naming the project
-needs a token scope the query does not ask for), or `no closer recorded`
-when the API holds none (closed by hand, or by something the token cannot
-see). `--closure` is that answer on its
+needs a token scope the query does not ask for), `no closer recorded` when
+the API holds none, or `closer not visible to this token` when GitHub
+answered that one field with an error: the issue still renders, and only
+that suffix is withheld. `--closure` is that answer on its
 own, the header and the `closed`/`reopened`/PR `xref` lines and nothing
 else:
 
@@ -274,7 +275,8 @@ With no number, the current branch's open PR is used.
   --closure                     Why it was closed, and by what: the header
                                 line, then every closed / reopened event with
                                 what closed it (a PR, a commit, "a project",
-                                or "no closer recorded") and every
+                                "no closer recorded", or "closer not visible
+                                to this token") and every
                                 cross-referenced PR with its state. No body,
                                 no comments. Refused on an issue that was
                                 never closed, and exclusive with every other

@@ -91,7 +91,8 @@ Flags:
   --closure                     Why it was closed, and by what: the header
                                 line, then every closed / reopened event with
                                 what closed it (a PR, a commit, "a project",
-                                or "no closer recorded") and every
+                                "no closer recorded", or "closer not visible
+                                to this token") and every
                                 cross-referenced PR with its state. No body,
                                 no comments. Refused on an issue that was
                                 never closed, and exclusive with every other
@@ -125,6 +126,7 @@ EOF
 }
 
 NUM="" REPO="" TOC=0 UNRESOLVED=0 SINCE="" SLR=0 SLR_AUTHOR="" BOTS=0 MERGES=0 EVENTS=0 HIDDEN=0 CLOSURE=0
+typeset -i CLOSER_HIDDEN=0
 # The arguments minus the pin, for the wrong-type hint: it suggests the same
 # command again without --pr / --issue, so -R and the view flags survive.
 typeset -a UNPINNED=("${(@)argv:#(--pr|--issue)}")
@@ -608,6 +610,23 @@ closer_types() {
            else ((.closer // {}).__typename) // "null" end' "$1" 2>/dev/null || true
 }
 
+# closer_errors_only <file> — whether every errors[] entry on the pages is
+# about a closer: its path runs through a timeline node's `closer`. A closer
+# the token cannot see comes back that way, as the node with a null closer
+# and such an entry, and gh then exits non-zero although the issue itself
+# was answered. The render goes on, with that closed line saying the closer
+# is not visible (never "no closer recorded", which is the API's null).
+closer_errors_only() {
+  jq -es '[.[] | .errors[]?] | length > 0 and all(.[]; (.path // []) | index("closer") != null)' "$1" >/dev/null 2>&1
+}
+# timeline_cut <file> — whether the last page fetched says more follow it.
+# --paginate stops at the page that carried errors, so one with more behind
+# it is a timeline cut short, which must not render as complete.
+timeline_cut() {
+  jq -es 'last | (.data.repository // {}) | (.issueOrPullRequest // .issue // .pullRequest // {})
+          | ((.timelineItems // {}).pageInfo // {}).hasNextPage // false' "$1" >/dev/null 2>&1
+}
+
 if [[ -n "$FIXTURES_TL" ]]; then
   # Fixtures hold the documented `jq -s .` array form; unwrap one level into
   # the value stream --slurpfile expects (a bare stream is accepted too).
@@ -646,6 +665,13 @@ else
     # number is wrong.
     if ! { grep -q '^gh: Could not resolve to an issue or pull request' "$GH_ERR" \
            || jq -es 'any(.[] | .errors[]?; .type == "NOT_FOUND" and .path == ["repository","issueOrPullRequest"])' "$TL_FILE" >/dev/null 2>&1; }; then
+      if closer_errors_only "$TL_FILE"; then
+        if timeline_cut "$TL_FILE"; then
+          print -r -- "$PROG: #$NUM: a closer is not visible to this token, and gh stopped the fetch at that page with more timeline behind it, so the issue cannot be rendered complete" >&2
+          exit 1
+        fi
+        CLOSER_HIDDEN=1
+      else
       print -r -- "$PROG: gh error:" >&2
       # gh writes a one-line summary to stderr *and* the full errors[] body
       # (type/path/locations) to stdout; show both, since either can carry the
@@ -658,7 +684,9 @@ else
         if [[ -n "$(tail -c1 "$f")" ]]; then echo >&2; fi
       done
       exit 1
+      fi
     fi
+    if (( ! CLOSER_HIDDEN )); then
     # `issueOrPullRequest` resolves both sequences, so a number that fails to
     # resolve is not a PR *or* an issue — it does not exist in this repo.
     print -r -- "$PROG: #$NUM not found in $REPO" >&2
@@ -673,6 +701,7 @@ else
     fi
     [[ -n "$BRANCH_PR" && "$BRANCH_PR" != "#$NUM:"* ]] && print -r -- "  the current branch's PR is $BRANCH_PR — rerun with that number" >&2
     exit 1
+    fi
   fi
 fi
 
@@ -958,8 +987,10 @@ def r_xref($repo):
     + ($s | quoted_title);
 
 # What closed the issue, as the API recorded it. A null closer is reported as
-# exactly that, never as "closed by hand": GitHub also leaves it null when the
-# closer is something the token cannot see. A ProjectV2 closer is named only
+# exactly that, never as "closed by hand". A closer the token cannot see is
+# a null closer with an error at its path, marked on the node as closerHidden
+# while the pages are flattened, and is reported as not visible: a third
+# answer, kept apart from the other two. A ProjectV2 closer is named only
 # by its type: its number and title need the read:project scope, and asking
 # for them fails the whole query for every token without it, on every issue.
 # A payload with no closer field, and a closer type the renderer does not
@@ -967,7 +998,8 @@ def r_xref($repo):
 # last branch is unreachable belt.
 def r_closer($repo):
   (.closer // null) as $c
-  | if $c == null then ", no closer recorded"
+  | if (.closerHidden // false) then ", closer not visible to this token"
+    elif $c == null then ", no closer recorded"
     elif $c.__typename == "PullRequest" then
       " by \($c | refnum($repo)) PR \($c.state // "?")" + ($c | quoted_title)
     elif $c.__typename == "Commit" then
@@ -1008,7 +1040,15 @@ if $meta == null then error("#\($num) not found in \($repo)") else
 
 if $rtype == "issue" then
 
-([$tl[] | tgt.timelineItems.nodes[]]) as $nodes0 |
+# A closer the token cannot see arrives as a null closer plus an errors[]
+# entry on its page whose path runs through that node. The node is marked as
+# the pages are flattened, so the closed line can say the closer is not
+# visible rather than that none was recorded. A page with no errors marks
+# nothing, so a fixture or a clean fetch renders as before.
+([$tl[] | . as $p
+  | ([$p.errors[]? | (.path // []) | select(index("closer") != null and index("nodes") != null) | .[(index("nodes") + 1)]]) as $hidden
+  | (tgt.timelineItems.nodes // []) | to_entries[] | . as $e
+  | $e.value + (if ($hidden | index($e.key)) != null then {closerHidden: true} else {} end)]) as $nodes0 |
 ([$nodes0[] | select(.__typename == "IssueComment")]) as $comsall |
 ([$comsall[] | select(isbot)] | length) as $combots |
 # The bot gate comes first: a hidden bot comment is counted once, as a bot,

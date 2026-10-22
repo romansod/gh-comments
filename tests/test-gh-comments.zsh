@@ -52,6 +52,13 @@
 #   issue-closer-project  closed by a Projects workflow: `by a project`, the
 #                 type alone, since naming it needs a scope the query must
 #                 not require
+#   issue-closer-hidden  a closer the token cannot see: GitHub answers the
+#                 node with a null closer and an errors[] entry at its path,
+#                 and the closed line says the closer is not visible, never
+#                 that none was recorded; the gh stub replays the page with
+#                 gh's non-zero exit (gh-closer-hidden-*), once whole, once
+#                 cut (more pages behind the error: refused), and once with
+#                 an unrelated error (the hard failure stays)
 #   issue-closer-unknown  closer is an invented `Closer` member the query
 #                 does not select: refused by name, never "no closer
 #                 recorded" (non-golden); so is a payload whose closed event
@@ -210,6 +217,9 @@ check issue-closer-reopened-full      issue-closer-reopened 45
 check issue-closer-reopened-closure   issue-closer-reopened 45 --closure
 check issue-closer-project-full       issue-closer-project 46
 check issue-closer-project-closure    issue-closer-project 46 --closure
+check issue-closer-hidden-full        issue-closer-hidden 49
+check issue-closer-hidden-toc         issue-closer-hidden 49 --toc
+check issue-closer-hidden-closure     issue-closer-hidden 49 --closure
 # Closed and reopened, so currently OPEN: --closure still has something to
 # show, and this pins that the refusal is "never closed", not "not closed".
 check issue-basic-closure     issue-basic 21 --closure
@@ -539,6 +549,11 @@ if [[ $which == th ]]; then jq -c '.[]' "$GH_STUB_TH"; exit 0; fi
 case "${GH_STUB_MODE:-}" in
   pr)    jq -c '.[]' "$GH_STUB_TL"; exit 0 ;;
   issue) jq -c '.[]' "$GH_STUB_ISSUE"; exit 0 ;;
+  # gh prints the page that carried errors[] and exits 1, with its own
+  # summary on stderr; --paginate stops there.
+  closer-hidden)      jq -c '.[]' "$GH_STUB_HIDDEN";     print -ru2 -- "gh: Resource not accessible by personal access token"; exit 1 ;;
+  closer-hidden-cut)  jq -c '.[]' "$GH_STUB_HIDDEN_CUT"; print -ru2 -- "gh: Resource not accessible by personal access token"; exit 1 ;;
+  closer-other-error) jq -c '.[]' "$GH_STUB_OTHER_ERR";  print -ru2 -- "gh: Something went wrong"; exit 1 ;;
   notfound)
     print -rn -- '{"data":{"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND","message":"Could not resolve to an issue or pull request with the number of 999."}]}'
     print -ru2 -- "gh: Could not resolve to an issue or pull request with the number of 999."
@@ -549,12 +564,21 @@ exit 65
 STUB
 chmod +x "$stubdir/gh" || { print -ru2 -- "chmod gh stub failed"; exit 1 }
 
+# Two variants of the hidden-closer page: the same page saying more pages
+# follow it, and the same page with its error somewhere other than a closer.
+jq '(.[0].data.repository.issueOrPullRequest.timelineItems.pageInfo.hasNextPage) = true' \
+  "$fx/issue-closer-hidden.tl.json" > "$stubdir/hidden-cut.tl.json"
+jq '(.[0].errors[0].path) = ["repository","issueOrPullRequest","timelineItems"]' \
+  "$fx/issue-closer-hidden.tl.json" > "$stubdir/other-error.tl.json"
 typeset -ga gh_env=(
   PATH="$stubdir:$PATH"
   GH_STUB_LOG="$stublog"
   GH_STUB_TL="$prfx/zero-threads.tl.json"
   GH_STUB_TH="$prfx/zero-threads.th.json"
   GH_STUB_ISSUE="$fx/issue-basic.tl.json"
+  GH_STUB_HIDDEN="$fx/issue-closer-hidden.tl.json"
+  GH_STUB_HIDDEN_CUT="$stubdir/hidden-cut.tl.json"
+  GH_STUB_OTHER_ERR="$stubdir/other-error.tl.json"
   GH_STUB_QUERY_LOG="$qlog"
 )
 gh_reset() { : > "$stublog"; : > "$qlog" }
@@ -646,6 +670,37 @@ for spec in "issue --issue 21 --unresolved|--unresolved only applies to pull req
     || problems+=("fetched before refusing: $(tr '\n' ' ' < "$stublog")")
   report "gh-pinned-flag-refused-before-fetch-${${spec%% *}}" "stubbed gh" $gh_rc "$gh_out"
 done
+
+# gh-closer-hidden-renders — a closer the token cannot see makes gh exit 1
+# with the page still carrying the issue: the issue renders, and its closed
+# line says the closer is not visible, never that none was recorded.
+gh_reset
+gh_case closer-hidden 49 --toc
+(( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0)")
+[[ "$gh_out" == "issue #49 "* ]] || problems+=("the issue did not render")
+[[ "$gh_out" == *"closer not visible to this token"* ]] || problems+=("the closed line does not say the closer is not visible")
+[[ "$gh_out" != *"no closer recorded"* ]] || problems+=("a hidden closer was reported as recorded-none")
+[[ "$gh_out" != *"gh error:"* ]] || problems+=("the fetch was reported as failed")
+report gh-closer-hidden-renders "stubbed gh" $gh_rc "$gh_out"
+
+# gh-closer-hidden-cut-refused — the same, on a page that says more follow:
+# --paginate stopped there, so the timeline is cut and must not render as
+# complete.
+gh_reset
+gh_case closer-hidden-cut 49 --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *"more timeline behind it"* ]] || problems+=("output lacks the cut-timeline refusal")
+[[ "$gh_out" != "issue #"* ]] || problems+=("a cut timeline rendered")
+report gh-closer-hidden-cut-refused "stubbed gh" $gh_rc "$gh_out"
+
+# gh-closer-other-error-still-fails — an error anywhere but at a closer is
+# the hard failure it always was.
+gh_reset
+gh_case closer-other-error 49 --toc
+(( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+[[ "$gh_out" == *"gh error:"* ]] || problems+=("output lacks the gh error diagnosis")
+[[ "$gh_out" != "issue #"* ]] || problems+=("rendered through an unrelated error")
+report gh-closer-other-error-still-fails "stubbed gh" $gh_rc "$gh_out"
 
 # gh-notfound — the union resolves both sequences, so a number it cannot
 # resolve is neither a PR nor an issue. The wording has to stop saying "PR".

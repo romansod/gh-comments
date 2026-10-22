@@ -1,0 +1,2 @@
+issue #49 proxy ignores NO_PROXY for loopback [CLOSED completed]
+closed [bob 2026-09-19 08:00] as completed, closer not visible to this token

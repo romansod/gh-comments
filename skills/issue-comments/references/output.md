@@ -44,11 +44,14 @@ ones change what you should do.
   `by commit <sha>` (`by commit owner/name@<sha>` for a commit in another
   repository), `by a project` (a Projects workflow closed it; naming
   the project needs the `read:project` scope, which the query does not ask
-  for), or `, no closer recorded`. The last states only that
-  the API holds no closer — an issue closed by hand reads so, but so does
-  one closed by a PR the token cannot see — so never turn it into "closed
-  by hand", and never infer the closer from an `xref (closes)` line: that
-  is the PR's claim, not the record. Under `--closure` those lines, the
+  for), `, no closer recorded`, or `, closer not visible to this token`.
+  `no closer recorded` states only that the API holds no closer — an issue
+  closed by hand reads so — so never turn it into "closed by hand", and
+  never infer the closer from an `xref (closes)` line: that is the PR's
+  claim, not the record. `not visible` means GitHub answered that one field
+  with an error for this token (a closer in a repository it cannot read, or
+  a project it cannot see) and the rest of the issue rendered; a token with
+  access would see the closer. Under `--closure` those lines, the
   `reopened` lines and the PR `xref` lines are the whole output.
 - `renamed` shows both titles — useful when the scope drifted and the early
   comments answer a different question than the current title asks.
