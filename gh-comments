@@ -610,14 +610,23 @@ closer_types() {
            else ((.closer // {}).__typename) // "null" end' "$1" 2>/dev/null || true
 }
 
+# An error that says the token cannot see a closer, and nothing else: an
+# access refusal (FORBIDDEN, or NOT_FOUND for a node it cannot resolve)
+# whose path ends exactly at a timeline node's `closer`. A transient error
+# there, or a refusal below a closer the payload did name, is not that, and
+# must not be reported as the token's access. One definition, used by the
+# gate on the fetch below and by the renderer's marking (the @CLOSER_DENIED@
+# slot in the jq program), so the two cannot disagree.
+CLOSER_DENIED_JQ='((.type == "FORBIDDEN" or .type == "NOT_FOUND") and ((.path // []) as $p | ($p | index("nodes")) as $n | $n != null and ($p | length) == $n + 3 and $p[-1] == "closer"))'
 # closer_errors_only <file> — whether every errors[] entry on the pages is
-# about a closer: its path runs through a timeline node's `closer`. A closer
-# the token cannot see comes back that way, as the node with a null closer
-# and such an entry, and gh then exits non-zero although the issue itself
-# was answered. The render goes on, with that closed line saying the closer
-# is not visible (never "no closer recorded", which is the API's null).
+# such a refusal. A closer the token cannot see comes back that way, as the
+# node with a null closer and the entry, and gh then exits non-zero although
+# the issue itself was answered. The render goes on, with that closed line
+# saying the closer is not visible (never "no closer recorded", which is the
+# API's null). Any other entry, or one beside such a refusal, is the hard
+# failure.
 closer_errors_only() {
-  jq -es '[.[] | .errors[]?] | length > 0 and all(.[]; (.path // []) | index("closer") != null)' "$1" >/dev/null 2>&1
+  jq -es '[.[] | .errors[]?] | length > 0 and all(.[]; '"$CLOSER_DENIED_JQ"')' "$1" >/dev/null 2>&1
 }
 # timeline_cut <file> — whether the last page fetched says more follow it.
 # --paginate stops at the page that carried errors, so one with more behind
@@ -1041,12 +1050,14 @@ if $meta == null then error("#\($num) not found in \($repo)") else
 if $rtype == "issue" then
 
 # A closer the token cannot see arrives as a null closer plus an errors[]
-# entry on its page whose path runs through that node. The node is marked as
-# the pages are flattened, so the closed line can say the closer is not
-# visible rather than that none was recorded. A page with no errors marks
-# nothing, so a fixture or a clean fetch renders as before.
+# entry on its page, an access refusal whose path ends at that node (the
+# same definition the shell gate used to let the fetch through). The node is
+# marked as the pages are flattened, so the closed line can say the closer
+# is not visible rather than that none was recorded. A page with no errors
+# marks nothing, so a fixture or a clean fetch renders as before.
+def closer_denied: @CLOSER_DENIED@;
 ([$tl[] | . as $p
-  | ([$p.errors[]? | (.path // []) | select(index("closer") != null and index("nodes") != null) | .[(index("nodes") + 1)]]) as $hidden
+  | ([$p.errors[]? | select(closer_denied) | .path | .[(index("nodes") + 1)]]) as $hidden
   | (tgt.timelineItems.nodes // []) | to_entries[] | . as $e
   | $e.value + (if ($hidden | index($e.key)) != null then {closerHidden: true} else {} end)]) as $nodes0 |
 ([$nodes0[] | select(.__typename == "IssueComment")]) as $comsall |
@@ -1277,6 +1288,9 @@ def thread_window: if $since != ""
 end end
 '
 
+# The closer-refusal definition is shared with the shell gate; see
+# CLOSER_DENIED_JQ. Substituted through a variable, like the query slots.
+JQ_PROG=${JQ_PROG//@CLOSER_DENIED@/$CLOSER_DENIED_JQ}
 jq -rn \
   --slurpfile tl "$TL_FILE" \
   --slurpfile th "$TH_FILE" \

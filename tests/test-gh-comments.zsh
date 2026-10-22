@@ -554,6 +554,9 @@ case "${GH_STUB_MODE:-}" in
   closer-hidden)      jq -c '.[]' "$GH_STUB_HIDDEN";     print -ru2 -- "gh: Resource not accessible by personal access token"; exit 1 ;;
   closer-hidden-cut)  jq -c '.[]' "$GH_STUB_HIDDEN_CUT"; print -ru2 -- "gh: Resource not accessible by personal access token"; exit 1 ;;
   closer-other-error) jq -c '.[]' "$GH_STUB_OTHER_ERR";  print -ru2 -- "gh: Something went wrong"; exit 1 ;;
+  closer-transient)   jq -c '.[]' "$GH_STUB_TRANSIENT";  print -ru2 -- "gh: Something went wrong"; exit 1 ;;
+  closer-deep)        jq -c '.[]' "$GH_STUB_DEEP";       print -ru2 -- "gh: Resource not accessible by personal access token"; exit 1 ;;
+  closer-mixed)       jq -c '.[]' "$GH_STUB_MIXED";      print -ru2 -- "gh: Resource not accessible by personal access token"; exit 1 ;;
   notfound)
     print -rn -- '{"data":{"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND","message":"Could not resolve to an issue or pull request with the number of 999."}]}'
     print -ru2 -- "gh: Could not resolve to an issue or pull request with the number of 999."
@@ -570,6 +573,15 @@ jq '(.[0].data.repository.issueOrPullRequest.timelineItems.pageInfo.hasNextPage)
   "$fx/issue-closer-hidden.tl.json" > "$stubdir/hidden-cut.tl.json"
 jq '(.[0].errors[0].path) = ["repository","issueOrPullRequest","timelineItems"]' \
   "$fx/issue-closer-hidden.tl.json" > "$stubdir/other-error.tl.json"
+# Three more that must not be tolerated: a transient error at the closer,
+# an access refusal below the closer (the closer itself was named), and a
+# closer refusal beside an unrelated error.
+jq '(.[0].errors[0].type) = "SERVICE_UNAVAILABLE"' \
+  "$fx/issue-closer-hidden.tl.json" > "$stubdir/transient.tl.json"
+jq '(.[0].errors[0].path) += ["repository"]' \
+  "$fx/issue-closer-hidden.tl.json" > "$stubdir/deep.tl.json"
+jq '(.[0].errors) += [{"type":"INTERNAL","path":["repository","issueOrPullRequest","timelineItems"],"message":"Something went wrong"}]' \
+  "$fx/issue-closer-hidden.tl.json" > "$stubdir/mixed.tl.json"
 typeset -ga gh_env=(
   PATH="$stubdir:$PATH"
   GH_STUB_LOG="$stublog"
@@ -579,6 +591,9 @@ typeset -ga gh_env=(
   GH_STUB_HIDDEN="$fx/issue-closer-hidden.tl.json"
   GH_STUB_HIDDEN_CUT="$stubdir/hidden-cut.tl.json"
   GH_STUB_OTHER_ERR="$stubdir/other-error.tl.json"
+  GH_STUB_TRANSIENT="$stubdir/transient.tl.json"
+  GH_STUB_DEEP="$stubdir/deep.tl.json"
+  GH_STUB_MIXED="$stubdir/mixed.tl.json"
   GH_STUB_QUERY_LOG="$qlog"
 )
 gh_reset() { : > "$stublog"; : > "$qlog" }
@@ -701,6 +716,21 @@ gh_case closer-other-error 49 --toc
 [[ "$gh_out" == *"gh error:"* ]] || problems+=("output lacks the gh error diagnosis")
 [[ "$gh_out" != "issue #"* ]] || problems+=("rendered through an unrelated error")
 report gh-closer-other-error-still-fails "stubbed gh" $gh_rc "$gh_out"
+
+# gh-closer-*-still-fails — the tolerance is for an access refusal at exactly
+# a node's closer, and nothing else: a transient error there, a refusal
+# below a closer the payload named, and a closer refusal beside an unrelated
+# error are all the hard failure. The last also tells the gate's `all` from
+# an `any`, which the single-error pages above cannot.
+for spec in closer-transient closer-deep closer-mixed; do
+  gh_reset
+  gh_case $spec 49 --toc
+  (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
+  [[ "$gh_out" == *"gh error:"* ]] || problems+=("output lacks the gh error diagnosis")
+  [[ "$gh_out" != "issue #"* ]] || problems+=("rendered through an error the tolerance must not cover")
+  [[ "$gh_out" != *"closer not visible"* ]] || problems+=("blamed the token for an error that is not an access refusal at the closer")
+  report "gh-$spec-still-fails" "stubbed gh" $gh_rc "$gh_out"
+done
 
 # gh-notfound — the union resolves both sequences, so a number it cannot
 # resolve is neither a PR nor an issue. The wording has to stop saying "PR".
