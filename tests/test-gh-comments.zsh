@@ -436,10 +436,16 @@ closer_absent() {
   }
   jq '(.[].data.repository.issueOrPullRequest.timelineItems.nodes[] | select(.__typename == "ClosedEvent")) |= del(.closer)' \
     "$fx/issue-closed.tl.json" > "$tmp/nocloser.tl.json"
-  out=$(zsh "$script" 5 --closure --fixtures "$tmp/nocloser.tl.json" 2>&1) || rc=$?
-  (( rc == 1 )) || problems+=("exit $rc (want 1)")
-  [[ "$out" == *"has no closer field"* ]] || problems+=("output lacks the no-closer-field refusal")
-  [[ "$out" != *"no closer recorded"* ]] || problems+=("an unfetched closer was reported as recorded-none")
+  # Every view, not only --closure: the closed line is printed by all of
+  # them, and a default-view render of an old payload would make the claim.
+  local view
+  for view in "" "--toc" "--closure"; do
+    rc=0
+    out=$(zsh "$script" 5 ${=view} --fixtures "$tmp/nocloser.tl.json" 2>&1) || rc=$?
+    (( rc == 1 )) || problems+=("exit $rc (want 1) with ${view:-the default view}")
+    [[ "$out" == *"has no closer field"* ]] || problems+=("output lacks the no-closer-field refusal with ${view:-the default view}")
+    [[ "$out" != *"no closer recorded"* ]] || problems+=("an unfetched closer was reported as recorded-none with ${view:-the default view}")
+  done
   report "$name" "refusals" $rc "$out"
   rm -rf "$tmp"
   return 0

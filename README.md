@@ -285,7 +285,10 @@ With no number, the current branch's open PR is used.
                                 `gh api graphql --paginate ... | jq -s .` output
                                 for the timeline / threads query. The threads
                                 payload is required for a PR, meaningless for
-                                an issue.
+                                an issue. A payload captured before this
+                                version fetched the closer is refused for a
+                                closed issue, in every view: the closed line
+                                cannot say what the API recorded.
   -h, --help                    This help
   --version                     Print the version
 ```
