@@ -3,7 +3,8 @@
 Read a GitHub pull request's or issue's discussion as compact, grep-friendly
 text: reviews with their inline threads nested in place and marked
 `OPEN`/`resolved`, top-level comments, commits, force-pushes, and on an issue
-the events that explain it — who closed it, why, and which PR references it.
+the events that explain it — who closed it, why, what closed it, and which
+PR references it.
 One command, one paginated fetch, output an agent or a human can slice with
 `grep`.
 
@@ -140,7 +141,20 @@ Drop `--toc` for the bodies. Issues get the same treatment: `gh issue view
 --comments` shows no timeline events, so it cannot say who closed an issue or
 which PR did; `gh-comments <N>` renders `closed`, `reopened`, `xref` and
 `renamed` lines in order, with label and assignee churn held back unless you
-ask for it.
+ask for it. The `closed` line names what closed the issue, which only
+GraphQL's `closer` field records: `by #13927 PR MERGED "…"`, `by commit
+1a2b3c4`, or `no closer recorded` when the API holds none (closed by hand,
+or by something the token cannot see). `--closure` is that answer on its
+own, the header and the `closed`/`reopened`/PR `xref` lines and nothing
+else:
+
+```
+$ gh-comments 13898 -R cli/cli --closure
+issue #13898 item-edit: reframe help around by-name editing as the first-class flow [CLOSED completed labels:enhancement,docs,gh-project]
+xref [zwick 2026-07-16 17:48] #13807 PR MERGED "Add name-based resolution to gh project item-edit"
+xref [Solaris-star 2026-07-21 03:23] #13927 PR MERGED "docs(project): present by-name item-edit as the first-class flow"
+closed [BagToad 2026-07-23 02:20] as completed by #13927 PR MERGED "docs(project): present by-name item-edit as the first-class flow"
+```
 
 ## How it compares
 
@@ -254,6 +268,13 @@ With no number, the current branch's open PR is used.
   --events                      Include label / assignee / milestone events
                                 (filtered by default; the counts line always
                                 states how many were held back)
+  --closure                     Why it was closed, and by what: the header
+                                line, then every closed / reopened event with
+                                what closed it (a PR, a commit, or "no closer
+                                recorded") and every cross-referenced PR with
+                                its state. No body, no comments. Refused on an
+                                issue that was never closed, and exclusive
+                                with every other view flag
 
   --fixtures <tl.json> [<th.json>]
                                 Render from saved GraphQL payloads instead of
@@ -267,8 +288,9 @@ With no number, the current branch's open PR is used.
 ```
 
 A flag that only the other type can honour is an error, not a no-op:
-`--unresolved` on an issue, `--events` on a PR. Ignoring it would report a
-filtered view as a complete one.
+`--unresolved` on an issue, `--events` or `--closure` on a PR. Ignoring it
+would report a filtered view as a complete one. So is `--closure` on an issue
+that was never closed, or with any other view flag: it is a view of its own.
 
 ### Reading the output
 

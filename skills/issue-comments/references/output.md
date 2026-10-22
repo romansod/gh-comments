@@ -38,8 +38,16 @@ ones change what you should do.
   cross-repo reference is qualified as `owner/repo#N`, a same-repo one as
   plain `#N`. `(closes)` means GitHub recorded it as closing this issue.
 - `closed … as <reason>` / `reopened` are the events that end or revive the
-  issue; `renamed` shows both titles — useful when the scope drifted and the
-  early comments answer a different question than the current title asks.
+  issue. The `closed` line ends with what closed it, as GitHub recorded it:
+  `by #N PR MERGED "title"` (a PR in another repository is `owner/name#N`),
+  `by commit <sha>`, or `, no closer recorded`. The last states only that
+  the API holds no closer — an issue closed by hand reads so, but so does
+  one closed by a PR the token cannot see — so never turn it into "closed
+  by hand", and never infer the closer from an `xref (closes)` line: that
+  is the PR's claim, not the record. Under `--closure` those lines, the
+  `reopened` lines and the PR `xref` lines are the whole output.
+- `renamed` shows both titles — useful when the scope drifted and the early
+  comments answer a different question than the current title asks.
 - A deleted account renders as `ghost`. Rich-text HTML pastes are converted
   to markdown; HTML inside a code fence is left alone. Timestamps are UTC.
 
