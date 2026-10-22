@@ -85,7 +85,7 @@ The targets are labelled by the shape of their discussion:
 | `pr-comments` description | every session, used or not | 752 | 278 |
 | `issue-comments` description | every session, used or not | 676 | 252 |
 | `pr-comments` SKILL.md | each invocation | 5,486 | 2,074 |
-| `issue-comments` SKILL.md | each invocation | 4,768 | 1,778 |
+| `issue-comments` SKILL.md | each invocation | 4,850 | 1,804 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,173 | 1,425 |
 | `issue-comments` references/output.md | when a marker needs interpreting | 3,896 | 1,394 |
 
@@ -153,7 +153,7 @@ The skill's documented flow is TOC first, dump to a file, then slice the one ite
 | cli#13946 top-level comment | 1,333 ✓ | 41,606 | 8,147 | **2,032** | 4,106 | 372 | 347 |
 | cli#13946 inline thread | 1,333 ✗ | 41,606 | 8,147 | **1,867** | 3,941 | 816 | 182 |
 | cli#14104 open thread | 6,105 ✗ | 65,734 | 8,502 | **2,412** | 4,486 | 1,104 | 334 |
-| cli#14483 last comment | 772 ✓ | 772 | 905 | **449** | 2,227 | 158 | 37 |
+| cli#14483 last comment | 772 ✓ | 772 | 905 | **449** | 2,253 | 158 | 37 |
 
 ### Task 5 — address the most recent review
 
@@ -212,7 +212,7 @@ one comment, cli#14483: expert vs TOC+slice                        ░░░░�
 
 ### Break-even: does loading the skill pay for itself?
 
-The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (2,074 for `pr-comments`, 1,778 for `issue-comments`). Against the realistic naive path for the same task:
+The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (2,074 for `pr-comments`, 1,804 for `issue-comments`). Against the realistic naive path for the same task:
 
 | Task | naive tokens | skill flow + SKILL.md | net per invocation |
 |---|--:|--:|--:|
@@ -222,8 +222,8 @@ The two descriptions cost **530 tokens in every session**, whether or not either
 | cli#13946 one inline thread (naive: gh view --comments + REST inline) | 41,606 | 3,941 | saves 37,665 |
 | cli#13946 one top-level comment (naive: gh pr view --comments) | 1,333 | 4,106 | costs 2,773 |
 | cli#14141 read all (naive: gh pr view) | 732 | 2,849 | costs 2,117 |
-| cli#14411 read all (naive: gh issue view ×2) | 1,133 | 3,137 | costs 2,004 |
-| cli#14483 one comment (naive: gh issue view --comments) | 772 | 2,227 | costs 1,455 |
+| cli#14411 read all (naive: gh issue view ×2) | 1,133 | 3,163 | costs 2,030 |
+| cli#14483 one comment (naive: gh issue view --comments) | 772 | 2,253 | costs 1,481 |
 
 ## Caveats
 
