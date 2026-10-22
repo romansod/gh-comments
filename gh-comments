@@ -676,7 +676,7 @@ else
            || jq -es 'any(.[] | .errors[]?; .type == "NOT_FOUND" and .path == ["repository","issueOrPullRequest"])' "$TL_FILE" >/dev/null 2>&1; }; then
       if closer_errors_only "$TL_FILE"; then
         if timeline_cut "$TL_FILE"; then
-          print -r -- "$PROG: #$NUM: a closer is not visible to this token, and gh stopped the fetch at that page with more timeline behind it, so the issue cannot be rendered complete" >&2
+          print -r -- "$PROG: #$NUM: a closer is not visible to this token, and gh stopped the fetch at that page with more timeline behind it, so the issue cannot be rendered complete; rerun with a token that can see the closer (its repository, or its project)" >&2
           exit 1
         fi
         CLOSER_HIDDEN=1

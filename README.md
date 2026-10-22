@@ -327,6 +327,11 @@ the markers is in the skills' reference files:
 
 ### Known limits
 
+- A closer the token cannot see is tolerated only when GitHub reported it on
+  the last page of the timeline: `gh --paginate` stops at a page that
+  carries an error, so when more pages follow, the issue is refused as
+  incomplete rather than rendered short, and the message says which token
+  would do. Resuming the fetch past that page is a possible follow-up.
 - A slice (`--since-last-review`, `--latest`) shows its anchor and everything
   after it. A newer reply nested under an older review's thread is outside
   the slice; `--unresolved` is the flag for "what is still open regardless
