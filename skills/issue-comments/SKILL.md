@@ -44,7 +44,7 @@ a PR is then refused by name, not rendered as a PR dump you did not ask for.
 Flags: `-R owner/name`; `--toc` (one line per item, no bodies);
 `--closure` (why it was closed and by what: the header, the
 `closed`/`reopened` lines with their closer, and the PR cross-references,
-nothing else; refused on an issue never closed, and takes no other flag);
+nothing else; refused on an issue never closed, and takes no other view flag);
 `--since YYYY-MM-DD[THH:MM[:SS]][Z]` (UTC); `--bots`, `--hidden`,
 `--events` (include bot comments, the bodies of hidden comments, and
 label/assignee/milestone events; all filtered by default, and the counts
