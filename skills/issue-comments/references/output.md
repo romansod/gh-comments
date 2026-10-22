@@ -40,7 +40,9 @@ ones change what you should do.
 - `closed … as <reason>` / `reopened` are the events that end or revive the
   issue. The `closed` line ends with what closed it, as GitHub recorded it:
   `by #N PR MERGED "title"` (a PR in another repository is `owner/name#N`),
-  `by commit <sha>`, or `, no closer recorded`. The last states only that
+  `by commit <sha>`, `by a project` (a Projects workflow closed it; naming
+  the project needs the `read:project` scope, which the query does not ask
+  for), or `, no closer recorded`. The last states only that
   the API holds no closer — an issue closed by hand reads so, but so does
   one closed by a PR the token cannot see — so never turn it into "closed
   by hand", and never infer the closer from an `xref (closes)` line: that

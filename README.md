@@ -143,8 +143,10 @@ which PR did; `gh-comments <N>` renders `closed`, `reopened`, `xref` and
 `renamed` lines in order, with label and assignee churn held back unless you
 ask for it. The `closed` line names what closed the issue, which only
 GraphQL's `closer` field records: `by #13927 PR MERGED "…"`, `by commit
-1a2b3c4`, or `no closer recorded` when the API holds none (closed by hand,
-or by something the token cannot see). `--closure` is that answer on its
+1a2b3c4`, `by a project` for a Projects workflow (naming the project
+needs a token scope the query does not ask for), or `no closer recorded`
+when the API holds none (closed by hand, or by something the token cannot
+see). `--closure` is that answer on its
 own, the header and the `closed`/`reopened`/PR `xref` lines and nothing
 else:
 
@@ -270,11 +272,12 @@ With no number, the current branch's open PR is used.
                                 states how many were held back)
   --closure                     Why it was closed, and by what: the header
                                 line, then every closed / reopened event with
-                                what closed it (a PR, a commit, or "no closer
-                                recorded") and every cross-referenced PR with
-                                its state. No body, no comments. Refused on an
-                                issue that was never closed, and exclusive
-                                with every other view flag
+                                what closed it (a PR, a commit, "a project",
+                                or "no closer recorded") and every
+                                cross-referenced PR with its state. No body,
+                                no comments. Refused on an issue that was
+                                never closed, and exclusive with every other
+                                view flag
 
   --fixtures <tl.json> [<th.json>]
                                 Render from saved GraphQL payloads instead of

@@ -90,11 +90,12 @@ Flags:
                                 states how many were held back)
   --closure                     Why it was closed, and by what: the header
                                 line, then every closed / reopened event with
-                                what closed it (a PR, a commit, or "no closer
-                                recorded") and every cross-referenced PR with
-                                its state. No body, no comments. Refused on an
-                                issue that was never closed, and exclusive
-                                with every other view flag
+                                what closed it (a PR, a commit, "a project",
+                                or "no closer recorded") and every
+                                cross-referenced PR with its state. No body,
+                                no comments. Refused on an issue that was
+                                never closed, and exclusive with every other
+                                view flag
 
   --fixtures <tl.json> [<th.json>]
                                 Render from saved GraphQL payloads instead of
@@ -203,28 +204,6 @@ if (( SLR && LATEST )); then
   print -r -- "$PROG: --latest and --since-last-review are exclusive — each picks the item to slice from" >&2
   exit 1
 fi
-# --closure is a view of its own: it renders no comments and no body, so a
-# flag that narrows or widens those would be a silent no-op, and the TOC and
-# the slicing flags are other answers to "what do I see". Every offender is
-# listed, so one rerun is enough, and it is decided from argv alone, before
-# any fetch. --merges is here too: it is PR-only and --closure is issue-only,
-# so the pair can never be honoured, whatever the number turns out to be.
-if (( CLOSURE )); then
-  typeset -a with=()
-  (( TOC )) && with+=(--toc)
-  [[ -n "$SINCE" ]] && with+=(--since)
-  (( EVENTS )) && with+=(--events)
-  (( BOTS )) && with+=(--bots)
-  (( HIDDEN )) && with+=(--hidden)
-  (( UNRESOLVED )) && with+=(--unresolved)
-  (( SLR )) && with+=(--since-last-review)
-  (( LATEST )) && with+=(--latest)
-  (( MERGES )) && with+=(--merges)
-  if (( ${#with} )); then
-    print -r -- "$PROG: --closure is a view of its own and takes no other view flag; drop ${(j:, :)with}" >&2
-    exit 1
-  fi
-fi
 
 # refuse_type_flags <type> <because> — flags that only the other resource
 # type can honour are an error, never a no-op: silently ignoring one would
@@ -282,6 +261,30 @@ fi
 # the first thing reported and one rerun is enough.
 if [[ "$TYPE" != auto ]]; then
   refuse_type_flags "$TYPE" "the type is pinned to ${ARTICLE[$TYPE]} by $TYPE_PINNED_BY"
+fi
+# --closure is a view of its own: it renders no comments and no body, so a
+# flag that narrows or widens those would be a silent no-op, and the TOC and
+# the slicing flags are other answers to "what do I see". Every offender is
+# listed, so one rerun is enough, and it is decided from argv alone, before
+# any fetch. --merges is here too: it is PR-only and --closure is issue-only,
+# so the pair can never be honoured, whatever the number turns out to be.
+# After the pinned-type refusal: on `--pr N --closure --toc` the flag that
+# can never work is the one to report, not the one it clashes with.
+if (( CLOSURE )); then
+  typeset -a with=()
+  (( TOC )) && with+=(--toc)
+  [[ -n "$SINCE" ]] && with+=(--since)
+  (( EVENTS )) && with+=(--events)
+  (( BOTS )) && with+=(--bots)
+  (( HIDDEN )) && with+=(--hidden)
+  (( UNRESOLVED )) && with+=(--unresolved)
+  (( SLR )) && with+=(--since-last-review)
+  (( LATEST )) && with+=(--latest)
+  (( MERGES )) && with+=(--merges)
+  if (( ${#with} )); then
+    print -r -- "$PROG: --closure is a view of its own and takes no other view flag; drop ${(j:, :)with}" >&2
+    exit 1
+  fi
 fi
 # The query takes owner and name apart, so the host- and URL-qualified forms
 # gh accepts for its own -R (github.com/o/n, https://github.com/o/n) are
@@ -569,16 +572,20 @@ target_title() {
 }
 
 # closer_types <file> — one line per ClosedEvent in an issue payload: the
-# closer's __typename, or `null` when the API recorded none. Every page is
-# read, since a close can sit on any of them. What the caller does with it:
-# refuse a closer type the query does not select (the `Closer` union also
-# holds ProjectV2, which the selection leaves as a bare __typename), rather
-# than render it as "no closer recorded"; and refuse --closure on an issue
-# that was never closed, which has nothing to show.
+# closer's __typename, `null` when the API recorded none, or `absent` when
+# the payload has no closer field at all. Every page is read, since a close
+# can sit on any of them. What the caller does with it: refuse a closer type
+# the renderer does not know (every member of the `Closer` union is handled
+# today; this is for one GitHub adds), rather than render it as "no closer
+# recorded"; refuse a payload captured before the closer was fetched, since
+# "no closer recorded" is a claim about the API's answer and that payload
+# never asked; and refuse --closure on an issue that was never closed, which
+# has nothing to show.
 closer_types() {
   jq -r '(.data.repository // {}) | (.issueOrPullRequest // .issue // {})
          | (.timelineItems.nodes // [])[] | select(.__typename == "ClosedEvent")
-         | ((.closer // {}).__typename) // "null"' "$1" 2>/dev/null || true
+         | if has("closer") | not then "absent"
+           else ((.closer // {}).__typename) // "null" end' "$1" 2>/dev/null || true
 }
 
 if [[ -n "$FIXTURES_TL" ]]; then
@@ -680,9 +687,13 @@ refuse_type_flags "$RTYPE" "#$NUM is ${ARTICLE[$RTYPE]}"
 if [[ "$RTYPE" == issue ]]; then
   typeset -a CLOSERS=("${(@f)$(closer_types "$TL_FILE")}")
   CLOSERS=("${(@)CLOSERS:#}")
-  typeset -a ODD=("${(@u)CLOSERS:#(PullRequest|Commit|null)}")
+  if (( ${CLOSERS[(I)absent]} )); then
+    print -r -- "$PROG: #$NUM: a closed event in the payload has no closer field; it was captured before this version asked for one, so the line cannot say what the API recorded" >&2
+    exit 1
+  fi
+  typeset -a ODD=("${(@u)CLOSERS:#(PullRequest|Commit|ProjectV2|null)}")
   if (( ${#ODD} )); then
-    print -r -- "$PROG: #$NUM was closed by a ${(j:, :)ODD}; this version renders only a pull request or a commit as the closer" >&2
+    print -r -- "$PROG: #$NUM was closed by a ${(j:, :)ODD}; this version renders only a pull request, a commit or a project as the closer" >&2
     exit 1
   fi
   if (( CLOSURE )) && (( ${#CLOSERS} == 0 )); then
@@ -900,9 +911,10 @@ def ishk: .__typename as $t | (housekeeping | index($t)) != null;
 # A reference to an issue or PR: `#N` in this repo, `owner/name#N` in another,
 # the way GitHub itself writes them. Shared by the xref line and the closer
 # on a closed line, so the two cannot drift apart.
+# Compared case-insensitively: GitHub names are, and -R is typed by hand.
 def refnum($repo):
   (((.repository // {}).nameWithOwner) // "") as $r
-  | if $r == "" or $r == $repo then "#\(.number // "?")" else "\($r)#\(.number // "?")" end;
+  | if $r == "" or ($r | ascii_downcase) == ($repo | ascii_downcase) then "#\(.number // "?")" else "\($r)#\(.number // "?")" end;
 def quoted_title: ((.title // "") | gsub("\\s+"; " ")) as $t | if $t == "" then "" else " \"\($t)\"" end;
 
 def r_xref($repo):
@@ -914,8 +926,11 @@ def r_xref($repo):
 
 # What closed the issue, as the API recorded it. A null closer is reported as
 # exactly that, never as "closed by hand": GitHub also leaves it null when the
-# closer is something the token cannot see. A closer type the query does not
-# select is refused before this renders (closer_check, in the shell), so the
+# closer is something the token cannot see. A ProjectV2 closer is named only
+# by its type: its number and title need the read:project scope, and asking
+# for them fails the whole query for every token without it, on every issue.
+# A payload with no closer field, and a closer type the renderer does not
+# know, are refused before this renders (closer_types, in the shell), so the
 # last branch is unreachable belt.
 def r_closer($repo):
   (.closer // null) as $c
@@ -923,6 +938,7 @@ def r_closer($repo):
     elif $c.__typename == "PullRequest" then
       " by \($c | refnum($repo)) PR \($c.state // "?")" + ($c | quoted_title)
     elif $c.__typename == "Commit" then " by commit \($c.abbreviatedOid // "?")"
+    elif $c.__typename == "ProjectV2" then " by a project"
     else error("closer of type \($c.__typename) is not rendered") end;
 
 def r_issue_item($repo; $TOC):

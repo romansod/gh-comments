@@ -47,8 +47,13 @@
 #   issue-closer-reopened  closed by a PR, reopened, closed again with no
 #                 closer recorded: each closed line carries its own; plus an
 #                 xref to an *issue*, which --closure does not list
-#   issue-closer-project  closer is a ProjectV2, a member of the `Closer`
-#                 union the query does not select: refused by name (non-golden)
+#   issue-closer-project  closed by a Projects workflow: `by a project`, the
+#                 type alone, since naming it needs a scope the query must
+#                 not require
+#   issue-closer-unknown  closer is an invented `Closer` member the query
+#                 does not select: refused by name, never "no closer
+#                 recorded" (non-golden); so is a payload whose closed event
+#                 has no closer field at all, generated from issue-closed
 #   The other closed fixtures (issue-basic, issue-closed, issue-bot-closed,
 #   issue-hidden) carry `closer: null`, the shape the API returns when it
 #   recorded none, and their closed lines say so.
@@ -199,6 +204,11 @@ check issue-closer-crossrepo-full     issue-closer-crossrepo 43
 check issue-closer-crossrepo-closure  issue-closer-crossrepo 43 --closure
 check issue-closer-reopened-full      issue-closer-reopened 45
 check issue-closer-reopened-closure   issue-closer-reopened 45 --closure
+check issue-closer-project-full       issue-closer-project 46
+check issue-closer-project-closure    issue-closer-project 46 --closure
+# Closed and reopened, so currently OPEN: --closure still has something to
+# show, and this pins that the refusal is "never closed", not "not closed".
+check issue-basic-closure     issue-basic 21 --closure
 # A null closer under --closure: the header and one closed line, nothing else
 # (issue-closed's only xref is to an issue).
 check issue-closed-closure    issue-closed 5 --closure
@@ -392,9 +402,11 @@ refuse flag-events-on-pr "--events only applies to issues; #1001 is a pull reque
   1001 --events --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
 refuse flag-closure-on-pr "--closure only applies to issues; #1001 is a pull request" \
   1001 --closure --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
-# --events with --closure never reaches the type refusal: the pair is refused
-# as exclusive from argv alone, whatever the number turns out to be
-# (arg-closure-with-events below).
+# --events with --closure on an unpinned number never reaches the type
+# refusal: the pair is refused as exclusive from argv alone, whatever the
+# number turns out to be (arg-closure-with-events below). Pinned, the type
+# refusal comes first (gh-pinned-flag-refused-before-fetch), so the flag that
+# can never work is the one reported.
 refuse type-hint-drops-closure "rerun as: gh-comments 1001 --fixtures $prfx/basic.tl.json $prfx/basic.th.json" \
   1001 --issue --closure --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
 
@@ -405,10 +417,34 @@ refuse closure-never-closed "issue #7 has never been closed" \
   7 --closure --fixtures "$fx/issue-empty.tl.json"
 # A closer the query does not select would otherwise read as "no closer
 # recorded", which is the one claim the line must never make by accident.
-refuse closer-type-unselected "#46 was closed by a ProjectV2" \
-  46 --fixtures "$fx/issue-closer-project.tl.json"
-refuse closer-type-unselected-toc "#46 was closed by a ProjectV2" \
-  46 --toc --fixtures "$fx/issue-closer-project.tl.json"
+# Every view refuses it, since every view prints the closed line.
+refuse closer-type-unselected "#47 was closed by a FutureCloser" \
+  47 --fixtures "$fx/issue-closer-unknown.tl.json"
+refuse closer-type-unselected-toc "#47 was closed by a FutureCloser" \
+  47 --toc --fixtures "$fx/issue-closer-unknown.tl.json"
+refuse closer-type-unselected-closure "#47 was closed by a FutureCloser" \
+  47 --closure --fixtures "$fx/issue-closer-unknown.tl.json"
+# A payload with no closer field at all (captured before this version asked
+# for it) is refused the same way: nothing was recorded *about* the closer,
+# which is not the same as the API recording none.
+closer_absent() {
+  local name=closer-absent-refused tmp out
+  local -i rc=0
+  tmp=$(mktemp -d) || {
+    t_fail "$name" "" "tests/test-gh-comments.zsh" "mktemp -d failed"
+    (( fails += 1 )); return 0
+  }
+  jq '(.[].data.repository.issueOrPullRequest.timelineItems.nodes[] | select(.__typename == "ClosedEvent")) |= del(.closer)' \
+    "$fx/issue-closed.tl.json" > "$tmp/nocloser.tl.json"
+  out=$(zsh "$script" 5 --closure --fixtures "$tmp/nocloser.tl.json" 2>&1) || rc=$?
+  (( rc == 1 )) || problems+=("exit $rc (want 1)")
+  [[ "$out" == *"has no closer field"* ]] || problems+=("output lacks the no-closer-field refusal")
+  [[ "$out" != *"no closer recorded"* ]] || problems+=("an unfetched closer was reported as recorded-none")
+  report "$name" "refusals" $rc "$out"
+  rm -rf "$tmp"
+  return 0
+}
+closer_absent
 
 # ---------------------------------------------------------------------------
 # Stubbed gh — the fetch half, which --fixtures can never reach. Offline by
@@ -530,6 +566,7 @@ fragment_case gh-query-fragments-pinned-issue 0 1 issue 21 --issue --toc
 for spec in "issue --issue 21 --unresolved|--unresolved only applies to pull requests; the type is pinned to an issue by --issue" \
             "pr --pr 7 --events|--events only applies to issues; the type is pinned to a pull request by --pr" \
             "pr --pr 7 --closure|--closure only applies to issues; the type is pinned to a pull request by --pr" \
+            "pr --pr 7 --closure --toc|--closure only applies to issues; the type is pinned to a pull request by --pr" \
             "issue --issue 21 --closure --toc|--closure is a view of its own and takes no other view flag; drop --toc"; do
   gh_reset
   gh_case ${=${spec%%|*}}

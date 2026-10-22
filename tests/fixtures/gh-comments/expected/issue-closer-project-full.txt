@@ -1,0 +1,7 @@
+issue #46 stale: pick a logo [CLOSED not_planned]
+comments: 0 · cross-refs: 0 · events: 1
+
+body [alice 2026-09-16 09:00]
+  Parked.
+
+closed [project-bot 2026-09-20 03:00] as not_planned by a project
