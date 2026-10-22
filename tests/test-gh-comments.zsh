@@ -609,10 +609,17 @@ fragment_case() {
   # for: every committed payload carries it already, so only the logged
   # query says whether it was asked for. Dropping it from ISSUE_FULL would
   # otherwise pass the suite and refuse every closed issue live.
-  local -i has_closer=0
+  local -i has_closer=0 has_commit_repo=0
   grep -q 'closer{__typename' "$qlog" && has_closer=1
   (( has_closer == want_issue )) \
     || problems+=("closer selected=$has_closer, want $want_issue")
+  # The commit closer's repository is the same kind of field: the fixtures
+  # carry it, and a missing one reads as this repository by design, so only
+  # the logged query says whether a cross-repository commit would be
+  # qualified live.
+  grep -q 'on Commit{abbreviatedOid repository{nameWithOwner}}' "$qlog" && has_commit_repo=1
+  (( has_commit_repo == want_issue )) \
+    || problems+=("commit closer repository selected=$has_commit_repo, want $want_issue")
   grep -q '@PR_FRAGMENT@\|@ISSUE_FRAGMENT@\|@ITEM_TYPES@\|@COMMIT_FRAGMENT@\|@COMMENT_BODY@' "$qlog" \
     && problems+=("an unsubstituted template slot reached the query")
   report "$name" "stubbed gh" $gh_rc "$gh_out"
