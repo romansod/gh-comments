@@ -672,18 +672,21 @@ fragment_case gh-query-fragments-pinned-issue 0 1 issue 21 --issue --toc
 # gh-pinned-flag-refused-before-fetch — with the type pinned, a flag the
 # pinned type cannot honour is decidable from argv alone, so it is refused
 # before the timeline is paid for.
-for spec in "issue --issue 21 --unresolved|--unresolved only applies to pull requests; the type is pinned to an issue by --issue" \
-            "pr --pr 7 --events|--events only applies to issues; the type is pinned to a pull request by --pr" \
-            "pr --pr 7 --closure|--closure only applies to issues; the type is pinned to a pull request by --pr" \
-            "pr --pr 7 --closure --toc|--closure only applies to issues; the type is pinned to a pull request by --pr" \
-            "issue --issue 21 --closure --toc|--closure is a view of its own and takes no other view flag; drop --toc"; do
+for spec in "pinned-issue-unresolved|issue --issue 21 --unresolved|--unresolved only applies to pull requests; the type is pinned to an issue by --issue" \
+            "pinned-pr-events|pr --pr 7 --events|--events only applies to issues; the type is pinned to a pull request by --pr" \
+            "pinned-pr-closure|pr --pr 7 --closure|--closure only applies to issues; the type is pinned to a pull request by --pr" \
+            "pinned-pr-closure-toc|pr --pr 7 --closure --toc|--closure only applies to issues; the type is pinned to a pull request by --pr" \
+            "pinned-issue-closure-toc|issue --issue 21 --closure --toc|--closure is a view of its own and takes no other view flag; drop --toc"; do
+  # name|mode and args|expected: the name is the spec's own, so a failure
+  # says which spec broke rather than sharing a name with its siblings.
+  local -a parts=("${(@s:|:)spec}")
   gh_reset
-  gh_case ${=${spec%%|*}}
+  gh_case ${=parts[2]}
   (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
-  [[ "$gh_out" == "gh-comments: ${spec#*|}" ]] || problems+=("output was: $gh_out")
+  [[ "$gh_out" == "gh-comments: ${parts[3]}" ]] || problems+=("output was: $gh_out")
   (( $(grep -c '^graphql:' "$stublog") == 0 )) \
     || problems+=("fetched before refusing: $(tr '\n' ' ' < "$stublog")")
-  report "gh-pinned-flag-refused-before-fetch-${${spec%% *}}" "stubbed gh" $gh_rc "$gh_out"
+  report "gh-${parts[1]}-refused-before-fetch" "stubbed gh" $gh_rc "$gh_out"
 done
 
 # gh-closer-hidden-renders — a closer the token cannot see makes gh exit 1
