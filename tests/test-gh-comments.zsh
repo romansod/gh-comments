@@ -38,6 +38,20 @@
 #                 and no body by default, the body under --hidden, and
 #                 `(1 hidden)` in the counts line. The other comments carry
 #                 isMinimized:null, which must read as not hidden
+#   issue-closer-pr  closed by a same-repo PR: the ClosedEvent's `closer` is
+#                 the PR, the xref to it carries (closes); a comment and a
+#                 label event, which --closure must leave out
+#   issue-closer-commit  closed by a commit, no PR anywhere: `by commit <sha>`
+#   issue-closer-crossrepo  closed by a PR in another repository: closer and
+#                 xref both written owner/name#N
+#   issue-closer-reopened  closed by a PR, reopened, closed again with no
+#                 closer recorded: each closed line carries its own; plus an
+#                 xref to an *issue*, which --closure does not list
+#   issue-closer-project  closer is a ProjectV2, a member of the `Closer`
+#                 union the query does not select: refused by name (non-golden)
+#   The other closed fixtures (issue-basic, issue-closed, issue-bot-closed,
+#   issue-hidden) carry `closer: null`, the shape the API returns when it
+#   recorded none, and their closed lines say so.
 #
 # Below the goldens, non-golden cases assert exit codes and substrings:
 #
@@ -50,8 +64,11 @@
 #   type refusals    a pinned type that does not match is an error, never a
 #                    silent switch to the other renderer
 #   flag refusals    --unresolved/--since-last-review/--merges on an issue and
-#                    --events on a PR are errors, because ignoring them would
-#                    report a filtered view as a complete one
+#                    --events/--closure on a PR are errors, because ignoring
+#                    them would report a filtered view as a complete one
+#   closure refusals --closure on an issue never closed, with any other view
+#                    flag (every offender listed, before any fetch), and a
+#                    closer type the query does not select
 #   stubbed gh       call counts and query shape per resolved type — an issue
 #                    must not pay for the reviewThreads fetch
 #   argument validation  the flag parser's refusals
@@ -168,6 +185,23 @@ check issue-html-toc      issue-html 9 --toc
 check issue-hidden-full   issue-hidden 21
 check issue-hidden-toc    issue-hidden 21 --toc
 check issue-hidden-shown  issue-hidden 21 --hidden
+
+# issue-closer-* — what closed it, on the closed line and under --closure.
+# The -closure goldens pin what the view leaves out as much as what it
+# shows: no body, no comments, no counts line, no housekeeping, no xref to
+# an issue.
+check issue-closer-pr-full        issue-closer-pr 41
+check issue-closer-pr-toc         issue-closer-pr 41 --toc
+check issue-closer-pr-closure     issue-closer-pr 41 --closure
+check issue-closer-commit-full    issue-closer-commit 42
+check issue-closer-commit-closure issue-closer-commit 42 --closure
+check issue-closer-crossrepo-full     issue-closer-crossrepo 43
+check issue-closer-crossrepo-closure  issue-closer-crossrepo 43 --closure
+check issue-closer-reopened-full      issue-closer-reopened 45
+check issue-closer-reopened-closure   issue-closer-reopened 45 --closure
+# A null closer under --closure: the header and one closed line, nothing else
+# (issue-closed's only xref is to an issue).
+check issue-closed-closure    issue-closed 5 --closure
 
 # bot-events-survive-default — the goldens above would happily record the bug
 # again if someone regenerated them after reintroducing it. This says out loud
@@ -356,6 +390,25 @@ refuse flag-many-on-issue "--unresolved, --since-last-review, --merges only appl
   21 --unresolved --since-last-review --merges --fixtures "$fx/issue-basic.tl.json"
 refuse flag-events-on-pr "--events only applies to issues; #1001 is a pull request" \
   1001 --events --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
+refuse flag-closure-on-pr "--closure only applies to issues; #1001 is a pull request" \
+  1001 --closure --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
+# --events with --closure never reaches the type refusal: the pair is refused
+# as exclusive from argv alone, whatever the number turns out to be
+# (arg-closure-with-events below).
+refuse type-hint-drops-closure "rerun as: gh-comments 1001 --fixtures $prfx/basic.tl.json $prfx/basic.th.json" \
+  1001 --issue --closure --fixtures "$prfx/basic.tl.json" "$prfx/basic.th.json"
+
+# --closure has nothing to show on an issue that was never closed, and says
+# so rather than printing a bare header. An issue closed and later reopened
+# is not this case: issue-closer-reopened-closure above renders it.
+refuse closure-never-closed "issue #7 has never been closed" \
+  7 --closure --fixtures "$fx/issue-empty.tl.json"
+# A closer the query does not select would otherwise read as "no closer
+# recorded", which is the one claim the line must never make by accident.
+refuse closer-type-unselected "#46 was closed by a ProjectV2" \
+  46 --fixtures "$fx/issue-closer-project.tl.json"
+refuse closer-type-unselected-toc "#46 was closed by a ProjectV2" \
+  46 --toc --fixtures "$fx/issue-closer-project.tl.json"
 
 # ---------------------------------------------------------------------------
 # Stubbed gh — the fetch half, which --fixtures can never reach. Offline by
@@ -475,7 +528,9 @@ fragment_case gh-query-fragments-pinned-issue 0 1 issue 21 --issue --toc
 # pinned type cannot honour is decidable from argv alone, so it is refused
 # before the timeline is paid for.
 for spec in "issue --issue 21 --unresolved|--unresolved only applies to pull requests; the type is pinned to an issue by --issue" \
-            "pr --pr 7 --events|--events only applies to issues; the type is pinned to a pull request by --pr"; do
+            "pr --pr 7 --events|--events only applies to issues; the type is pinned to a pull request by --pr" \
+            "pr --pr 7 --closure|--closure only applies to issues; the type is pinned to a pull request by --pr" \
+            "issue --issue 21 --closure --toc|--closure is a view of its own and takes no other view flag; drop --toc"; do
   gh_reset
   gh_case ${=${spec%%|*}}
   (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
@@ -581,6 +636,19 @@ argcase arg-since-empty          1 "--since needs <iso-date>" 21 --since=
 
 # Two answers to "which item do I slice from" cannot both be honoured.
 argcase arg-latest-with-slr      1 "--latest and --since-last-review are exclusive" 21 --latest --since-last-review
+# --closure is a view of its own: every other view flag is refused with it,
+# all of them named, from argv alone (no --fixtures here on purpose).
+argcase arg-closure-with-toc     1 "takes no other view flag; drop --toc" 21 --closure --toc
+argcase arg-closure-with-since   1 "drop --since" 21 --closure --since 2026-01-01
+argcase arg-closure-with-events  1 "drop --events" 21 --closure --events
+argcase arg-closure-with-bots    1 "drop --bots" 21 --closure --bots
+argcase arg-closure-with-hidden  1 "drop --hidden" 21 --closure --hidden
+argcase arg-closure-with-merges  1 "drop --merges" 21 --closure --merges
+# (--since-last-review is left out here: paired with --latest it is refused
+# by the slice check first, which runs before this one.)
+argcase arg-closure-with-many    1 "drop --toc, --since, --events, --bots, --hidden, --unresolved, --latest, --merges" \
+  21 --closure --toc --since 2026-01-01 --events --bots --hidden --unresolved --latest --merges
+argcase arg-closure-with-slr     1 "drop --since-last-review" 21 --closure --since-last-review
 
 # missing-* — a tool the script needs but PATH lacks is one sentence naming
 # every missing tool, not zsh's "command not found" with a line number. PATH

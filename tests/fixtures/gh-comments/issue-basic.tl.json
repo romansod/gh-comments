@@ -68,7 +68,7 @@
          "__typename": "User"
         },
         "createdAt": "2026-08-16T18:00:00Z",
-        "body": "Option 3, and let the API resolve the type \u2014 `issueOrPullRequest`\nmeans the number is never ambiguous."
+        "body": "Option 3, and let the API resolve the type — `issueOrPullRequest`\nmeans the number is never ambiguous."
        },
        {
         "__typename": "IssueComment",
@@ -114,7 +114,8 @@
          "__typename": "User"
         },
         "createdAt": "2026-08-19T08:00:00Z",
-        "stateReason": "COMPLETED"
+        "stateReason": "COMPLETED",
+        "closer": null
        },
        {
         "__typename": "ReopenedEvent",

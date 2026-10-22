@@ -1,0 +1,130 @@
+[
+ {
+  "data": {
+   "repository": {
+    "issueOrPullRequest": {
+     "__typename": "Issue",
+     "number": 45,
+     "title": "flaky: retry test times out under load",
+     "state": "CLOSED",
+     "stateReason": "COMPLETED",
+     "author": {
+      "login": "alice",
+      "__typename": "User"
+     },
+     "createdAt": "2026-09-08T09:00:00Z",
+     "body": "Fails about one run in twenty on the CI runners.",
+     "labels": {
+      "totalCount": 0,
+      "nodes": []
+     },
+     "assignees": {
+      "nodes": []
+     },
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": "Y3Vyc29yOnYyOpHP"
+      },
+      "nodes": [
+       {
+        "__typename": "CrossReferencedEvent",
+        "actor": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-09T10:00:00Z",
+        "willCloseTarget": true,
+        "source": {
+         "__typename": "PullRequest",
+         "number": 50,
+         "title": "test(retry): lengthen the load-test deadline",
+         "state": "MERGED",
+         "repository": {
+          "nameWithOwner": "fixtures/fixtures"
+         }
+        }
+       },
+       {
+        "__typename": "ClosedEvent",
+        "actor": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-09T15:00:00Z",
+        "stateReason": "COMPLETED",
+        "closer": {
+         "__typename": "PullRequest",
+         "number": 50,
+         "title": "test(retry): lengthen the load-test deadline",
+         "state": "MERGED",
+         "repository": {
+          "nameWithOwner": "fixtures/fixtures"
+         }
+        }
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "alice",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-12T08:30:00Z",
+        "isMinimized": false,
+        "minimizedReason": null,
+        "body": "Still failing, just less often."
+       },
+       {
+        "__typename": "ReopenedEvent",
+        "actor": {
+         "login": "alice",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-12T08:31:00Z"
+       },
+       {
+        "__typename": "CrossReferencedEvent",
+        "actor": {
+         "login": "alice",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-12T08:40:00Z",
+        "willCloseTarget": false,
+        "source": {
+         "__typename": "Issue",
+         "number": 60,
+         "title": "umbrella: CI flakes",
+         "state": "OPEN",
+         "repository": {
+          "nameWithOwner": "fixtures/fixtures"
+         }
+        }
+       },
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "carol",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-15T09:00:00Z",
+        "isMinimized": false,
+        "minimizedReason": null,
+        "body": "Root cause was the shared fixture; fixed in the umbrella work."
+       },
+       {
+        "__typename": "ClosedEvent",
+        "actor": {
+         "login": "alice",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-15T09:05:00Z",
+        "stateReason": "COMPLETED",
+        "closer": null
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

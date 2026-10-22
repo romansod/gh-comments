@@ -41,7 +41,7 @@
          "__typename": "User"
         },
         "createdAt": "2026-04-23T19:57:00Z",
-        "body": "Opened a PR for this \u2014 the listener is reattached on every CONNECT."
+        "body": "Opened a PR for this — the listener is reattached on every CONNECT."
        },
        {
         "__typename": "LabeledEvent",
@@ -88,7 +88,8 @@
          "__typename": "Bot"
         },
         "createdAt": "2026-08-23T01:33:00Z",
-        "stateReason": "NOT_PLANNED"
+        "stateReason": "NOT_PLANNED",
+        "closer": null
        }
       ]
      }

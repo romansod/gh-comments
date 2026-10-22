@@ -88,6 +88,13 @@ Flags:
   --events                      Include label / assignee / milestone events
                                 (filtered by default; the counts line always
                                 states how many were held back)
+  --closure                     Why it was closed, and by what: the header
+                                line, then every closed / reopened event with
+                                what closed it (a PR, a commit, or "no closer
+                                recorded") and every cross-referenced PR with
+                                its state. No body, no comments. Refused on an
+                                issue that was never closed, and exclusive
+                                with every other view flag
 
   --fixtures <tl.json> [<th.json>]
                                 Render from saved GraphQL payloads instead of
@@ -113,7 +120,7 @@ EOF
   print -r -- "${u//@PROG@/$PROG}"
 }
 
-NUM="" REPO="" TOC=0 UNRESOLVED=0 SINCE="" SLR=0 SLR_AUTHOR="" BOTS=0 MERGES=0 EVENTS=0 HIDDEN=0
+NUM="" REPO="" TOC=0 UNRESOLVED=0 SINCE="" SLR=0 SLR_AUTHOR="" BOTS=0 MERGES=0 EVENTS=0 HIDDEN=0 CLOSURE=0
 # The arguments minus the pin, for the wrong-type hint: it suggests the same
 # command again without --pr / --issue, so -R and the view flags survive.
 typeset -a UNPINNED=("${(@)argv:#(--pr|--issue)}")
@@ -149,6 +156,7 @@ while (( $# )); do
     --hidden) HIDDEN=1; shift ;;
     --merges) MERGES=1; shift ;;
     --events) EVENTS=1; shift ;;
+    --closure) CLOSURE=1; shift ;;
     --fixtures)
       # The threads payload is optional: an issue has no review threads to
       # save. A second operand is taken only when it is a readable file that
@@ -195,6 +203,28 @@ if (( SLR && LATEST )); then
   print -r -- "$PROG: --latest and --since-last-review are exclusive — each picks the item to slice from" >&2
   exit 1
 fi
+# --closure is a view of its own: it renders no comments and no body, so a
+# flag that narrows or widens those would be a silent no-op, and the TOC and
+# the slicing flags are other answers to "what do I see". Every offender is
+# listed, so one rerun is enough, and it is decided from argv alone, before
+# any fetch. --merges is here too: it is PR-only and --closure is issue-only,
+# so the pair can never be honoured, whatever the number turns out to be.
+if (( CLOSURE )); then
+  typeset -a with=()
+  (( TOC )) && with+=(--toc)
+  [[ -n "$SINCE" ]] && with+=(--since)
+  (( EVENTS )) && with+=(--events)
+  (( BOTS )) && with+=(--bots)
+  (( HIDDEN )) && with+=(--hidden)
+  (( UNRESOLVED )) && with+=(--unresolved)
+  (( SLR )) && with+=(--since-last-review)
+  (( LATEST )) && with+=(--latest)
+  (( MERGES )) && with+=(--merges)
+  if (( ${#with} )); then
+    print -r -- "$PROG: --closure is a view of its own and takes no other view flag; drop ${(j:, :)with}" >&2
+    exit 1
+  fi
+fi
 
 # refuse_type_flags <type> <because> — flags that only the other resource
 # type can honour are an error, never a no-op: silently ignoring one would
@@ -214,9 +244,13 @@ refuse_type_flags() {
       print -r -- "$PROG: ${(j:, :)bad} only appl$( (( ${#bad} == 1 )) && print -n ies || print -n y ) to pull requests; $because" >&2
       exit 1
     fi
-  elif (( EVENTS )); then
-    print -r -- "$PROG: --events only applies to issues; $because" >&2
-    exit 1
+  else
+    (( EVENTS )) && bad+=(--events)
+    (( CLOSURE )) && bad+=(--closure)
+    if (( ${#bad} )); then
+      print -r -- "$PROG: ${(j:, :)bad} only appl$( (( ${#bad} == 1 )) && print -n ies || print -n y ) to issues; $because" >&2
+      exit 1
+    fi
   fi
 }
 if [[ -n "$NUM" && "$NUM" != <-> ]]; then
@@ -398,7 +432,7 @@ ISSUE_FULL='number title state stateReason author{login __typename} createdAt bo
         nodes{
           __typename
           ... on IssueComment{author{login __typename} createdAt isMinimized minimizedReason body}
-          ... on ClosedEvent{actor{login __typename} createdAt stateReason}
+          ... on ClosedEvent{actor{login __typename} createdAt stateReason closer{__typename ... on PullRequest{number title state repository{nameWithOwner}} ... on Commit{abbreviatedOid}}}
           ... on ReopenedEvent{actor{login __typename} createdAt}
           ... on CrossReferencedEvent{actor{login __typename} createdAt willCloseTarget source{__typename ... on Issue{number title state repository{nameWithOwner}} ... on PullRequest{number title state repository{nameWithOwner}}}}
           ... on RenamedTitleEvent{actor{login __typename} createdAt previousTitle currentTitle}
@@ -534,6 +568,19 @@ target_title() {
          | ((.issueOrPullRequest // .pullRequest // .issue // {}).title // "")' "$1" 2>/dev/null || true
 }
 
+# closer_types <file> — one line per ClosedEvent in an issue payload: the
+# closer's __typename, or `null` when the API recorded none. Every page is
+# read, since a close can sit on any of them. What the caller does with it:
+# refuse a closer type the query does not select (the `Closer` union also
+# holds ProjectV2, which the selection leaves as a bare __typename), rather
+# than render it as "no closer recorded"; and refuse --closure on an issue
+# that was never closed, which has nothing to show.
+closer_types() {
+  jq -r '(.data.repository // {}) | (.issueOrPullRequest // .issue // {})
+         | (.timelineItems.nodes // [])[] | select(.__typename == "ClosedEvent")
+         | ((.closer // {}).__typename) // "null"' "$1" 2>/dev/null || true
+}
+
 if [[ -n "$FIXTURES_TL" ]]; then
   # Fixtures hold the documented `jq -s .` array form; unwrap one level into
   # the value stream --slurpfile expects (a bare stream is accepted too).
@@ -621,7 +668,7 @@ if [[ "$TYPE" != auto && "$TYPE" != "$RTYPE" ]]; then
   if [[ "$RTYPE" == issue ]]; then
     HINT=("${(@)HINT:#(--unresolved|--since-last-review|--since-last-review=*|--latest|--latest=*|--merges)}")
   else
-    HINT=("${(@)HINT:#--events}")
+    HINT=("${(@)HINT:#(--events|--closure)}")
   fi
   print -r -- "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG ${(j: :)${(@q-)HINT}}" >&2
   exit 1
@@ -629,6 +676,20 @@ fi
 
 # Flags that only one resource type can honour, now that the type is known.
 refuse_type_flags "$RTYPE" "#$NUM is ${ARTICLE[$RTYPE]}"
+
+if [[ "$RTYPE" == issue ]]; then
+  typeset -a CLOSERS=("${(@f)$(closer_types "$TL_FILE")}")
+  CLOSERS=("${(@)CLOSERS:#}")
+  typeset -a ODD=("${(@u)CLOSERS:#(PullRequest|Commit|null)}")
+  if (( ${#ODD} )); then
+    print -r -- "$PROG: #$NUM was closed by a ${(j:, :)ODD}; this version renders only a pull request or a commit as the closer" >&2
+    exit 1
+  fi
+  if (( CLOSURE )) && (( ${#CLOSERS} == 0 )); then
+    print -r -- "$PROG: issue #$NUM has never been closed" >&2
+    exit 1
+  fi
+fi
 
 if [[ "$RTYPE" == pr ]]; then
   if [[ -n "$FIXTURES_TL" ]]; then
@@ -836,16 +897,33 @@ def housekeeping: ["LabeledEvent","UnlabeledEvent","AssignedEvent","UnassignedEv
                    "MilestonedEvent","DemilestonedEvent"];
 def ishk: .__typename as $t | (housekeeping | index($t)) != null;
 
+# A reference to an issue or PR: `#N` in this repo, `owner/name#N` in another,
+# the way GitHub itself writes them. Shared by the xref line and the closer
+# on a closed line, so the two cannot drift apart.
+def refnum($repo):
+  (((.repository // {}).nameWithOwner) // "") as $r
+  | if $r == "" or $r == $repo then "#\(.number // "?")" else "\($r)#\(.number // "?")" end;
+def quoted_title: ((.title // "") | gsub("\\s+"; " ")) as $t | if $t == "" then "" else " \"\($t)\"" end;
+
 def r_xref($repo):
   (.source // {}) as $s
-  | ((($s.repository // {}).nameWithOwner) // "") as $srepo
-  | (if $srepo == "" or $srepo == $repo then "#\($s.number // "?")"
-     else "\($srepo)#\($s.number // "?")" end) as $ref
   | (if $s.__typename == "PullRequest" then "PR" else "issue" end) as $kind
-  | "xref [\(login) \(.createdAt | hdate)] \($ref) \($kind) \($s.state // "?")"
+  | "xref [\(login) \(.createdAt | hdate)] \($s | refnum($repo)) \($kind) \($s.state // "?")"
     + (if (.willCloseTarget // false) then " (closes)" else "" end)
-    + ((($s.title // "") | gsub("\\s+"; " ")) as $t
-       | if $t == "" then "" else " \"\($t)\"" end);
+    + ($s | quoted_title);
+
+# What closed the issue, as the API recorded it. A null closer is reported as
+# exactly that, never as "closed by hand": GitHub also leaves it null when the
+# closer is something the token cannot see. A closer type the query does not
+# select is refused before this renders (closer_check, in the shell), so the
+# last branch is unreachable belt.
+def r_closer($repo):
+  (.closer // null) as $c
+  | if $c == null then ", no closer recorded"
+    elif $c.__typename == "PullRequest" then
+      " by \($c | refnum($repo)) PR \($c.state // "?")" + ($c | quoted_title)
+    elif $c.__typename == "Commit" then " by commit \($c.abbreviatedOid // "?")"
+    else error("closer of type \($c.__typename) is not rendered") end;
 
 def r_issue_item($repo; $TOC):
   "[\(login) \(.createdAt | hdate)]" as $by
@@ -855,6 +933,7 @@ def r_issue_item($repo; $TOC):
       + comment_body($TOC; "  ")
     elif .__typename == "ClosedEvent" then
       "closed \($by)" + ((.stateReason // null) | if . then " as \(ascii_downcase)" else "" end)
+      + r_closer($repo)
     elif .__typename == "ReopenedEvent" then "reopened \($by)"
     elif .__typename == "CrossReferencedEvent" then r_xref($repo)
     elif .__typename == "RenamedTitleEvent" then
@@ -872,6 +951,7 @@ def r_issue_item($repo; $TOC):
 ($bots == "1") as $BOTS |
 ($merges == "1") as $MERGES |
 ($events == "1") as $EVENTS |
+($closure == "1") as $CLOSURE |
 
 ($tl[0] | tgt) as $meta |
 if $meta == null then error("#\($num) not found in \($repo)") else
@@ -917,6 +997,16 @@ if $rtype == "issue" then
        end)
   + ((([(($meta.assignees // {}).nodes // [])[] | .login]) | if length > 0 then " assignees:" + join(",") else "" end))
   + "]",
+# --closure: what ended the issue and what claimed to. Read from $nodes0, not
+# $items: events are never filtered by author or date, and the view takes no
+# flag that could narrow them. The shell has already refused an issue with no
+# ClosedEvent, so this never prints a bare header.
+(if $CLOSURE then
+   ($nodes0[]
+    | select(.__typename == "ClosedEvent" or .__typename == "ReopenedEvent"
+             or (.__typename == "CrossReferencedEvent" and ((.source // {}).__typename) == "PullRequest"))
+    | r_issue_item($repo; false))
+ else
 ("comments: \(if $BOTS then ($comsall | length) else ($comsall | length) - $combots end)\(botmark($combots; $BOTS))\(hiddenmark($comhidden))"
  + " · cross-refs: \($evxref)"
  + " · events: \(($evall | length) - $evxref - (if $EVENTS then 0 else $evhk end))\(hkmark($evhk; $EVENTS))"),
@@ -928,6 +1018,7 @@ if $rtype == "issue" then
  else empty end),
 (if ($items | length) == 0 then "(no timeline items)"
  else ($items[] | r_issue_item($repo; $TOC), (if $TOC then empty else "" end)) end)
+ end)
 
 else
 
@@ -1113,4 +1204,5 @@ jq -rn \
   --arg hidden "$HIDDEN" \
   --arg merges "$MERGES" \
   --arg events "$EVENTS" \
+  --arg closure "$CLOSURE" \
   "$JQ_PROG"

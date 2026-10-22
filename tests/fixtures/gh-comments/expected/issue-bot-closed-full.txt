@@ -9,4 +9,4 @@ comment [alice 2026-04-23 19:57]
 
 xref [dependabot[bot] 2026-08-01 06:00] #71 PR OPEN (closes) "build(deps): bump the proxy agent past the leak"
 
-closed [github-actions[bot] 2026-08-23 01:33] as not_planned
+closed [github-actions[bot] 2026-08-23 01:33] as not_planned, no closer recorded

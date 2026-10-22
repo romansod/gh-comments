@@ -1,0 +1,21 @@
+issue #45 flaky: retry test times out under load [CLOSED completed]
+comments: 2 · cross-refs: 2 · events: 3
+
+body [alice 2026-09-08 09:00]
+  Fails about one run in twenty on the CI runners.
+
+xref [bob 2026-09-09 10:00] #50 PR MERGED (closes) "test(retry): lengthen the load-test deadline"
+
+closed [bob 2026-09-09 15:00] as completed by #50 PR MERGED "test(retry): lengthen the load-test deadline"
+
+comment [alice 2026-09-12 08:30]
+  Still failing, just less often.
+
+reopened [alice 2026-09-12 08:31]
+
+xref [alice 2026-09-12 08:40] #60 issue OPEN "umbrella: CI flakes"
+
+comment [carol 2026-09-15 09:00]
+  Root cause was the shared fixture; fixed in the umbrella work.
+
+closed [alice 2026-09-15 09:05] as completed, no closer recorded

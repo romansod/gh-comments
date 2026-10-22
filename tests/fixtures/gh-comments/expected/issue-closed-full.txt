@@ -8,4 +8,4 @@ xref [dana 2026-08-10 11:00] other/upstream#99 issue OPEN "umbrella: retry seman
 
 comment [dana 2026-08-10 11:05]
 
-closed [dana 2026-08-11 09:01] as not_planned
+closed [dana 2026-08-11 09:01] as not_planned, no closer recorded

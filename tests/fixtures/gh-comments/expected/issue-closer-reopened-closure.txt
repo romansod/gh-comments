@@ -1,0 +1,5 @@
+issue #45 flaky: retry test times out under load [CLOSED completed]
+xref [bob 2026-09-09 10:00] #50 PR MERGED (closes) "test(retry): lengthen the load-test deadline"
+closed [bob 2026-09-09 15:00] as completed by #50 PR MERGED "test(retry): lengthen the load-test deadline"
+reopened [alice 2026-09-12 08:31]
+closed [alice 2026-09-15 09:05] as completed, no closer recorded
