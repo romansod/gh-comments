@@ -455,20 +455,23 @@ refuse closer-type-unselected-closure "#47 was closed by a FutureCloser" \
 # case-insensitive, as GitHub names are and -R is typed by hand: a mixed-case
 # -R must still write a same-repository closer and xref as `#N`, and a
 # different repository must still be qualified.
+# Each line is matched on its own: a glob over the whole output spans
+# newlines in zsh, and the closed line that follows the xref line used to
+# satisfy the xref check by itself.
 repo_case() {
-  local name=$1 r=$2 want=$3 unwanted=$4 out; shift 4
+  local name=$1 r=$2 want_closed=$3 want_xref=$4 unwanted=$5 out; shift 5
   local -i rc=0
   out=$(zsh "$script" "$@" -R "$r" --closure 2>&1) || rc=$?
   (( rc == 0 )) || problems+=("exit $rc (want 0)")
-  [[ "$out" == *"closed ["*"$want"* ]] || problems+=("closed line lacks: $want")
-  [[ "$out" == *"xref ["*"$want"* ]] || problems+=("xref line lacks: $want")
+  print -r -- "$out" | grep -q -- "^closed \[.*$want_closed" || problems+=("closed line lacks: $want_closed")
+  print -r -- "$out" | grep -q -- "^xref \[.*$want_xref" || problems+=("xref line lacks: $want_xref")
   [[ "$out" != *"$unwanted"* ]] || problems+=("output carries: $unwanted")
   report "$name" "refusals" $rc "$out"
   return 0
 }
-repo_case repo-case-mixed    Fixtures/Fixtures " by #44 PR MERGED" "fixtures/fixtures#44" 41 --fixtures "$fx/issue-closer-pr.tl.json"
-repo_case repo-case-upper    FIXTURES/fixtures " by #44 PR MERGED" "fixtures/fixtures#44" 41 --fixtures "$fx/issue-closer-pr.tl.json"
-repo_case repo-case-other    Fixtures/Fixtures " by other/upstream#17 PR MERGED" " by #17 " 43 --fixtures "$fx/issue-closer-crossrepo.tl.json"
+repo_case repo-case-mixed    Fixtures/Fixtures " by #44 PR MERGED" "] #44 PR MERGED" "fixtures/fixtures#44" 41 --fixtures "$fx/issue-closer-pr.tl.json"
+repo_case repo-case-upper    FIXTURES/fixtures " by #44 PR MERGED" "] #44 PR MERGED" "fixtures/fixtures#44" 41 --fixtures "$fx/issue-closer-pr.tl.json"
+repo_case repo-case-other    Fixtures/Fixtures " by other/upstream#17 PR MERGED" "] other/upstream#17 PR MERGED" "] #17 PR" 43 --fixtures "$fx/issue-closer-crossrepo.tl.json"
 
 # A payload with no closer field at all (captured before this version asked
 # for it) is refused the same way: nothing was recorded *about* the closer,
