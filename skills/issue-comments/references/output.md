@@ -36,7 +36,8 @@ ones change what you should do.
   shows it. Treat it as stale unless the task is about why it was hidden.
 - `xref` lines name the referencing PR or issue, its state and its title; a
   cross-repo reference is qualified as `owner/repo#N`, a same-repo one as
-  plain `#N`. `(closes)` means GitHub recorded it as closing this issue.
+  plain `#N`. `(closes)` means the PR declared it would close this issue (a
+  closing keyword); whether it did is on the `closed` line.
 - `closed … as <reason>` / `reopened` are the events that end or revive the
   issue. The `closed` line ends with what closed it, as GitHub recorded it:
   `by #N PR MERGED "title"` (a PR in another repository is `owner/name#N`),
