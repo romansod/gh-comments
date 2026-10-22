@@ -445,7 +445,7 @@ ISSUE_FULL='number title state stateReason author{login __typename} createdAt bo
         nodes{
           __typename
           ... on IssueComment{author{login __typename} createdAt isMinimized minimizedReason body}
-          ... on ClosedEvent{actor{login __typename} createdAt stateReason closer{__typename ... on PullRequest{number title state repository{nameWithOwner}} ... on Commit{abbreviatedOid}}}
+          ... on ClosedEvent{actor{login __typename} createdAt stateReason closer{__typename ... on PullRequest{number title state repository{nameWithOwner}} ... on Commit{abbreviatedOid repository{nameWithOwner}}}}
           ... on ReopenedEvent{actor{login __typename} createdAt}
           ... on CrossReferencedEvent{actor{login __typename} createdAt willCloseTarget source{__typename ... on Issue{number title state repository{nameWithOwner}} ... on PullRequest{number title state repository{nameWithOwner}}}}
           ... on RenamedTitleEvent{actor{login __typename} createdAt previousTitle currentTitle}
@@ -918,13 +918,18 @@ def housekeeping: ["LabeledEvent","UnlabeledEvent","AssignedEvent","UnassignedEv
                    "MilestonedEvent","DemilestonedEvent"];
 def ishk: .__typename as $t | (housekeeping | index($t)) != null;
 
+# Whether an object with a repository is in this one. Compared
+# case-insensitively: GitHub names are, and -R is typed by hand. No
+# repository at all reads as this one, which keeps payloads captured before
+# the field was selected renderable.
+def samerepo($repo):
+  (((.repository // {}).nameWithOwner) // "") as $r
+  | $r == "" or ($r | ascii_downcase) == ($repo | ascii_downcase);
 # A reference to an issue or PR: `#N` in this repo, `owner/name#N` in another,
 # the way GitHub itself writes them. Shared by the xref line and the closer
 # on a closed line, so the two cannot drift apart.
-# Compared case-insensitively: GitHub names are, and -R is typed by hand.
 def refnum($repo):
-  (((.repository // {}).nameWithOwner) // "") as $r
-  | if $r == "" or ($r | ascii_downcase) == ($repo | ascii_downcase) then "#\(.number // "?")" else "\($r)#\(.number // "?")" end;
+  if samerepo($repo) then "#\(.number // "?")" else "\(.repository.nameWithOwner)#\(.number // "?")" end;
 def quoted_title: ((.title // "") | gsub("\\s+"; " ")) as $t | if $t == "" then "" else " \"\($t)\"" end;
 
 def r_xref($repo):
@@ -947,7 +952,8 @@ def r_closer($repo):
   | if $c == null then ", no closer recorded"
     elif $c.__typename == "PullRequest" then
       " by \($c | refnum($repo)) PR \($c.state // "?")" + ($c | quoted_title)
-    elif $c.__typename == "Commit" then " by commit \($c.abbreviatedOid // "?")"
+    elif $c.__typename == "Commit" then
+      " by commit " + (if ($c | samerepo($repo)) then "" else "\($c.repository.nameWithOwner)@" end) + ($c.abbreviatedOid // "?")
     elif $c.__typename == "ProjectV2" then " by a project"
     else error("closer of type \($c.__typename) is not rendered") end;
 

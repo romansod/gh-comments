@@ -1,0 +1,2 @@
+issue #48 upstream typo in the shared banner [CLOSED completed]
+closed [dana 2026-09-04 14:25] as completed by commit other/upstream@1a2b3c4

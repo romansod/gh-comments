@@ -48,7 +48,10 @@
         "stateReason": "COMPLETED",
         "closer": {
          "__typename": "Commit",
-         "abbreviatedOid": "1a2b3c4"
+         "abbreviatedOid": "1a2b3c4",
+         "repository": {
+          "nameWithOwner": "fixtures/fixtures"
+         }
         }
        }
       ]

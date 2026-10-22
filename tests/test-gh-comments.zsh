@@ -42,6 +42,8 @@
 #                 the PR, the xref to it carries (closes); a comment and a
 #                 label event, which --closure must leave out
 #   issue-closer-commit  closed by a commit, no PR anywhere: `by commit <sha>`
+#   issue-closer-commit-crossrepo  closed by a commit in another repository:
+#                 `by commit owner/name@<sha>`, qualified like a PR closer
 #   issue-closer-crossrepo  closed by a PR in another repository: closer and
 #                 xref both written owner/name#N
 #   issue-closer-reopened  closed by a PR, reopened, closed again with no
@@ -200,6 +202,8 @@ check issue-closer-pr-toc         issue-closer-pr 41 --toc
 check issue-closer-pr-closure     issue-closer-pr 41 --closure
 check issue-closer-commit-full    issue-closer-commit 42
 check issue-closer-commit-closure issue-closer-commit 42 --closure
+check issue-closer-commit-crossrepo-full     issue-closer-commit-crossrepo 48
+check issue-closer-commit-crossrepo-closure  issue-closer-commit-crossrepo 48 --closure
 check issue-closer-crossrepo-full     issue-closer-crossrepo 43
 check issue-closer-crossrepo-closure  issue-closer-crossrepo 43 --closure
 check issue-closer-reopened-full      issue-closer-reopened 45

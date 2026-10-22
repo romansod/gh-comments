@@ -1,0 +1,10 @@
+issue #48 upstream typo in the shared banner [CLOSED completed]
+comments: 1 · cross-refs: 0 · events: 1
+
+body [carol 2026-09-04 14:00]
+  The banner we vendor from upstream says "Instaled".
+
+comment [dana 2026-09-04 14:20]
+  Fixed upstream; the commit message closes this with owner/name#48.
+
+closed [dana 2026-09-04 14:25] as completed by commit other/upstream@1a2b3c4
