@@ -666,13 +666,6 @@ if [[ -n "$FIXTURES_TL" ]]; then
   fi
   if [[ -n "$FIXTURES_TH" ]]; then
     jq -c 'if type == "array" then .[] else . end' "$FIXTURES_TH" > "$TH_FILE"
-    # The live threads fetch has no tolerated case: any page carrying errors
-    # fails it, so a saved copy of one is refused the same way.
-    if jq -es 'any(.[]; (.errors // []) | length > 0)' "$TH_FILE" >/dev/null 2>&1; then
-      print -r -- "$PROG: #$NUM: the threads payload is the capture of a fetch gh failed on; its errors:" >&2
-      jq -c '.errors[]?' "$TH_FILE" >&2
-      exit 1
-    fi
   fi
 else
   # The two fetches stay sequential and in the foreground. Overlapping them is
@@ -803,6 +796,15 @@ if [[ "$RTYPE" == pr ]]; then
   if [[ -n "$FIXTURES_TL" ]]; then
     if [[ -z "$FIXTURES_TH" ]]; then
       print -r -- "$PROG: --fixtures needs a threads payload for a PR: --fixtures <tl.json> <th.json>" >&2
+      exit 1
+    fi
+    # The live threads fetch has no tolerated case: any page carrying errors
+    # fails it, so a saved copy of one is refused the same way. Only here,
+    # once the type is a PR: an issue never fetches threads, and ignores a
+    # threads file it is given, as the help says.
+    if jq -es 'any(.[]; (.errors // []) | length > 0)' "$TH_FILE" >/dev/null 2>&1; then
+      print -r -- "$PROG: #$NUM: the threads payload is the capture of a fetch gh failed on; its errors:" >&2
+      jq -c '.errors[]?' "$TH_FILE" >&2
       exit 1
     fi
   else

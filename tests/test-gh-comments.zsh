@@ -532,6 +532,15 @@ fixtures_errors() {
     "$fx/issue-closer-hidden.tl.json" > "$tmp/cut.tl.json"
   jq '(.[0].errors[0].type) = "NOT_FOUND"' \
     "$fx/issue-closer-hidden.tl.json" > "$tmp/notfound.tl.json"
+  # The threads payload is meaningless for an issue and the live path never
+  # fetches one, so a threads file an issue is given is ignored whatever it
+  # carries: the gate on it belongs to a PR alone.
+  jq '(.[0].errors) = [{"type":"FORBIDDEN","path":["repository","pullRequest","reviewThreads"],"message":"Resource not accessible by personal access token"}]' \
+    "$prfx/all-resolved.th.json" > "$tmp/errors.th.json"
+  rc=0
+  out=$(zsh "$script" 41 --toc --fixtures "$fx/issue-closer-pr.tl.json" "$tmp/errors.th.json" 2>&1) || rc=$?
+  (( rc == 0 )) || problems+=("issue with an errored threads file: exit $rc (want 0)")
+  [[ "$out" == "issue #41"* ]] || problems+=("issue with an errored threads file did not render")
   for spec in cut notfound; do
     for view in "" "--toc" "--closure"; do
       rc=0
