@@ -579,8 +579,13 @@ threads_errors_refused() {
     "$fx/all-resolved.th.json" > "$tmp/truncated.th.json"
   jq '.[0] = {"message":"You have exceeded a secondary rate limit.","documentation_url":"https://docs.github.com/"}' \
     "$fx/all-resolved.th.json" > "$tmp/restbody.th.json"
+  # And that body as a second page after a good first one, the shape gh
+  # leaves when the limit bites mid-pagination; only this variant tells a
+  # gate on every page from one on the first.
+  jq '. + [{"message":"You have exceeded a secondary rate limit.","documentation_url":"https://docs.github.com/"}]' \
+    "$fx/all-resolved.th.json" > "$tmp/restlast.th.json"
   local spec
-  for spec in errors truncated restbody; do
+  for spec in errors truncated restbody restlast; do
     for view in "" "--toc"; do
       rc=0
       out=$(zsh "$script" --pr 1 ${=view} --fixtures "$fx/all-resolved.tl.json" "$tmp/$spec.th.json" 2>&1) || rc=$?
@@ -590,7 +595,7 @@ threads_errors_refused() {
     case $spec in
       errors)    [[ "$out" == *"errors"* ]] || problems+=("errors: output lacks the error diagnosis") ;;
       truncated) [[ "$out" == *"stopped before its last page"* ]] || problems+=("truncated: output lacks the incomplete-capture refusal") ;;
-      restbody)  [[ "$out" == *"not a GraphQL response"* ]] || problems+=("restbody: output lacks the not-a-response refusal") ;;
+      restbody|restlast) [[ "$out" == *"not a GraphQL response"* ]] || problems+=("$spec: output lacks the not-a-response refusal") ;;
     esac
   done
   report "$name" "fixture shapes" $rc "$out"

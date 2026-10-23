@@ -550,8 +550,14 @@ fixtures_errors() {
   jq '[.[0]]' "$fx/issue-paged.tl.json" > "$tmp/truncated.tl.json"
   jq '.[0] = {"message":"You have exceeded a secondary rate limit.","documentation_url":"https://docs.github.com/"}' \
     "$fx/issue-paged.tl.json" > "$tmp/restbody.tl.json"
-  local -A num=(cut 49 notfound 49 truncated 21 restbody 21)
-  for spec in cut notfound truncated restbody; do
+  # The same body as the last page, after a good first page: the shape gh
+  # leaves when the limit bites mid-pagination. A first page that is not a
+  # response was refused before the gate existed, as a number not found;
+  # only this variant tells a gate on every page from one on the first.
+  jq '.[1] = {"message":"You have exceeded a secondary rate limit.","documentation_url":"https://docs.github.com/"}' \
+    "$fx/issue-paged.tl.json" > "$tmp/restlast.tl.json"
+  local -A num=(cut 49 notfound 49 truncated 21 restbody 21 restlast 21)
+  for spec in cut notfound truncated restbody restlast; do
     for view in "" "--toc" "--closure"; do
       rc=0
       out=$(zsh "$script" ${num[$spec]} ${=view} --fixtures "$tmp/$spec.tl.json" 2>&1) || rc=$?
@@ -563,7 +569,7 @@ fixtures_errors() {
       cut)       [[ "$out" == *"more timeline behind it"* ]] || problems+=("cut: output lacks the cut-timeline refusal") ;;
       notfound)  [[ "$out" == *"errors"* ]] || problems+=("notfound: output lacks the error diagnosis") ;;
       truncated) [[ "$out" == *"stopped before its last page"* ]] || problems+=("truncated: output lacks the incomplete-capture refusal") ;;
-      restbody)  [[ "$out" == *"not a GraphQL response"* ]] || problems+=("restbody: output lacks the not-a-response refusal") ;;
+      restbody|restlast) [[ "$out" == *"not a GraphQL response"* ]] || problems+=("$spec: output lacks the not-a-response refusal") ;;
     esac
   done
   report "$name" "refusals" $rc "$out"
