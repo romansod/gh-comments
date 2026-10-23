@@ -610,14 +610,16 @@ closer_types() {
            else ((.closer // {}).__typename) // "null" end' "$1" 2>/dev/null || true
 }
 
-# An error that says the token cannot see a closer, and nothing else: an
-# access refusal (FORBIDDEN, or NOT_FOUND for a node it cannot resolve)
-# whose path ends exactly at a timeline node's `closer`. A transient error
-# there, or a refusal below a closer the payload did name, is not that, and
-# must not be reported as the token's access. One definition, used by the
-# gate on the fetch below and by the renderer's marking (the @CLOSER_DENIED@
-# slot in the jq program), so the two cannot disagree.
-CLOSER_DENIED_JQ='((.type == "FORBIDDEN" or .type == "NOT_FOUND") and ((.path // []) as $p | ($p | index("nodes")) as $n | $n != null and ($p | length) == $n + 3 and $p[-1] == "closer"))'
+# An error that says the token cannot see a closer, and nothing else: a
+# FORBIDDEN whose path ends exactly at a timeline node's `closer`. A
+# transient error there, or a refusal below a closer the payload did name,
+# is not that, and must not be reported as the token's access. Nor is a
+# NOT_FOUND: GitHub also answers that for a closer that no longer resolves,
+# which no token would see, so it stays the hard failure until one is seen
+# live. One definition, used by the gate on the fetch below and by the
+# renderer's marking (the @CLOSER_DENIED@ slot in the jq program), so the
+# two cannot disagree.
+CLOSER_DENIED_JQ='(.type == "FORBIDDEN" and ((.path // []) as $p | ($p | index("nodes")) as $n | $n != null and ($p | length) == $n + 3 and $p[-1] == "closer"))'
 # closer_errors_only <file> — whether every errors[] entry on the pages is
 # such a refusal. A closer the token cannot see comes back that way, as the
 # node with a null closer and the entry, and gh then exits non-zero although

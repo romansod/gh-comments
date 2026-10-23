@@ -557,6 +557,8 @@ case "${GH_STUB_MODE:-}" in
   closer-transient)   jq -c '.[]' "$GH_STUB_TRANSIENT";  print -ru2 -- "gh: Something went wrong"; exit 1 ;;
   closer-deep)        jq -c '.[]' "$GH_STUB_DEEP";       print -ru2 -- "gh: Resource not accessible by personal access token"; exit 1 ;;
   closer-mixed)       jq -c '.[]' "$GH_STUB_MIXED";      print -ru2 -- "gh: Resource not accessible by personal access token"; exit 1 ;;
+  closer-deeper)      jq -c '.[]' "$GH_STUB_DEEPER";     print -ru2 -- "gh: Resource not accessible by personal access token"; exit 1 ;;
+  closer-notfound)    jq -c '.[]' "$GH_STUB_NOTFOUND";   print -ru2 -- "gh: Could not resolve to a node"; exit 1 ;;
   notfound)
     print -rn -- '{"data":{"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND","message":"Could not resolve to an issue or pull request with the number of 999."}]}'
     print -ru2 -- "gh: Could not resolve to an issue or pull request with the number of 999."
@@ -582,6 +584,13 @@ jq '(.[0].errors[0].path) += ["repository"]' \
   "$fx/issue-closer-hidden.tl.json" > "$stubdir/deep.tl.json"
 jq '(.[0].errors) += [{"type":"INTERNAL","path":["repository","issueOrPullRequest","timelineItems"],"message":"Something went wrong"}]' \
   "$fx/issue-closer-hidden.tl.json" > "$stubdir/mixed.tl.json"
+# A path that ends in "closer" but runs below the node's closer, which only
+# the exact-length clause of the gate tells apart; and a NOT_FOUND at the
+# closer, which can also be a closer that no longer resolves.
+jq '(.[0].errors[0].path) += ["closer"]' \
+  "$fx/issue-closer-hidden.tl.json" > "$stubdir/deeper.tl.json"
+jq '(.[0].errors[0].type) = "NOT_FOUND"' \
+  "$fx/issue-closer-hidden.tl.json" > "$stubdir/notfound.tl.json"
 typeset -ga gh_env=(
   PATH="$stubdir:$PATH"
   GH_STUB_LOG="$stublog"
@@ -594,6 +603,8 @@ typeset -ga gh_env=(
   GH_STUB_TRANSIENT="$stubdir/transient.tl.json"
   GH_STUB_DEEP="$stubdir/deep.tl.json"
   GH_STUB_MIXED="$stubdir/mixed.tl.json"
+  GH_STUB_DEEPER="$stubdir/deeper.tl.json"
+  GH_STUB_NOTFOUND="$stubdir/notfound.tl.json"
   GH_STUB_QUERY_LOG="$qlog"
 )
 gh_reset() { : > "$stublog"; : > "$qlog" }
@@ -720,12 +731,14 @@ gh_case closer-other-error 49 --toc
 [[ "$gh_out" != "issue #"* ]] || problems+=("rendered through an unrelated error")
 report gh-closer-other-error-still-fails "stubbed gh" $gh_rc "$gh_out"
 
-# gh-closer-*-still-fails — the tolerance is for an access refusal at exactly
-# a node's closer, and nothing else: a transient error there, a refusal
-# below a closer the payload named, and a closer refusal beside an unrelated
-# error are all the hard failure. The last also tells the gate's `all` from
-# an `any`, which the single-error pages above cannot.
-for spec in closer-transient closer-deep closer-mixed; do
+# gh-closer-*-still-fails — the tolerance is for a FORBIDDEN at exactly a
+# node's closer, and nothing else: a transient error there, a refusal below
+# a closer the payload named, a closer refusal beside an unrelated error, a
+# refusal whose path runs deeper yet still ends in "closer", and a NOT_FOUND
+# (which can also be a closer that no longer resolves) are all the hard
+# failure. The mixed page tells the gate's `all` from an `any`; the deeper
+# path tells its exact-length clause from a `>=`.
+for spec in closer-transient closer-deep closer-mixed closer-deeper closer-notfound; do
   gh_reset
   gh_case $spec 49 --toc
   (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
