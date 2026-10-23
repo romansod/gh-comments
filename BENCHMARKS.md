@@ -265,8 +265,10 @@ python3 analyze.py
 To measure a release instead, check its tag out beside this checkout and
 point the scripts at it. `v1.0.0` predates the harness and has no
 `--closure`, so its four `s_closure` cases exit 1 there and `analyze.py`
-refuses the run until those rows are dropped; it is a baseline for the
-other rows, not a reproduction of these tables:
+refuses the run (and cannot analyze it with those rows dropped either, since
+the Task 7 table and the why-closed ladder read them unconditionally); its
+other rows, read by hand from `cases.tsv` and `tokens.tsv`, are a baseline,
+not a reproduction of these tables:
 
 ```bash
 git worktree add /tmp/gh-comments-v1.0.0 v1.0.0
