@@ -295,11 +295,11 @@ With no number, the current branch's open PR is used.
                                 the closed line cannot say what the API
                                 recorded. A capture of a fetch gh failed on
                                 (a page carrying errors, a page that is not
-                                a GraphQL response, or a last page saying
-                                more follow) is refused as the live fetch
-                                is; the one tolerated case, a closer the
-                                token could not see with no pages behind
-                                it, renders as not visible.
+                                a GraphQL response, a last page saying more
+                                follow, or no page at all) is refused as the
+                                live fetch is; the one tolerated case, a
+                                closer the token could not see with no pages
+                                behind it, renders as not visible.
   -h, --help                    This help
   --version                     Print the version
 ```
