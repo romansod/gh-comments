@@ -109,10 +109,12 @@ Flags:
                                 issue that was ever closed, in every view:
                                 the closed line cannot say what the API
                                 recorded. A capture of a fetch gh failed on
-                                (a page carrying errors) is refused as the
-                                live fetch is; the one tolerated case, a
-                                closer the token could not see with no pages
-                                behind it, renders as not visible.
+                                (a page carrying errors, a page that is not
+                                a GraphQL response, or a last page saying
+                                more follow) is refused as the live fetch
+                                is; the one tolerated case, a closer the
+                                token could not see with no pages behind
+                                it, renders as not visible.
   -h, --help                    This help
   --version                     Print the version
 
@@ -664,6 +666,18 @@ if [[ -n "$FIXTURES_TL" ]]; then
       exit 1
     fi
   fi
+  # A capture gh stopped with no errors[] on any page: a page that is not a
+  # GraphQL response (gh prints a REST-shaped error body, a rate limit, before
+  # exiting), or a last page saying more follow (the connection dropped). The
+  # live fetch fails on both, so a saved copy must not render as complete.
+  if ! jq -es 'all(.[]; (.data.repository? // null) != null)' "$TL_FILE" >/dev/null 2>&1; then
+    print -r -- "$PROG: #$NUM: a page of this payload is not a GraphQL response; it is the capture of a fetch gh failed on" >&2
+    exit 1
+  fi
+  if timeline_cut "$TL_FILE"; then
+    print -r -- "$PROG: #$NUM: this payload stopped before its last page, so the issue cannot be rendered complete; capture it again" >&2
+    exit 1
+  fi
   if [[ -n "$FIXTURES_TH" ]]; then
     jq -c 'if type == "array" then .[] else . end' "$FIXTURES_TH" > "$TH_FILE"
   fi
@@ -805,6 +819,15 @@ if [[ "$RTYPE" == pr ]]; then
     if jq -es 'any(.[]; (.errors // []) | length > 0)' "$TH_FILE" >/dev/null 2>&1; then
       print -r -- "$PROG: #$NUM: the threads payload is the capture of a fetch gh failed on; its errors:" >&2
       jq -c '.errors[]?' "$TH_FILE" >&2
+      exit 1
+    fi
+    # And the same completeness the timeline payload had to show.
+    if ! jq -es 'all(.[]; (.data.repository? // null) != null)' "$TH_FILE" >/dev/null 2>&1; then
+      print -r -- "$PROG: #$NUM: a page of the threads payload is not a GraphQL response; it is the capture of a fetch gh failed on" >&2
+      exit 1
+    fi
+    if jq -es 'last | (((.data.repository // {}).pullRequest // {}).reviewThreads // {}).pageInfo.hasNextPage // false' "$TH_FILE" >/dev/null 2>&1; then
+      print -r -- "$PROG: #$NUM: the threads payload stopped before its last page, so the PR cannot be rendered complete; capture it again" >&2
       exit 1
     fi
   else

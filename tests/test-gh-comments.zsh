@@ -60,8 +60,9 @@
 #                 cut (more pages behind the error: refused), and once with
 #                 an unrelated error (the hard failure stays); variants of
 #                 the page pin each clause of the gate (gh-closer-*-still-fails),
-#                 and two of them, saved, pin that --fixtures refuses what the
-#                 live fetch refuses (fixtures-errors-refused)
+#                 and saved variants pin that --fixtures refuses what the
+#                 live fetch refuses, a capture cut short with no error
+#                 included (fixtures-errors-refused)
 #   issue-closer-unknown  closer is an invented `Closer` member the query
 #                 does not select: refused by name, never "no closer
 #                 recorded" (non-golden); so is a payload whose closed event
@@ -541,17 +542,28 @@ fixtures_errors() {
   out=$(zsh "$script" 41 --toc --fixtures "$fx/issue-closer-pr.tl.json" "$tmp/errors.th.json" 2>&1) || rc=$?
   (( rc == 0 )) || problems+=("issue with an errored threads file: exit $rc (want 0)")
   [[ "$out" == "issue #41"* ]] || problems+=("issue with an errored threads file did not render")
-  for spec in cut notfound; do
+  # Two captures gh stopped with no errors[] on any page: the connection
+  # dropped before the last page (the first page of a paged issue alone,
+  # saying more follow), and a page GitHub answered with a REST-shaped error
+  # body (a rate limit), which gh prints before exiting 1. The live fetch
+  # fails on both; a saved copy must not render as complete.
+  jq '[.[0]]' "$fx/issue-paged.tl.json" > "$tmp/truncated.tl.json"
+  jq '.[0] = {"message":"You have exceeded a secondary rate limit.","documentation_url":"https://docs.github.com/"}' \
+    "$fx/issue-paged.tl.json" > "$tmp/restbody.tl.json"
+  local -A num=(cut 49 notfound 49 truncated 21 restbody 21)
+  for spec in cut notfound truncated restbody; do
     for view in "" "--toc" "--closure"; do
       rc=0
-      out=$(zsh "$script" 49 ${=view} --fixtures "$tmp/$spec.tl.json" 2>&1) || rc=$?
+      out=$(zsh "$script" ${num[$spec]} ${=view} --fixtures "$tmp/$spec.tl.json" 2>&1) || rc=$?
       (( rc == 1 )) || problems+=("$spec: exit $rc (want 1) with ${view:-the default view}")
       [[ "$out" != *"no closer recorded"* ]] || problems+=("$spec: a failed closer lookup rendered as recorded-none with ${view:-the default view}")
       [[ "$out" != "issue #"* ]] || problems+=("$spec: rendered with ${view:-the default view}")
     done
     case $spec in
-      cut)      [[ "$out" == *"more timeline behind it"* ]] || problems+=("cut: output lacks the cut-timeline refusal") ;;
-      notfound) [[ "$out" == *"errors"* ]] || problems+=("notfound: output lacks the error diagnosis") ;;
+      cut)       [[ "$out" == *"more timeline behind it"* ]] || problems+=("cut: output lacks the cut-timeline refusal") ;;
+      notfound)  [[ "$out" == *"errors"* ]] || problems+=("notfound: output lacks the error diagnosis") ;;
+      truncated) [[ "$out" == *"stopped before its last page"* ]] || problems+=("truncated: output lacks the incomplete-capture refusal") ;;
+      restbody)  [[ "$out" == *"not a GraphQL response"* ]] || problems+=("restbody: output lacks the not-a-response refusal") ;;
     esac
   done
   report "$name" "refusals" $rc "$out"

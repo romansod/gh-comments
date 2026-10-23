@@ -572,12 +572,26 @@ threads_errors_refused() {
   }
   jq '(.[0].errors) = [{"type":"FORBIDDEN","path":["repository","pullRequest","reviewThreads"],"message":"Resource not accessible by personal access token"}]' \
     "$fx/all-resolved.th.json" > "$tmp/errors.th.json"
-  for view in "" "--toc"; do
-    rc=0
-    out=$(zsh "$script" --pr 1 ${=view} --fixtures "$fx/all-resolved.tl.json" "$tmp/errors.th.json" 2>&1) || rc=$?
-    (( rc == 1 )) || problems+=("exit $rc (want 1) with ${view:-the default view}")
-    [[ "$out" != "PR #"* ]] || problems+=("rendered with ${view:-the default view}")
-    [[ "$out" == *"errors"* ]] || problems+=("output lacks the error diagnosis with ${view:-the default view}")
+  # And two captures gh stopped with no errors[]: the last page saying more
+  # follow (the connection dropped), and a page that is a REST-shaped error
+  # body rather than a GraphQL response (a rate limit).
+  jq '(.[-1].data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage) = true' \
+    "$fx/all-resolved.th.json" > "$tmp/truncated.th.json"
+  jq '.[0] = {"message":"You have exceeded a secondary rate limit.","documentation_url":"https://docs.github.com/"}' \
+    "$fx/all-resolved.th.json" > "$tmp/restbody.th.json"
+  local spec
+  for spec in errors truncated restbody; do
+    for view in "" "--toc"; do
+      rc=0
+      out=$(zsh "$script" --pr 1 ${=view} --fixtures "$fx/all-resolved.tl.json" "$tmp/$spec.th.json" 2>&1) || rc=$?
+      (( rc == 1 )) || problems+=("$spec: exit $rc (want 1) with ${view:-the default view}")
+      [[ "$out" != "PR #"* ]] || problems+=("$spec: rendered with ${view:-the default view}")
+    done
+    case $spec in
+      errors)    [[ "$out" == *"errors"* ]] || problems+=("errors: output lacks the error diagnosis") ;;
+      truncated) [[ "$out" == *"stopped before its last page"* ]] || problems+=("truncated: output lacks the incomplete-capture refusal") ;;
+      restbody)  [[ "$out" == *"not a GraphQL response"* ]] || problems+=("restbody: output lacks the not-a-response refusal") ;;
+    esac
   done
   report "$name" "fixture shapes" $rc "$out"
   rm -rf "$tmp"
