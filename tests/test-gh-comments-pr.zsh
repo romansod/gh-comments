@@ -87,7 +87,8 @@
 # assert exit codes and substrings, because their input is built at runtime:
 #
 #   oversized payload  generates a >1 MB timeline rather than committing one
-#   fixture shapes     the --slurpfile unwrap: array form, bare stream, garbage
+#   fixture shapes     the --slurpfile unwrap: array form, bare stream, garbage,
+#                      and a threads capture carrying errors[], refused
 #   html entities      numeric entities decode (decimal and hex), dangerous
 #                      code points are replaced, and `&#38;amp;` is not
 #                      decoded twice
@@ -556,6 +557,33 @@ hidden_bodies_gated() {
   return 0
 }
 hidden_bodies_gated
+
+# threads-errors-refused — a saved threads payload gh failed on. The capture
+# command keeps the page gh printed before exiting non-zero, so a th.json can
+# carry errors[]; the live threads fetch rides set -e and never renders one.
+# --fixtures must refuse it the same way, in the default and --toc views,
+# rather than render the PR with its threads missing.
+threads_errors_refused() {
+  local name=threads-errors-refused tmp out view
+  local -i rc=0
+  tmp=$(mktemp -d) || {
+    t_fail "$name" "" "tests/test-gh-comments-pr.zsh" "mktemp -d failed"
+    (( fails += 1 )); return 0
+  }
+  jq '(.[0].errors) = [{"type":"FORBIDDEN","path":["repository","pullRequest","reviewThreads"],"message":"Resource not accessible by personal access token"}]' \
+    "$fx/all-resolved.th.json" > "$tmp/errors.th.json"
+  for view in "" "--toc"; do
+    rc=0
+    out=$(zsh "$script" --pr 1 ${=view} --fixtures "$fx/all-resolved.tl.json" "$tmp/errors.th.json" 2>&1) || rc=$?
+    (( rc == 1 )) || problems+=("exit $rc (want 1) with ${view:-the default view}")
+    [[ "$out" != "PR #"* ]] || problems+=("rendered with ${view:-the default view}")
+    [[ "$out" == *"errors"* ]] || problems+=("output lacks the error diagnosis with ${view:-the default view}")
+  done
+  report "$name" "fixture shapes" $rc "$out"
+  rm -rf "$tmp"
+  return 0
+}
+threads_errors_refused
 
 # fallback-is-toc — a slicing flag that matches nothing must print the TOC
 # and nothing more: the output minus its note line is byte-identical to a
