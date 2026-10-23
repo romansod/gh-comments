@@ -59,7 +59,9 @@
 #                 gh's non-zero exit (gh-closer-hidden-*), once whole, once
 #                 cut (more pages behind the error: refused), and once with
 #                 an unrelated error (the hard failure stays); variants of
-#                 the page pin each clause of the gate (gh-closer-*-still-fails)
+#                 the page pin each clause of the gate (gh-closer-*-still-fails),
+#                 and two of them, saved, pin that --fixtures refuses what the
+#                 live fetch refuses (fixtures-errors-refused)
 #   issue-closer-unknown  closer is an invented `Closer` member the query
 #                 does not select: refused by name, never "no closer
 #                 recorded" (non-golden); so is a payload whose closed event
@@ -511,6 +513,43 @@ closer_absent() {
   return 0
 }
 closer_absent
+
+# fixtures-errors-refused — a saved copy of a fetch gh failed on. The
+# documented capture command pipes gh through jq -s, which keeps the page gh
+# printed before exiting 1, so a fixture can carry errors[]. The live path
+# runs the gate on such a page; --fixtures must answer the same way, in every
+# view: a hidden closer with more pages behind it is a cut timeline, and an
+# error at the closer that is not an access refusal must never render as
+# `no closer recorded`.
+fixtures_errors() {
+  local name=fixtures-errors-refused tmp out view spec
+  local -i rc=0
+  tmp=$(mktemp -d) || {
+    t_fail "$name" "" "tests/test-gh-comments.zsh" "mktemp -d failed"
+    (( fails += 1 )); return 0
+  }
+  jq '(.[0].data.repository.issueOrPullRequest.timelineItems.pageInfo.hasNextPage) = true' \
+    "$fx/issue-closer-hidden.tl.json" > "$tmp/cut.tl.json"
+  jq '(.[0].errors[0].type) = "NOT_FOUND"' \
+    "$fx/issue-closer-hidden.tl.json" > "$tmp/notfound.tl.json"
+  for spec in cut notfound; do
+    for view in "" "--toc" "--closure"; do
+      rc=0
+      out=$(zsh "$script" 49 ${=view} --fixtures "$tmp/$spec.tl.json" 2>&1) || rc=$?
+      (( rc == 1 )) || problems+=("$spec: exit $rc (want 1) with ${view:-the default view}")
+      [[ "$out" != *"no closer recorded"* ]] || problems+=("$spec: a failed closer lookup rendered as recorded-none with ${view:-the default view}")
+      [[ "$out" != "issue #"* ]] || problems+=("$spec: rendered with ${view:-the default view}")
+    done
+    case $spec in
+      cut)      [[ "$out" == *"more timeline behind it"* ]] || problems+=("cut: output lacks the cut-timeline refusal") ;;
+      notfound) [[ "$out" == *"errors"* ]] || problems+=("notfound: output lacks the error diagnosis") ;;
+    esac
+  done
+  report "$name" "refusals" $rc "$out"
+  rm -rf "$tmp"
+  return 0
+}
+fixtures_errors
 
 # ---------------------------------------------------------------------------
 # Stubbed gh — the fetch half, which --fixtures can never reach. Offline by

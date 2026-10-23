@@ -108,7 +108,11 @@ Flags:
                                 version fetched the closer is refused for an
                                 issue that was ever closed, in every view:
                                 the closed line cannot say what the API
-                                recorded.
+                                recorded. A capture of a fetch gh failed on
+                                (a page carrying errors) is refused as the
+                                live fetch is; the one tolerated case, a
+                                closer the token could not see with no pages
+                                behind it, renders as not visible.
   -h, --help                    This help
   --version                     Print the version
 
@@ -643,6 +647,23 @@ if [[ -n "$FIXTURES_TL" ]]; then
   # Fixtures hold the documented `jq -s .` array form; unwrap one level into
   # the value stream --slurpfile expects (a bare stream is accepted too).
   jq -c 'if type == "array" then .[] else . end' "$FIXTURES_TL" > "$TL_FILE"
+  # The documented capture command keeps the page gh printed before exiting
+  # non-zero, so a saved payload can carry errors[]. The live fetch runs the
+  # gate on such a page; a copy of it gets the same gate, or a failed closer
+  # lookup would render as the API's null and a cut timeline as complete.
+  if jq -es 'any(.[]; (.errors // []) | length > 0)' "$TL_FILE" >/dev/null 2>&1; then
+    if closer_errors_only "$TL_FILE"; then
+      if timeline_cut "$TL_FILE"; then
+        print -r -- "$PROG: #$NUM: this payload stopped at a closer its token could not see, with more timeline behind it, so the issue cannot be rendered complete; capture it again with a token that can see the closer (its repository, or its project)" >&2
+        exit 1
+      fi
+      CLOSER_HIDDEN=1
+    else
+      print -r -- "$PROG: #$NUM: this payload is the capture of a fetch gh failed on; its errors:" >&2
+      jq -c '.errors[]?' "$TL_FILE" >&2
+      exit 1
+    fi
+  fi
   if [[ -n "$FIXTURES_TH" ]]; then
     jq -c 'if type == "array" then .[] else . end' "$FIXTURES_TH" > "$TH_FILE"
   fi

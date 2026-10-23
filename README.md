@@ -293,7 +293,11 @@ With no number, the current branch's open PR is used.
                                 version fetched the closer is refused for an
                                 issue that was ever closed, in every view:
                                 the closed line cannot say what the API
-                                recorded.
+                                recorded. A capture of a fetch gh failed on
+                                (a page carrying errors) is refused as the
+                                live fetch is; the one tolerated case, a
+                                closer the token could not see with no pages
+                                behind it, renders as not visible.
   -h, --help                    This help
   --version                     Print the version
 ```
