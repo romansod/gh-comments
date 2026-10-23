@@ -584,8 +584,11 @@ threads_errors_refused() {
   # gate on every page from one on the first.
   jq '. + [{"message":"You have exceeded a secondary rate limit.","documentation_url":"https://docs.github.com/"}]' \
     "$fx/all-resolved.th.json" > "$tmp/restlast.th.json"
+  # And no page at all: what `jq -s .` saves when gh fails before printing
+  # one. A PR must not render as having no threads.
+  print -r -- '[]' > "$tmp/empty.th.json"
   local spec
-  for spec in errors truncated restbody restlast; do
+  for spec in errors truncated restbody restlast empty; do
     for view in "" "--toc"; do
       rc=0
       out=$(zsh "$script" --pr 1 ${=view} --fixtures "$fx/all-resolved.tl.json" "$tmp/$spec.th.json" 2>&1) || rc=$?
@@ -596,6 +599,7 @@ threads_errors_refused() {
       errors)    [[ "$out" == *"errors"* ]] || problems+=("errors: output lacks the error diagnosis") ;;
       truncated) [[ "$out" == *"stopped before its last page"* ]] || problems+=("truncated: output lacks the incomplete-capture refusal") ;;
       restbody|restlast) [[ "$out" == *"not a GraphQL response"* ]] || problems+=("$spec: output lacks the not-a-response refusal") ;;
+      empty)     [[ "$out" == *"holds no page"* ]] || problems+=("empty: output lacks the no-page refusal") ;;
     esac
   done
   report "$name" "fixture shapes" $rc "$out"

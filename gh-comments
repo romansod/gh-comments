@@ -666,10 +666,15 @@ if [[ -n "$FIXTURES_TL" ]]; then
       exit 1
     fi
   fi
-  # A capture gh stopped with no errors[] on any page: a page that is not a
-  # GraphQL response (gh prints a REST-shaped error body, a rate limit, before
-  # exiting), or a last page saying more follow (the connection dropped). The
-  # live fetch fails on both, so a saved copy must not render as complete.
+  # A capture gh stopped with no errors[] on any page: no page at all (gh
+  # failed before printing one), a page that is not a GraphQL response (gh
+  # prints a REST-shaped error body, a rate limit, before exiting), or a
+  # last page saying more follow (the connection dropped). The live fetch
+  # fails on all three, so a saved copy must not render as complete.
+  if ! jq -es 'length > 0' "$TL_FILE" >/dev/null 2>&1; then
+    print -r -- "$PROG: #$NUM: this payload holds no page; it is the capture of a fetch gh failed on before printing one" >&2
+    exit 1
+  fi
   if ! jq -es 'all(.[]; (.data.repository? // null) != null)' "$TL_FILE" >/dev/null 2>&1; then
     print -r -- "$PROG: #$NUM: a page of this payload is not a GraphQL response; it is the capture of a fetch gh failed on" >&2
     exit 1
@@ -822,6 +827,10 @@ if [[ "$RTYPE" == pr ]]; then
       exit 1
     fi
     # And the same completeness the timeline payload had to show.
+    if ! jq -es 'length > 0' "$TH_FILE" >/dev/null 2>&1; then
+      print -r -- "$PROG: #$NUM: the threads payload holds no page; it is the capture of a fetch gh failed on before printing one" >&2
+      exit 1
+    fi
     if ! jq -es 'all(.[]; (.data.repository? // null) != null)' "$TH_FILE" >/dev/null 2>&1; then
       print -r -- "$PROG: #$NUM: a page of the threads payload is not a GraphQL response; it is the capture of a fetch gh failed on" >&2
       exit 1
