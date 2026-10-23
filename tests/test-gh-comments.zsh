@@ -559,8 +559,12 @@ fixtures_errors() {
   # And no page at all: what `jq -s .` saves when gh fails before printing
   # one (no network, no auth). It must not read as a number not found.
   print -r -- '[]' > "$tmp/empty.tl.json"
-  local -A num=(cut 49 notfound 49 truncated 21 restbody 21 restlast 21 empty 21)
-  for spec in cut notfound truncated restbody restlast empty; do
+  # A saved not-found answer: GitHub's NOT_FOUND at the issue itself, which
+  # the capture command saves too. Refused, but with the live path's own
+  # diagnosis, since the number is what is wrong, not the fetch.
+  print -r -- '[{"data":{"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","issueOrPullRequest"],"locations":[{"line":2,"column":3}],"message":"Could not resolve to an issue or pull request with the number of 999."}]}]' > "$tmp/nfcapture.tl.json"
+  local -A num=(cut 49 notfound 49 truncated 21 restbody 21 restlast 21 empty 21 nfcapture 999)
+  for spec in cut notfound truncated restbody restlast empty nfcapture; do
     for view in "" "--toc" "--closure"; do
       rc=0
       out=$(zsh "$script" ${num[$spec]} ${=view} --fixtures "$tmp/$spec.tl.json" 2>&1) || rc=$?
@@ -574,6 +578,8 @@ fixtures_errors() {
       truncated) [[ "$out" == *"stopped before its last page"* ]] || problems+=("truncated: output lacks the incomplete-capture refusal") ;;
       restbody|restlast) [[ "$out" == *"not a GraphQL response"* ]] || problems+=("$spec: output lacks the not-a-response refusal") ;;
       empty)     [[ "$out" == *"holds no page"* ]] || problems+=("empty: output lacks the no-page refusal") ;;
+      nfcapture) [[ "$out" == *"#999 not found in"* ]] || problems+=("nfcapture: output lacks the not-found diagnosis")
+                 [[ "$out" != *"capture of a fetch gh failed on"* ]] || problems+=("nfcapture: a not-found answer was reported as a failed fetch") ;;
     esac
   done
   report "$name" "refusals" $rc "$out"

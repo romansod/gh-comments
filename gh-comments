@@ -654,6 +654,12 @@ if [[ -n "$FIXTURES_TL" ]]; then
   # gate on such a page; a copy of it gets the same gate, or a failed closer
   # lookup would render as the API's null and a cut timeline as complete.
   if jq -es 'any(.[]; (.errors // []) | length > 0)' "$TL_FILE" >/dev/null 2>&1; then
+    # A saved not-found answer is the number's fault, not the fetch's: the
+    # live path's own diagnosis, the same structural match it uses.
+    if jq -es 'any(.[] | .errors[]?; .type == "NOT_FOUND" and .path == ["repository","issueOrPullRequest"])' "$TL_FILE" >/dev/null 2>&1; then
+      print -r -- "$PROG: #$NUM not found in $REPO" >&2
+      exit 1
+    fi
     if closer_errors_only "$TL_FILE"; then
       if timeline_cut "$TL_FILE"; then
         print -r -- "$PROG: #$NUM: this payload stopped at a closer its token could not see, with more timeline behind it, so the issue cannot be rendered complete; capture it again with a token that can see the closer (its repository, or its project)" >&2
