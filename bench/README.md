@@ -28,6 +28,9 @@ Needs `zsh`, `jq`, `gh`, `python3` and the `claude` CLI.
   run with `--pr`, issues with `--issue`.
 - To measure a release, check its tag out beside this checkout and point the
   scripts at it, since a tag cut before `bench/` existed has no harness:
+  A release without `--closure` (v1.0.0) fails the four `s_closure` cases
+  with exit 1, and `analyze.py` then refuses the run; drop those rows, or
+  treat such a run as a baseline for the other rows only.
 
   ```bash
   git worktree add /tmp/gh-comments-v1.0.0 v1.0.0
