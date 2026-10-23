@@ -21,7 +21,7 @@ comment [mallory-spam-bot-01 2026-08-18 10:00] (hidden: spam)
 
 xref [bob 2026-08-18 12:00] #44 PR MERGED (closes) "fix(r-pr-comments): reach jq through files so large PRs don't blow ARG_MAX"
 
-closed [bob 2026-08-19 08:00] as completed
+closed [bob 2026-08-19 08:00] as completed, no closer recorded
 
 reopened [romansod 2026-08-20 09:30]
 

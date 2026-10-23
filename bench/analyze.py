@@ -314,6 +314,7 @@ matrix("Task 7 — why was the issue closed, and by what", ["I1", "I3", "I4"], [
         G("task7", "gh_json_close")),
     ("REST timeline (raw JSON)", lambda T: [f"{T}.rest_tl"], G("task7", "rest_tl")),
     ("**`gh-comments --toc`**", lambda T: [f"{T}.s_toc"], G("task7", "s_toc")),
+    ("**`gh-comments --closure`**", lambda T: [f"{T}.s_closure"], G("task7", "s_closure")),
 ], note=N("task7"))
 
 # ── Ratio ladder ─────────────────────────────────────────────────────────────
@@ -332,7 +333,7 @@ ladder = [
     (f"open threads, {NAME['O1']}: REST inline vs --toc --unresolved", ratio([f"{C}.rest_rc"], [f"{C}.s_toc_unres"]), LN("open-threads-o1-rest")),
     (f"open threads, {NAME['R1']}: REST inline vs --toc --unresolved", ratio(["R1.rest_rc"], ["R1.s_toc_unres"]), LN("open-threads-r1-rest")),
     (f"read all, {NAME['O1']}: REST trio vs full", ratio([f"{C}.rest_ic", f"{C}.rest_rv", f"{C}.rest_rc"], [f"{C}.s_full"]), LN("read-all-o1-rest")),
-    (f"why closed, {NAME['I4']}: REST timeline vs --toc", ratio(["I4.rest_tl"], ["I4.s_toc"]), LN("why-closed-i4-rest")),
+    (f"why closed, {NAME['I4']}: REST timeline vs --closure", ratio(["I4.rest_tl"], ["I4.s_closure"]), LN("why-closed-i4-rest")),
     (f"one inline thread, {NAME['R1']}: naive vs TOC+slice", ratio(["R1.gh_view_c", "R1.rest_rc"], ["R1.s_toc", "TB.skill_slice"]), LN("one-thread-r1-naive")),
     (f"read all, {NAME['R1']}: gh view + REST inline vs full", ratio(["R1.gh_view", "R1.gh_view_c", "R1.rest_rc"], ["R1.s_full"]), LN("read-all-r1-naive")),
     (f"one comment, {NAME['R1']}: gh pr view --comments vs TOC+slice", ratio(["R1.gh_view_c"], ["R1.s_toc", "TA.skill_slice"]), LN("one-comment-r1-ghview")),
@@ -340,7 +341,6 @@ ladder = [
     (f"read all, {NAME['E2']}: gh pr view vs full", ratio(["E2.gh_view"], ["E2.s_full"]), LN("read-all-e2-ghview")),
     (f"one comment, {NAME['I1']}: expert vs TOC+slice", ratio(["TD.expert_list", "TD.expert_fetch"], ["I1.s_toc", "TD.skill_slice"]), LN("one-comment-i1-expert")),
     (f"open bodies, {NAME['O1']}: hand GraphQL vs --unresolved", ratio([f"{C}.gql_open"], [f"{C}.s_unres"]), LN("open-bodies-o1-gql")),
-    (f"why closed, {NAME['I4']}: --json closedBy vs --toc", ratio(["I4.gh_json_close"], ["I4.s_toc"]), LN("why-closed-i4-json")),
 ]
 ladder.sort(key=lambda r: -(r[1] if r[1] is not None else -1))
 P("```")

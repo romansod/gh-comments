@@ -1,0 +1,98 @@
+[
+ {
+  "data": {
+   "repository": {
+    "issueOrPullRequest": {
+     "__typename": "Issue",
+     "number": 41,
+     "title": "retry loop never backs off",
+     "state": "CLOSED",
+     "stateReason": "COMPLETED",
+     "author": {
+      "login": "alice",
+      "__typename": "User"
+     },
+     "createdAt": "2026-09-01T09:00:00Z",
+     "body": "Every retry fires immediately; the delay from the config is read but never applied.",
+     "labels": {
+      "totalCount": 1,
+      "nodes": [
+       {
+        "name": "bug"
+       }
+      ]
+     },
+     "assignees": {
+      "nodes": []
+     },
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": "Y3Vyc29yOnYyOpHP"
+      },
+      "nodes": [
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-01T10:15:00Z",
+        "isMinimized": false,
+        "minimizedReason": null,
+        "body": "Reproduced. The sleep is in the wrong branch."
+       },
+       {
+        "__typename": "LabeledEvent",
+        "actor": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-01T10:16:00Z",
+        "label": {
+         "name": "bug"
+        }
+       },
+       {
+        "__typename": "CrossReferencedEvent",
+        "actor": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-02T08:00:00Z",
+        "willCloseTarget": true,
+        "source": {
+         "__typename": "PullRequest",
+         "number": 44,
+         "title": "fix(retry):  apply the configured  backoff",
+         "state": "MERGED",
+         "repository": {
+          "nameWithOwner": "fixtures/fixtures"
+         }
+        }
+       },
+       {
+        "__typename": "ClosedEvent",
+        "actor": {
+         "login": "bob",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-03T12:30:00Z",
+        "stateReason": "COMPLETED",
+        "closer": {
+         "__typename": "PullRequest",
+         "number": 44,
+         "title": "fix(retry):  apply the configured  backoff",
+         "state": "MERGED",
+         "repository": {
+          "nameWithOwner": "fixtures/fixtures"
+         }
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

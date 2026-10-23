@@ -88,6 +88,15 @@ Flags:
   --events                      Include label / assignee / milestone events
                                 (filtered by default; the counts line always
                                 states how many were held back)
+  --closure                     Why it was closed, and by what: the header
+                                line, then every closed / reopened event with
+                                what closed it (a PR, a commit, "a project",
+                                "no closer recorded", or "closer not visible
+                                to this token") and every
+                                cross-referenced PR with its state. No body,
+                                no comments. Refused on an issue that was
+                                never closed, and exclusive with every other
+                                view flag
 
   --fixtures <tl.json> [<th.json>]
                                 Render from saved GraphQL payloads instead of
@@ -95,7 +104,17 @@ Flags:
                                 `gh api graphql --paginate ... | jq -s .` output
                                 for the timeline / threads query. The threads
                                 payload is required for a PR, meaningless for
-                                an issue.
+                                an issue. A payload captured before this
+                                version fetched the closer is refused for an
+                                issue that was ever closed, in every view:
+                                the closed line cannot say what the API
+                                recorded. A capture of a fetch gh failed on
+                                (a page carrying errors, a page that is not
+                                a GraphQL response, a last page saying more
+                                follow, or no page at all) is refused as the
+                                live fetch is; the one tolerated case, a
+                                closer the token could not see with no pages
+                                behind it, renders as not visible.
   -h, --help                    This help
   --version                     Print the version
 
@@ -113,7 +132,8 @@ EOF
   print -r -- "${u//@PROG@/$PROG}"
 }
 
-NUM="" REPO="" TOC=0 UNRESOLVED=0 SINCE="" SLR=0 SLR_AUTHOR="" BOTS=0 MERGES=0 EVENTS=0 HIDDEN=0
+NUM="" REPO="" TOC=0 UNRESOLVED=0 SINCE="" SLR=0 SLR_AUTHOR="" BOTS=0 MERGES=0 EVENTS=0 HIDDEN=0 CLOSURE=0
+typeset -i CLOSER_HIDDEN=0
 # The arguments minus the pin, for the wrong-type hint: it suggests the same
 # command again without --pr / --issue, so -R and the view flags survive.
 typeset -a UNPINNED=("${(@)argv:#(--pr|--issue)}")
@@ -149,6 +169,7 @@ while (( $# )); do
     --hidden) HIDDEN=1; shift ;;
     --merges) MERGES=1; shift ;;
     --events) EVENTS=1; shift ;;
+    --closure) CLOSURE=1; shift ;;
     --fixtures)
       # The threads payload is optional: an issue has no review threads to
       # save. A second operand is taken only when it is a readable file that
@@ -214,9 +235,13 @@ refuse_type_flags() {
       print -r -- "$PROG: ${(j:, :)bad} only appl$( (( ${#bad} == 1 )) && print -n ies || print -n y ) to pull requests; $because" >&2
       exit 1
     fi
-  elif (( EVENTS )); then
-    print -r -- "$PROG: --events only applies to issues; $because" >&2
-    exit 1
+  else
+    (( EVENTS )) && bad+=(--events)
+    (( CLOSURE )) && bad+=(--closure)
+    if (( ${#bad} )); then
+      print -r -- "$PROG: ${(j:, :)bad} only appl$( (( ${#bad} == 1 )) && print -n ies || print -n y ) to issues; $because" >&2
+      exit 1
+    fi
   fi
 }
 if [[ -n "$NUM" && "$NUM" != <-> ]]; then
@@ -244,10 +269,41 @@ if [[ -z "$NUM" ]] && (( REPO_GIVEN )); then
   print -r -- "$PROG: -R needs a number: the current branch's PR is in the cwd's repo, not in $REPO" >&2
   exit 1
 fi
+# No number means the current branch's PR, so a flag only an issue can honour
+# is decidable here, from argv alone: refused before the branch lookup is paid
+# for, and before the --closure exclusivity check below, so the flag that can
+# never work on this target is the one reported.
+if [[ -z "$NUM" ]]; then
+  refuse_type_flags pr "no number means the current branch's pull request"
+fi
 # After every number check — malformed or missing — so a number problem is
 # the first thing reported and one rerun is enough.
 if [[ "$TYPE" != auto ]]; then
   refuse_type_flags "$TYPE" "the type is pinned to ${ARTICLE[$TYPE]} by $TYPE_PINNED_BY"
+fi
+# --closure is a view of its own: it renders no comments and no body, so a
+# flag that narrows or widens those would be a silent no-op, and the TOC and
+# the slicing flags are other answers to "what do I see". Every offender is
+# listed, so one rerun is enough, and it is decided from argv alone, before
+# any fetch. --merges is here too: it is PR-only and --closure is issue-only,
+# so the pair can never be honoured, whatever the number turns out to be.
+# After the pinned-type refusal: on `--pr N --closure --toc` the flag that
+# can never work is the one to report, not the one it clashes with.
+if (( CLOSURE )); then
+  typeset -a with=()
+  (( TOC )) && with+=(--toc)
+  [[ -n "$SINCE" ]] && with+=(--since)
+  (( EVENTS )) && with+=(--events)
+  (( BOTS )) && with+=(--bots)
+  (( HIDDEN )) && with+=(--hidden)
+  (( UNRESOLVED )) && with+=(--unresolved)
+  (( SLR )) && with+=(--since-last-review)
+  (( LATEST )) && with+=(--latest)
+  (( MERGES )) && with+=(--merges)
+  if (( ${#with} )); then
+    print -r -- "$PROG: --closure is a view of its own and takes no other view flag; drop ${(j:, :)with}" >&2
+    exit 1
+  fi
 fi
 # The query takes owner and name apart, so the host- and URL-qualified forms
 # gh accepts for its own -R (github.com/o/n, https://github.com/o/n) are
@@ -345,10 +401,12 @@ if [[ -z "$NUM" ]]; then
     fi
     exit 1
   fi
-  # A branch resolves to a PR, so the type stops being an open question —
-  # and an issue-only flag can be refused here, before the fetch.
+  # A branch resolves to a PR, so the type stops being an open question.
+  # Nothing is refused here: the issue-only flags were refused from argv,
+  # before this lookup was paid for (the no-number check above), and that
+  # check reads the same flags this type would, so a second call could
+  # never fire.
   TYPE=pr TYPE_PINNED_BY="the current branch's PR"
-  refuse_type_flags pr "#$NUM, the current branch's PR, is a pull request"
   echo "note: no number given — using the current branch's PR #$NUM" >&2
 fi
 
@@ -398,7 +456,7 @@ ISSUE_FULL='number title state stateReason author{login __typename} createdAt bo
         nodes{
           __typename
           ... on IssueComment{author{login __typename} createdAt isMinimized minimizedReason body}
-          ... on ClosedEvent{actor{login __typename} createdAt stateReason}
+          ... on ClosedEvent{actor{login __typename} createdAt stateReason closer{__typename ... on PullRequest{number title state repository{nameWithOwner}} ... on Commit{abbreviatedOid repository{nameWithOwner}}}}
           ... on ReopenedEvent{actor{login __typename} createdAt}
           ... on CrossReferencedEvent{actor{login __typename} createdAt willCloseTarget source{__typename ... on Issue{number title state repository{nameWithOwner}} ... on PullRequest{number title state repository{nameWithOwner}}}}
           ... on RenamedTitleEvent{actor{login __typename} createdAt previousTitle currentTitle}
@@ -534,10 +592,103 @@ target_title() {
          | ((.issueOrPullRequest // .pullRequest // .issue // {}).title // "")' "$1" 2>/dev/null || true
 }
 
+# target_state <file> — the state the payload holds for the target, so a
+# refusal about its timeline can be worded against what the header prints.
+target_state() {
+  jq -rn 'input | (if type == "array" then .[0] else . end)
+         | (.data.repository // {})
+         | ((.issueOrPullRequest // .pullRequest // .issue // {}).state // "")' "$1" 2>/dev/null || true
+}
+
+# closer_types <file> — one line per ClosedEvent in an issue payload: the
+# closer's __typename, `null` when the API recorded none, or `absent` when
+# the payload has no closer field at all. Every page is read, since a close
+# can sit on any of them. What the caller does with it: refuse a closer type
+# the renderer does not know (every member of the `Closer` union is handled
+# today; this is for one GitHub adds), rather than render it as "no closer
+# recorded"; refuse a payload captured before the closer was fetched, since
+# "no closer recorded" is a claim about the API's answer and that payload
+# never asked; and refuse --closure on an issue that was never closed, which
+# has nothing to show.
+closer_types() {
+  jq -r '(.data.repository // {}) | (.issueOrPullRequest // .issue // {})
+         | (.timelineItems.nodes // [])[] | select(.__typename == "ClosedEvent")
+         | if has("closer") | not then "absent"
+           else ((.closer // {}).__typename) // "null" end' "$1" 2>/dev/null || true
+}
+
+# An error that says the token cannot see a closer, and nothing else: a
+# FORBIDDEN whose path ends exactly at a timeline node's `closer`. A
+# transient error there, or a refusal below a closer the payload did name,
+# is not that, and must not be reported as the token's access. Nor is a
+# NOT_FOUND: GitHub also answers that for a closer that no longer resolves,
+# which no token would see, so it stays the hard failure until one is seen
+# live. One definition, used by the gate on the fetch below and by the
+# renderer's marking (the @CLOSER_DENIED@ slot in the jq program), so the
+# two cannot disagree.
+CLOSER_DENIED_JQ='(.type == "FORBIDDEN" and ((.path // []) as $p | ($p | index("nodes")) as $n | $n != null and ($p | length) == $n + 3 and $p[-1] == "closer"))'
+# closer_errors_only <file> — whether every errors[] entry on the pages is
+# such a refusal. A closer the token cannot see comes back that way, as the
+# node with a null closer and the entry, and gh then exits non-zero although
+# the issue itself was answered. The render goes on, with that closed line
+# saying the closer is not visible (never "no closer recorded", which is the
+# API's null). Any other entry, or one beside such a refusal, is the hard
+# failure.
+closer_errors_only() {
+  jq -es '[.[] | .errors[]?] | length > 0 and all(.[]; '"$CLOSER_DENIED_JQ"')' "$1" >/dev/null 2>&1
+}
+# timeline_cut <file> — whether the last page fetched says more follow it.
+# --paginate stops at the page that carried errors, so one with more behind
+# it is a timeline cut short, which must not render as complete.
+timeline_cut() {
+  jq -es 'last | (.data.repository // {}) | (.issueOrPullRequest // .issue // .pullRequest // {})
+          | ((.timelineItems // {}).pageInfo // {}).hasNextPage // false' "$1" >/dev/null 2>&1
+}
+
 if [[ -n "$FIXTURES_TL" ]]; then
   # Fixtures hold the documented `jq -s .` array form; unwrap one level into
   # the value stream --slurpfile expects (a bare stream is accepted too).
   jq -c 'if type == "array" then .[] else . end' "$FIXTURES_TL" > "$TL_FILE"
+  # The documented capture command keeps the page gh printed before exiting
+  # non-zero, so a saved payload can carry errors[]. The live fetch runs the
+  # gate on such a page; a copy of it gets the same gate, or a failed closer
+  # lookup would render as the API's null and a cut timeline as complete.
+  if jq -es 'any(.[]; (.errors // []) | length > 0)' "$TL_FILE" >/dev/null 2>&1; then
+    # A saved not-found answer is the number's fault, not the fetch's: the
+    # live path's own diagnosis, the same structural match it uses.
+    if jq -es 'any(.[] | .errors[]?; .type == "NOT_FOUND" and .path == ["repository","issueOrPullRequest"])' "$TL_FILE" >/dev/null 2>&1; then
+      print -r -- "$PROG: #$NUM not found in $REPO" >&2
+      exit 1
+    fi
+    if closer_errors_only "$TL_FILE"; then
+      if timeline_cut "$TL_FILE"; then
+        print -r -- "$PROG: #$NUM: this payload stopped at a closer its token could not see, with more timeline behind it, so the issue cannot be rendered complete; capture it again with a token that can see the closer (its repository, or its project)" >&2
+        exit 1
+      fi
+      CLOSER_HIDDEN=1
+    else
+      print -r -- "$PROG: #$NUM: this payload is the capture of a fetch gh failed on; its errors:" >&2
+      jq -c '.errors[]?' "$TL_FILE" >&2
+      exit 1
+    fi
+  fi
+  # A capture gh stopped with no errors[] on any page: no page at all (gh
+  # failed before printing one), a page that is not a GraphQL response (gh
+  # prints a REST-shaped error body, a rate limit, before exiting), or a
+  # last page saying more follow (the connection dropped). The live fetch
+  # fails on all three, so a saved copy must not render as complete.
+  if ! jq -es 'length > 0' "$TL_FILE" >/dev/null 2>&1; then
+    print -r -- "$PROG: #$NUM: this payload holds no page; it is the capture of a fetch gh failed on before printing one" >&2
+    exit 1
+  fi
+  if ! jq -es 'all(.[]; (.data.repository? // null) != null)' "$TL_FILE" >/dev/null 2>&1; then
+    print -r -- "$PROG: #$NUM: a page of this payload is not a GraphQL response; it is the capture of a fetch gh failed on" >&2
+    exit 1
+  fi
+  if timeline_cut "$TL_FILE"; then
+    print -r -- "$PROG: #$NUM: this payload stopped before its last page, so the issue cannot be rendered complete; capture it again" >&2
+    exit 1
+  fi
   if [[ -n "$FIXTURES_TH" ]]; then
     jq -c 'if type == "array" then .[] else . end' "$FIXTURES_TH" > "$TH_FILE"
   fi
@@ -572,6 +723,13 @@ else
     # number is wrong.
     if ! { grep -q '^gh: Could not resolve to an issue or pull request' "$GH_ERR" \
            || jq -es 'any(.[] | .errors[]?; .type == "NOT_FOUND" and .path == ["repository","issueOrPullRequest"])' "$TL_FILE" >/dev/null 2>&1; }; then
+      if closer_errors_only "$TL_FILE"; then
+        if timeline_cut "$TL_FILE"; then
+          print -r -- "$PROG: #$NUM: a closer is not visible to this token, and gh stopped the fetch at that page with more timeline behind it, so the issue cannot be rendered complete; rerun with a token that can see the closer (its repository, or its project)" >&2
+          exit 1
+        fi
+        CLOSER_HIDDEN=1
+      else
       print -r -- "$PROG: gh error:" >&2
       # gh writes a one-line summary to stderr *and* the full errors[] body
       # (type/path/locations) to stdout; show both, since either can carry the
@@ -584,7 +742,9 @@ else
         if [[ -n "$(tail -c1 "$f")" ]]; then echo >&2; fi
       done
       exit 1
+      fi
     fi
+    if (( ! CLOSER_HIDDEN )); then
     # `issueOrPullRequest` resolves both sequences, so a number that fails to
     # resolve is not a PR *or* an issue — it does not exist in this repo.
     print -r -- "$PROG: #$NUM not found in $REPO" >&2
@@ -599,6 +759,7 @@ else
     fi
     [[ -n "$BRANCH_PR" && "$BRANCH_PR" != "#$NUM:"* ]] && print -r -- "  the current branch's PR is $BRANCH_PR — rerun with that number" >&2
     exit 1
+    fi
   fi
 fi
 
@@ -621,7 +782,7 @@ if [[ "$TYPE" != auto && "$TYPE" != "$RTYPE" ]]; then
   if [[ "$RTYPE" == issue ]]; then
     HINT=("${(@)HINT:#(--unresolved|--since-last-review|--since-last-review=*|--latest|--latest=*|--merges)}")
   else
-    HINT=("${(@)HINT:#--events}")
+    HINT=("${(@)HINT:#(--events|--closure)}")
   fi
   print -r -- "  the type was pinned by $TYPE_PINNED_BY — rerun as: $PROG ${(j: :)${(@q-)HINT}}" >&2
   exit 1
@@ -630,10 +791,58 @@ fi
 # Flags that only one resource type can honour, now that the type is known.
 refuse_type_flags "$RTYPE" "#$NUM is ${ARTICLE[$RTYPE]}"
 
+if [[ "$RTYPE" == issue ]]; then
+  typeset -a CLOSERS=("${(@f)$(closer_types "$TL_FILE")}")
+  CLOSERS=("${(@)CLOSERS:#}")
+  if (( ${CLOSERS[(I)absent]} )); then
+    print -r -- "$PROG: #$NUM: a closed event in the payload has no closer field; it was captured before this version asked for one, so the line cannot say what the API recorded" >&2
+    exit 1
+  fi
+  typeset -a ODD=("${(@u)CLOSERS:#(PullRequest|Commit|ProjectV2|null)}")
+  if (( ${#ODD} )); then
+    print -r -- "$PROG: #$NUM was closed by a ${(j:, :)ODD}; this version renders only a pull request, a commit or a project as the closer" >&2
+    exit 1
+  fi
+  # No closed event to show. Worded against the state the payload carries:
+  # an OPEN issue has never been closed, while a CLOSED one whose timeline
+  # holds no closed event is reported as exactly that, since "never closed"
+  # would contradict its own header.
+  if (( CLOSURE )) && (( ${#CLOSERS} == 0 )); then
+    if [[ "$(target_state "$TL_FILE")" == CLOSED ]]; then
+      print -r -- "$PROG: issue #$NUM is CLOSED, but its timeline holds no closed event; --closure has nothing to show" >&2
+    else
+      print -r -- "$PROG: issue #$NUM has never been closed" >&2
+    fi
+    exit 1
+  fi
+fi
+
 if [[ "$RTYPE" == pr ]]; then
   if [[ -n "$FIXTURES_TL" ]]; then
     if [[ -z "$FIXTURES_TH" ]]; then
       print -r -- "$PROG: --fixtures needs a threads payload for a PR: --fixtures <tl.json> <th.json>" >&2
+      exit 1
+    fi
+    # The live threads fetch has no tolerated case: any page carrying errors
+    # fails it, so a saved copy of one is refused the same way. Only here,
+    # once the type is a PR: an issue never fetches threads, and ignores a
+    # threads file it is given, as the help says.
+    if jq -es 'any(.[]; (.errors // []) | length > 0)' "$TH_FILE" >/dev/null 2>&1; then
+      print -r -- "$PROG: #$NUM: the threads payload is the capture of a fetch gh failed on; its errors:" >&2
+      jq -c '.errors[]?' "$TH_FILE" >&2
+      exit 1
+    fi
+    # And the same completeness the timeline payload had to show.
+    if ! jq -es 'length > 0' "$TH_FILE" >/dev/null 2>&1; then
+      print -r -- "$PROG: #$NUM: the threads payload holds no page; it is the capture of a fetch gh failed on before printing one" >&2
+      exit 1
+    fi
+    if ! jq -es 'all(.[]; (.data.repository? // null) != null)' "$TH_FILE" >/dev/null 2>&1; then
+      print -r -- "$PROG: #$NUM: a page of the threads payload is not a GraphQL response; it is the capture of a fetch gh failed on" >&2
+      exit 1
+    fi
+    if jq -es 'last | (((.data.repository // {}).pullRequest // {}).reviewThreads // {}).pageInfo.hasNextPage // false' "$TH_FILE" >/dev/null 2>&1; then
+      print -r -- "$PROG: #$NUM: the threads payload stopped before its last page, so the PR cannot be rendered complete; capture it again" >&2
       exit 1
     fi
   else
@@ -836,16 +1045,47 @@ def housekeeping: ["LabeledEvent","UnlabeledEvent","AssignedEvent","UnassignedEv
                    "MilestonedEvent","DemilestonedEvent"];
 def ishk: .__typename as $t | (housekeeping | index($t)) != null;
 
+# Whether an object with a repository is in this one. Compared
+# case-insensitively: GitHub names are, and -R is typed by hand. No
+# repository at all reads as this one, which keeps payloads captured before
+# the field was selected renderable.
+def samerepo($repo):
+  (((.repository // {}).nameWithOwner) // "") as $r
+  | $r == "" or ($r | ascii_downcase) == ($repo | ascii_downcase);
+# A reference to an issue or PR: `#N` in this repo, `owner/name#N` in another,
+# the way GitHub itself writes them. Shared by the xref line and the closer
+# on a closed line, so the two cannot drift apart.
+def refnum($repo):
+  if samerepo($repo) then "#\(.number // "?")" else "\(.repository.nameWithOwner)#\(.number // "?")" end;
+def quoted_title: ((.title // "") | gsub("\\s+"; " ")) as $t | if $t == "" then "" else " \"\($t)\"" end;
+
 def r_xref($repo):
   (.source // {}) as $s
-  | ((($s.repository // {}).nameWithOwner) // "") as $srepo
-  | (if $srepo == "" or $srepo == $repo then "#\($s.number // "?")"
-     else "\($srepo)#\($s.number // "?")" end) as $ref
   | (if $s.__typename == "PullRequest" then "PR" else "issue" end) as $kind
-  | "xref [\(login) \(.createdAt | hdate)] \($ref) \($kind) \($s.state // "?")"
+  | "xref [\(login) \(.createdAt | hdate)] \($s | refnum($repo)) \($kind) \($s.state // "?")"
     + (if (.willCloseTarget // false) then " (closes)" else "" end)
-    + ((($s.title // "") | gsub("\\s+"; " ")) as $t
-       | if $t == "" then "" else " \"\($t)\"" end);
+    + ($s | quoted_title);
+
+# What closed the issue, as the API recorded it. A null closer is reported as
+# exactly that, never as "closed by hand". A closer the token cannot see is
+# a null closer with an error at its path, marked on the node as closerHidden
+# while the pages are flattened, and is reported as not visible: a third
+# answer, kept apart from the other two. A ProjectV2 closer is named only
+# by its type: its number and title need the read:project scope, and asking
+# for them fails the whole query for every token without it, on every issue.
+# A payload with no closer field, and a closer type the renderer does not
+# know, are refused before this renders (closer_types, in the shell), so the
+# last branch is unreachable belt.
+def r_closer($repo):
+  (.closer // null) as $c
+  | if (.closerHidden // false) then ", closer not visible to this token"
+    elif $c == null then ", no closer recorded"
+    elif $c.__typename == "PullRequest" then
+      " by \($c | refnum($repo)) PR \($c.state // "?")" + ($c | quoted_title)
+    elif $c.__typename == "Commit" then
+      " by commit " + (if ($c | samerepo($repo)) then "" else "\($c.repository.nameWithOwner)@" end) + ($c.abbreviatedOid // "?")
+    elif $c.__typename == "ProjectV2" then " by a project"
+    else error("closer of type \($c.__typename) is not rendered") end;
 
 def r_issue_item($repo; $TOC):
   "[\(login) \(.createdAt | hdate)]" as $by
@@ -855,6 +1095,7 @@ def r_issue_item($repo; $TOC):
       + comment_body($TOC; "  ")
     elif .__typename == "ClosedEvent" then
       "closed \($by)" + ((.stateReason // null) | if . then " as \(ascii_downcase)" else "" end)
+      + r_closer($repo)
     elif .__typename == "ReopenedEvent" then "reopened \($by)"
     elif .__typename == "CrossReferencedEvent" then r_xref($repo)
     elif .__typename == "RenamedTitleEvent" then
@@ -872,13 +1113,24 @@ def r_issue_item($repo; $TOC):
 ($bots == "1") as $BOTS |
 ($merges == "1") as $MERGES |
 ($events == "1") as $EVENTS |
+($closure == "1") as $CLOSURE |
 
 ($tl[0] | tgt) as $meta |
 if $meta == null then error("#\($num) not found in \($repo)") else
 
 if $rtype == "issue" then
 
-([$tl[] | tgt.timelineItems.nodes[]]) as $nodes0 |
+# A closer the token cannot see arrives as a null closer plus an errors[]
+# entry on its page, an access refusal whose path ends at that node (the
+# same definition the shell gate used to let the fetch through). The node is
+# marked as the pages are flattened, so the closed line can say the closer
+# is not visible rather than that none was recorded. A page with no errors
+# marks nothing, so a fixture or a clean fetch renders as before.
+def closer_denied: @CLOSER_DENIED@;
+([$tl[] | . as $p
+  | ([$p.errors[]? | select(closer_denied) | .path | .[(index("nodes") + 1)]]) as $hidden
+  | (tgt.timelineItems.nodes // []) | to_entries[] | . as $e
+  | $e.value + (if ($hidden | index($e.key)) != null then {closerHidden: true} else {} end)]) as $nodes0 |
 ([$nodes0[] | select(.__typename == "IssueComment")]) as $comsall |
 ([$comsall[] | select(isbot)] | length) as $combots |
 # The bot gate comes first: a hidden bot comment is counted once, as a bot,
@@ -917,6 +1169,16 @@ if $rtype == "issue" then
        end)
   + ((([(($meta.assignees // {}).nodes // [])[] | .login]) | if length > 0 then " assignees:" + join(",") else "" end))
   + "]",
+# --closure: what ended the issue and what claimed to. Read from $nodes0, not
+# $items: events are never filtered by author or date, and the view takes no
+# flag that could narrow them. The shell has already refused an issue with no
+# ClosedEvent, so this never prints a bare header.
+(if $CLOSURE then
+   ($nodes0[]
+    | select(.__typename == "ClosedEvent" or .__typename == "ReopenedEvent"
+             or (.__typename == "CrossReferencedEvent" and ((.source // {}).__typename) == "PullRequest"))
+    | r_issue_item($repo; false))
+ else
 ("comments: \(if $BOTS then ($comsall | length) else ($comsall | length) - $combots end)\(botmark($combots; $BOTS))\(hiddenmark($comhidden))"
  + " · cross-refs: \($evxref)"
  + " · events: \(($evall | length) - $evxref - (if $EVENTS then 0 else $evhk end))\(hkmark($evhk; $EVENTS))"),
@@ -928,6 +1190,7 @@ if $rtype == "issue" then
  else empty end),
 (if ($items | length) == 0 then "(no timeline items)"
  else ($items[] | r_issue_item($repo; $TOC), (if $TOC then empty else "" end)) end)
+ end)
 
 else
 
@@ -1096,6 +1359,9 @@ def thread_window: if $since != ""
 end end
 '
 
+# The closer-refusal definition is shared with the shell gate; see
+# CLOSER_DENIED_JQ. Substituted through a variable, like the query slots.
+JQ_PROG=${JQ_PROG//@CLOSER_DENIED@/$CLOSER_DENIED_JQ}
 jq -rn \
   --slurpfile tl "$TL_FILE" \
   --slurpfile th "$TH_FILE" \
@@ -1113,4 +1379,5 @@ jq -rn \
   --arg hidden "$HIDDEN" \
   --arg merges "$MERGES" \
   --arg events "$EVENTS" \
+  --arg closure "$CLOSURE" \
   "$JQ_PROG"

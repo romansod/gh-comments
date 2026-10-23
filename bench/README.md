@@ -35,6 +35,13 @@ Needs `zsh`, `jq`, `gh`, `python3` and the `claude` CLI.
   zsh run-targets.zsh
   SKILLS_DIR=/tmp/gh-comments-v1.0.0/skills zsh run-fixed.zsh
   ```
+
+  A release without `--closure` (v1.0.0) fails the four `s_closure` cases
+  with exit 1, and `analyze.py` refuses the run; it cannot analyze such a
+  run at all, since the Task 7 table and the why-closed ladder read those
+  rows unconditionally and dropping them from `cases.tsv` and `tokens.tsv`
+  makes it fail on the missing ids. Read the other rows from the two files
+  by hand as a baseline; the tables here are not reproducible from v1.0.0.
 - `run-fixed.zsh` reads this checkout's `skills/`, which is exactly what the
   Claude Code plugin installs. Each description is measured the way a
   session lists it, under the plugin's namespace (`gh-comments:pr-comments`).

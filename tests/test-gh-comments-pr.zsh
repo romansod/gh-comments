@@ -87,7 +87,8 @@
 # assert exit codes and substrings, because their input is built at runtime:
 #
 #   oversized payload  generates a >1 MB timeline rather than committing one
-#   fixture shapes     the --slurpfile unwrap: array form, bare stream, garbage
+#   fixture shapes     the --slurpfile unwrap: array form, bare stream, garbage,
+#                      and a threads capture carrying errors[], refused
 #   html entities      numeric entities decode (decimal and hex), dangerous
 #                      code points are replaced, and `&#38;amp;` is not
 #                      decoded twice
@@ -556,6 +557,56 @@ hidden_bodies_gated() {
   return 0
 }
 hidden_bodies_gated
+
+# threads-errors-refused — a saved threads payload gh failed on. The capture
+# command keeps the page gh printed before exiting non-zero, so a th.json can
+# carry errors[]; the live threads fetch rides set -e and never renders one.
+# --fixtures must refuse it the same way, in the default and --toc views,
+# rather than render the PR with its threads missing.
+threads_errors_refused() {
+  local name=threads-errors-refused tmp out view
+  local -i rc=0
+  tmp=$(mktemp -d) || {
+    t_fail "$name" "" "tests/test-gh-comments-pr.zsh" "mktemp -d failed"
+    (( fails += 1 )); return 0
+  }
+  jq '(.[0].errors) = [{"type":"FORBIDDEN","path":["repository","pullRequest","reviewThreads"],"message":"Resource not accessible by personal access token"}]' \
+    "$fx/all-resolved.th.json" > "$tmp/errors.th.json"
+  # And two captures gh stopped with no errors[]: the last page saying more
+  # follow (the connection dropped), and a page that is a REST-shaped error
+  # body rather than a GraphQL response (a rate limit).
+  jq '(.[-1].data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage) = true' \
+    "$fx/all-resolved.th.json" > "$tmp/truncated.th.json"
+  jq '.[0] = {"message":"You have exceeded a secondary rate limit.","documentation_url":"https://docs.github.com/"}' \
+    "$fx/all-resolved.th.json" > "$tmp/restbody.th.json"
+  # And that body as a second page after a good first one, the shape gh
+  # leaves when the limit bites mid-pagination; only this variant tells a
+  # gate on every page from one on the first.
+  jq '. + [{"message":"You have exceeded a secondary rate limit.","documentation_url":"https://docs.github.com/"}]' \
+    "$fx/all-resolved.th.json" > "$tmp/restlast.th.json"
+  # And no page at all: what `jq -s .` saves when gh fails before printing
+  # one. A PR must not render as having no threads.
+  print -r -- '[]' > "$tmp/empty.th.json"
+  local spec
+  for spec in errors truncated restbody restlast empty; do
+    for view in "" "--toc"; do
+      rc=0
+      out=$(zsh "$script" --pr 1 ${=view} --fixtures "$fx/all-resolved.tl.json" "$tmp/$spec.th.json" 2>&1) || rc=$?
+      (( rc == 1 )) || problems+=("$spec: exit $rc (want 1) with ${view:-the default view}")
+      [[ "$out" != "PR #"* ]] || problems+=("$spec: rendered with ${view:-the default view}")
+    done
+    case $spec in
+      errors)    [[ "$out" == *"errors"* ]] || problems+=("errors: output lacks the error diagnosis") ;;
+      truncated) [[ "$out" == *"stopped before its last page"* ]] || problems+=("truncated: output lacks the incomplete-capture refusal") ;;
+      restbody|restlast) [[ "$out" == *"not a GraphQL response"* ]] || problems+=("$spec: output lacks the not-a-response refusal") ;;
+      empty)     [[ "$out" == *"holds no page"* ]] || problems+=("empty: output lacks the no-page refusal") ;;
+    esac
+  done
+  report "$name" "fixture shapes" $rc "$out"
+  rm -rf "$tmp"
+  return 0
+}
+threads_errors_refused
 
 # fallback-is-toc — a slicing flag that matches nothing must print the TOC
 # and nothing more: the output minus its note line is byte-identical to a
@@ -1383,16 +1434,17 @@ gh_case notfound-both 43 -R acme/widget --toc
 gh_leaks
 report gh-notfound-no-hint-under-repo-flag "stubbed gh" $gh_rc "$gh_out"
 
-# gh-no-number-events-refused-before-fetch — the branch lookup settles the
-# type as PR, so an issue-only flag is refused there and no timeline is paid for.
+# gh-no-number-events-refused-before-fetch — no number means the current
+# branch's PR, so an issue-only flag is refused from argv alone: not only
+# before the timeline, but before the branch lookup itself is paid for.
 gh_reset
 print -r -- '7' > "$stubfx/branch-pr"
 gh_rc=0
 gh_out=$(env "${gh_env[@]}" GH_STUB_MODE=ok zsh "$script" --events 2>&1) || gh_rc=$?
 (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
-[[ "$gh_out" == "gh-comments: --events only applies to issues; #7, the current branch's PR, is a pull request" ]] \
+[[ "$gh_out" == "gh-comments: --events only applies to issues; no number means the current branch's pull request" ]] \
   || problems+=("output was: $gh_out")
-(( $(grep -c '^graphql:' "$stublog") == 0 )) || problems+=("fetched before refusing")
+(( $(grep -c '' "$stublog") == 0 )) || problems+=("called gh before refusing: $(tr '\n' ' ' < "$stublog")")
 gh_leaks
 report gh-no-number-events-refused-before-fetch "stubbed gh" $gh_rc "$gh_out"
 

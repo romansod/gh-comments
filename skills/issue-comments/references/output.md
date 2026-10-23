@@ -36,10 +36,26 @@ ones change what you should do.
   shows it. Treat it as stale unless the task is about why it was hidden.
 - `xref` lines name the referencing PR or issue, its state and its title; a
   cross-repo reference is qualified as `owner/repo#N`, a same-repo one as
-  plain `#N`. `(closes)` means GitHub recorded it as closing this issue.
+  plain `#N`. `(closes)` means the PR declared it would close this issue (a
+  closing keyword); whether it did is on the `closed` line.
 - `closed … as <reason>` / `reopened` are the events that end or revive the
-  issue; `renamed` shows both titles — useful when the scope drifted and the
-  early comments answer a different question than the current title asks.
+  issue. The `closed` line ends with what closed it, as GitHub recorded it:
+  `by #N PR MERGED "title"` (a PR in another repository is `owner/name#N`),
+  `by commit <sha>` (`by commit owner/name@<sha>` for a commit in another
+  repository), `by a project` (a Projects workflow closed it; naming
+  the project needs the `read:project` scope, which the query does not ask
+  for), `, no closer recorded`, or `, closer not visible to this token`.
+  `no closer recorded` states only that the API returned null — an issue
+  closed by hand reads so, and so may one whose closer GitHub withheld
+  without saying so — so never turn it into "closed by hand", and never
+  infer the closer from an `xref (closes)` line: that is the PR's claim,
+  not the record. `not visible` is the case where GitHub did say so: it
+  answered that one field with an access error for this token (a closer in
+  a repository it cannot read, or a project it cannot see) and the rest of
+  the issue rendered; a token with access would see the closer. Under `--closure` those lines, the
+  `reopened` lines and the PR `xref` lines are the whole output.
+- `renamed` shows both titles — useful when the scope drifted and the early
+  comments answer a different question than the current title asks.
 - A deleted account renders as `ghost`. Rich-text HTML pastes are converted
   to markdown; HTML inside a code fence is left alone. Timestamps are UTC.
 

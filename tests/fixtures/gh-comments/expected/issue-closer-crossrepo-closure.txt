@@ -1,0 +1,3 @@
+issue #43 upstream drops the retry header [CLOSED completed]
+xref [frank 2026-09-06 11:00] other/upstream#17 PR MERGED "keep Retry-After on proxied responses"
+closed [frank 2026-09-07 16:45] as completed by other/upstream#17 PR MERGED "keep Retry-After on proxied responses"

@@ -129,7 +129,8 @@
          "__typename": "User"
         },
         "createdAt": "2026-08-19T08:00:00Z",
-        "stateReason": "COMPLETED"
+        "stateReason": "COMPLETED",
+        "closer": null
        },
        {
         "__typename": "ReopenedEvent",

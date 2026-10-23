@@ -1,0 +1,72 @@
+[
+ {
+  "data": {
+   "repository": {
+    "issueOrPullRequest": {
+     "__typename": "Issue",
+     "number": 43,
+     "title": "upstream drops the retry header",
+     "state": "CLOSED",
+     "stateReason": "COMPLETED",
+     "author": {
+      "login": "erin",
+      "__typename": "User"
+     },
+     "createdAt": "2026-09-05T09:00:00Z",
+     "body": "The proxy strips Retry-After before it reaches us.",
+     "labels": {
+      "totalCount": 0,
+      "nodes": []
+     },
+     "assignees": {
+      "nodes": []
+     },
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": "Y3Vyc29yOnYyOpHP"
+      },
+      "nodes": [
+       {
+        "__typename": "CrossReferencedEvent",
+        "actor": {
+         "login": "frank",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-06T11:00:00Z",
+        "willCloseTarget": false,
+        "source": {
+         "__typename": "PullRequest",
+         "number": 17,
+         "title": "keep Retry-After on proxied responses",
+         "state": "MERGED",
+         "repository": {
+          "nameWithOwner": "other/upstream"
+         }
+        }
+       },
+       {
+        "__typename": "ClosedEvent",
+        "actor": {
+         "login": "frank",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-07T16:45:00Z",
+        "stateReason": "COMPLETED",
+        "closer": {
+         "__typename": "PullRequest",
+         "number": 17,
+         "title": "keep Retry-After on proxied responses",
+         "state": "MERGED",
+         "repository": {
+          "nameWithOwner": "other/upstream"
+         }
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

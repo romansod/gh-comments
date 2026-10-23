@@ -3,7 +3,8 @@
 Read a GitHub pull request's or issue's discussion as compact, grep-friendly
 text: reviews with their inline threads nested in place and marked
 `OPEN`/`resolved`, top-level comments, commits, force-pushes, and on an issue
-the events that explain it — who closed it, why, and which PR references it.
+the events that explain it — who closed it, why, what closed it, and which
+PR references it.
 One command, one paginated fetch, output an agent or a human can slice with
 `grep`.
 
@@ -140,7 +141,25 @@ Drop `--toc` for the bodies. Issues get the same treatment: `gh issue view
 --comments` shows no timeline events, so it cannot say who closed an issue or
 which PR did; `gh-comments <N>` renders `closed`, `reopened`, `xref` and
 `renamed` lines in order, with label and assignee churn held back unless you
-ask for it.
+ask for it. The `closed` line names what closed the issue, which only
+GraphQL's `closer` field records: `by #13927 PR MERGED "…"`, `by commit
+1a2b3c4` (`owner/name#N` and `owner/name@1a2b3c4` when the closer lives in
+another repository), `by a project` for a Projects workflow (naming the project
+needs a token scope the query does not ask for), `no closer recorded` when
+the API returned null (closed by hand, or a closer GitHub withheld without
+saying so), or `closer not visible to this token` when GitHub answered that
+one field with an access error: the issue still renders, and only the
+closer itself is withheld. `--closure` is that answer on its
+own, the header and the `closed`/`reopened`/PR `xref` lines and nothing
+else:
+
+```
+$ gh-comments 13898 -R cli/cli --closure
+issue #13898 item-edit: reframe help around by-name editing as the first-class flow [CLOSED completed labels:enhancement,docs,gh-project]
+xref [zwick 2026-07-16 17:48] #13807 PR MERGED "Add name-based resolution to gh project item-edit"
+xref [Solaris-star 2026-07-21 03:23] #13927 PR MERGED "docs(project): present by-name item-edit as the first-class flow"
+closed [BagToad 2026-07-23 02:20] as completed by #13927 PR MERGED "docs(project): present by-name item-edit as the first-class flow"
+```
 
 ## How it compares
 
@@ -254,6 +273,15 @@ With no number, the current branch's open PR is used.
   --events                      Include label / assignee / milestone events
                                 (filtered by default; the counts line always
                                 states how many were held back)
+  --closure                     Why it was closed, and by what: the header
+                                line, then every closed / reopened event with
+                                what closed it (a PR, a commit, "a project",
+                                "no closer recorded", or "closer not visible
+                                to this token") and every
+                                cross-referenced PR with its state. No body,
+                                no comments. Refused on an issue that was
+                                never closed, and exclusive with every other
+                                view flag
 
   --fixtures <tl.json> [<th.json>]
                                 Render from saved GraphQL payloads instead of
@@ -261,14 +289,25 @@ With no number, the current branch's open PR is used.
                                 `gh api graphql --paginate ... | jq -s .` output
                                 for the timeline / threads query. The threads
                                 payload is required for a PR, meaningless for
-                                an issue.
+                                an issue. A payload captured before this
+                                version fetched the closer is refused for an
+                                issue that was ever closed, in every view:
+                                the closed line cannot say what the API
+                                recorded. A capture of a fetch gh failed on
+                                (a page carrying errors, a page that is not
+                                a GraphQL response, a last page saying more
+                                follow, or no page at all) is refused as the
+                                live fetch is; the one tolerated case, a
+                                closer the token could not see with no pages
+                                behind it, renders as not visible.
   -h, --help                    This help
   --version                     Print the version
 ```
 
 A flag that only the other type can honour is an error, not a no-op:
-`--unresolved` on an issue, `--events` on a PR. Ignoring it would report a
-filtered view as a complete one.
+`--unresolved` on an issue, `--events` or `--closure` on a PR. Ignoring it
+would report a filtered view as a complete one. So is `--closure` on an issue
+that was never closed, or with any other view flag: it is a view of its own.
 
 ### Reading the output
 
@@ -296,6 +335,11 @@ the markers is in the skills' reference files:
 
 ### Known limits
 
+- A closer the token cannot see is tolerated only when GitHub reported it on
+  the last page of the timeline: `gh --paginate` stops at a page that
+  carries an error, so when more pages follow, the issue is refused as
+  incomplete rather than rendered short, and the message says which token
+  would do. Resuming the fetch past that page is a possible follow-up.
 - A slice (`--since-last-review`, `--latest`) shows its anchor and everything
   after it. A newer reply nested under an older review's thread is outside
   the slice; `--unresolved` is the flag for "what is still open regardless

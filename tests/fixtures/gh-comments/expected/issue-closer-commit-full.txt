@@ -1,0 +1,10 @@
+issue #42 typo in the install banner [CLOSED completed]
+comments: 1 · cross-refs: 0 · events: 1
+
+body [carol 2026-09-04 14:00]
+  "Instaled" on the first line of the banner.
+
+comment [dana 2026-09-04 14:20]
+  Fixing on main directly.
+
+closed [dana 2026-09-04 14:25] as completed by commit 1a2b3c4

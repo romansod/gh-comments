@@ -1,0 +1,7 @@
+issue #41 retry loop never backs off [CLOSED completed labels:bug]
+comments: 1 · cross-refs: 1 · events: 1 (+1 housekeeping filtered)
+
+body [alice 2026-09-01 09:00] Every retry fires immediately; the delay from the config is read but n… [+13 chars]
+comment [bob 2026-09-01 10:15] Reproduced. The sleep is in the wrong branch.
+xref [bob 2026-09-02 08:00] #44 PR MERGED (closes) "fix(retry): apply the configured backoff"
+closed [bob 2026-09-03 12:30] as completed by #44 PR MERGED "fix(retry): apply the configured backoff"

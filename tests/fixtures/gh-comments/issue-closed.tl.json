@@ -73,7 +73,8 @@
          "__typename": "User"
         },
         "createdAt": "2026-08-11T09:01:00Z",
-        "stateReason": "NOT_PLANNED"
+        "stateReason": "NOT_PLANNED",
+        "closer": null
        }
       ]
      }

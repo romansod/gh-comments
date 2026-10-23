@@ -1,0 +1,2 @@
+issue #46 stale: pick a logo [CLOSED not_planned]
+closed [project-bot 2026-09-20 03:00] as not_planned by a project

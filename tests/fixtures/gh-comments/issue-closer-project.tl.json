@@ -1,0 +1,48 @@
+[
+ {
+  "data": {
+   "repository": {
+    "issueOrPullRequest": {
+     "__typename": "Issue",
+     "number": 46,
+     "title": "stale: pick a logo",
+     "state": "CLOSED",
+     "stateReason": "NOT_PLANNED",
+     "author": {
+      "login": "alice",
+      "__typename": "User"
+     },
+     "createdAt": "2026-09-16T09:00:00Z",
+     "body": "Parked.",
+     "labels": {
+      "totalCount": 0,
+      "nodes": []
+     },
+     "assignees": {
+      "nodes": []
+     },
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": "Y3Vyc29yOnYyOpHP"
+      },
+      "nodes": [
+       {
+        "__typename": "ClosedEvent",
+        "actor": {
+         "login": "project-bot",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-20T03:00:00Z",
+        "stateReason": "NOT_PLANNED",
+        "closer": {
+         "__typename": "ProjectV2"
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

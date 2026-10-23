@@ -1,0 +1,63 @@
+[
+ {
+  "data": {
+   "repository": {
+    "issueOrPullRequest": {
+     "__typename": "Issue",
+     "number": 42,
+     "title": "typo in the install banner",
+     "state": "CLOSED",
+     "stateReason": "COMPLETED",
+     "author": {
+      "login": "carol",
+      "__typename": "User"
+     },
+     "createdAt": "2026-09-04T14:00:00Z",
+     "body": "\"Instaled\" on the first line of the banner.",
+     "labels": {
+      "totalCount": 0,
+      "nodes": []
+     },
+     "assignees": {
+      "nodes": []
+     },
+     "timelineItems": {
+      "pageInfo": {
+       "hasNextPage": false,
+       "endCursor": "Y3Vyc29yOnYyOpHP"
+      },
+      "nodes": [
+       {
+        "__typename": "IssueComment",
+        "author": {
+         "login": "dana",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-04T14:20:00Z",
+        "isMinimized": false,
+        "minimizedReason": null,
+        "body": "Fixing on main directly."
+       },
+       {
+        "__typename": "ClosedEvent",
+        "actor": {
+         "login": "dana",
+         "__typename": "User"
+        },
+        "createdAt": "2026-09-04T14:25:00Z",
+        "stateReason": "COMPLETED",
+        "closer": {
+         "__typename": "Commit",
+         "abbreviatedOid": "1a2b3c4",
+         "repository": {
+          "nameWithOwner": "fixtures/fixtures"
+         }
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

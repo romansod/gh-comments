@@ -42,6 +42,9 @@ pass it when you *know* it should be an issue: a number that turns out to be
 a PR is then refused by name, not rendered as a PR dump you did not ask for.
 
 Flags: `-R owner/name`; `--toc` (one line per item, no bodies);
+`--closure` (why it was closed and by what: the header, the
+`closed`/`reopened` lines with their closer, and the PR cross-references,
+nothing else; refused on an issue never closed, and takes no other view flag);
 `--since YYYY-MM-DD[THH:MM[:SS]][Z]` (UTC); `--bots`, `--hidden`,
 `--events` (include bot comments, the bodies of hidden comments, and
 label/assignee/milestone events; all filtered by default, and the counts
@@ -62,9 +65,23 @@ The PR-only flags (`--unresolved`, `--since-last-review`, `--latest`,
    event.
 
 2. **Take the narrowest view that answers the question:**
-   - Structural facts (is it closed, who closed it, which PR references it,
-     how many people weighed in) — the TOC is the answer. Never conclude from
-     a `… [+N chars]` preview: it is a cut, not a summary.
+   - Why it was closed, or what closed it — `--closure`:
+
+     ```bash
+     gh-comments <N> --issue --closure
+     ```
+
+     The `closed` line says `by #N PR MERGED "…"`, `by commit <sha>`
+     (`owner/name#N` and `owner/name@<sha>` in another repository),
+     `by a project`, `no closer recorded`, or `closer not visible to this
+     token`. `no closer recorded` means the API returned null: a hand
+     close, or a closer GitHub withheld without saying so; never "closed by
+     hand" on its own. The comments may still explain it, and the TOC shows
+     them. `not visible` means GitHub refused that one field to this token
+     and the rest of the issue rendered.
+   - Structural facts (is it closed, which PR references it, how many people
+     weighed in) — the TOC is the answer. Never conclude from a
+     `… [+N chars]` preview: it is a cut, not a summary.
    - Most issues are small — if the TOC fits on a screen, the full render,
      inline. There is no thread machinery to explode.
    - A long issue — `--since <date>` for "what changed this week", or dump
@@ -80,8 +97,9 @@ The PR-only flags (`--unresolved`, `--since-last-review`, `--latest`,
    sed -n '1,40p' issue.txt                     # the opening post, no refetch
    ```
 
-4. **Before acting on an issue, check the cross-references.** An `xref` line
-   marked `(closes)` names a PR that claimed the issue; `MERGED` on it means
+4. **Before acting on an issue, check the cross-references.** The `closed …
+   by #N` line is authoritative for what closed it. An `xref` line marked
+   `(closes)` only names a PR that claimed the issue; `MERGED` on it means
    the work may already be done — `gh pr diff <xref-number>` shows what it
    changed.
 

@@ -69,6 +69,7 @@ issue_target() { # issue_target <label> <owner/name> <num>
   run $L s_full        1 $S $N -R $R --issue
   run $L s_toc         1 $S $N -R $R --issue --toc
   run $L s_events      1 $S $N -R $R --issue --events
+  run $L s_closure     1 $S $N -R $R --issue --closure
 }
 
 print -r -- "run-cases: $S ($($S --version 2>/dev/null || print unknown version))" >&2
