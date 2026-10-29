@@ -1,4 +1,4 @@
-# gh-comments
+# gh-comments [![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/romansod/badge.svg)](https://hub.xerj.org/contributors/romansod)
 
 Read a GitHub pull request's or issue's discussion as compact, grep-friendly
 text: reviews with their inline threads nested in place and marked
