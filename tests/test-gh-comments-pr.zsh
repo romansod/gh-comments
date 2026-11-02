@@ -704,9 +704,20 @@ latest_skips_hidden() {
   out=$(zsh "$script" --pr 44 --latest=carol --hidden --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("hidden-review exit $rc"); }
   [[ "$out" == *"note: no matching review or comment"* ]] \
     || problems+=("--latest sliced from a hidden review with no threads")
-  out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("hidden-review alice exit $rc"); }
+  # On the fixture alice also has a later visible comment, which --latest=alice
+  # would anchor on whatever the rule says about her review, so the check runs
+  # on a copy without that comment: the hidden review is all she said.
+  local atl
+  atl=$(mktemp) || { problems+=("mktemp failed"); report "$name" "latest" 1 ""; return 0; }
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        map(select((.__typename == "IssueComment" and .author.login == "alice") | not))' \
+    "$rtl" > "$atl" || problems+=("could not derive the alice-only timeline")
+  out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$atl" "$rth" 2>&1) || { rc=$?; problems+=("hidden-review alice exit $rc"); }
+  rm -f "$atl"
   [[ "$out" != *"note: no matching"* ]] \
     || problems+=("a hidden review with threads did not count as substantive")
+  [[ "$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)" == 'review  [alice 2026-08-10 12:00] '*'(hidden: outdated)' ]] \
+    || problems+=("--latest=alice did not anchor on her hidden review: $(print -r -- "$out" | grep -v '^body ' | sed -n 4p)")
   report "$name" "latest" $rc "$out"
   return 0
 }
