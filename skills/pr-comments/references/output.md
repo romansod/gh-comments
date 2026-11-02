@@ -13,8 +13,8 @@ mean and which ones change what you should do.
   `(incl. N bot)` appears when `--bots` puts them back. `(N hidden)` is
   different: those lines *are* rendered, as markers without a body, and the
   number already counts them — so it matches a count of `comment` lines (or,
-  on `reviews:`, of `review` lines), and reads the same under `--hidden`. Merge commits are filtered silently unless
-  `--merges`.
+  on `reviews:`, of `review` lines), and reads the same under `--hidden`.
+  Merge commits are filtered silently unless `--merges`.
 - A REST review count higher than the number of `review` lines is expected,
   not data loss: the empty review object GitHub creates when someone replies
   inside a thread never appears in the timeline; its comment surfaces inside
