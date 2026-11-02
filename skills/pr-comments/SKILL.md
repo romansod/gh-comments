@@ -48,8 +48,8 @@ Flags:
 - `--unresolved` — only reviews with open threads, and those threads.
 - `--latest[=<user>]` — the last substantive review or top-level comment
   (optionally by `<user>`) and everything after it. A bare approval, a
-  hidden comment, or a bot (without `--bots`) is not the anchor; the first
-  two still render if later.
+  hidden comment, a hidden review without threads, or a bot (without
+  `--bots`) is not the anchor; the first three still render if later.
 - `--since-last-review[=<user>]` — the last review *object* and everything
   after it; never looks at comments. Exclusive with `--latest`.
 - `--since YYYY-MM-DD[THH:MM[:SS]][Z]` — a time window, UTC.
