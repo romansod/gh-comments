@@ -68,7 +68,8 @@ Flags:
   Pull requests only:
   --unresolved                  Only reviews with open threads, and those threads
   --since-last-review[=<user>]  Only the last review (optionally by <user>)
-                                and everything after it
+                                and everything after it; a hidden review
+                                with no threads is passed over
   --latest[=<user>]             Only the most recent *substantive* review or
                                 top-level comment (optionally by <user>) and
                                 everything after it. Substantive: a review with
@@ -1228,9 +1229,14 @@ else
   | select((.__typename == "PullRequestCommit" and (((.commit.parents // {}).totalCount // 1) > 1) and ($MERGES | not)) | not)
  ]) as $nodes1 |
 
+# A review GitHub hid with no threads under it is passed over, as --latest
+# passes it over: its body is all it had, and someone judged that spam,
+# off-topic or outdated. A bare approval still anchors here; a hidden
+# review with threads does too, since those keep their own state.
 (if $slr == "1" then
    ([$nodes1 | to_entries[]
      | select(.value.__typename == "PullRequestReview")
+     | select(((.value | hidden) and ((($tmap[.value.id] // []) | length) == 0)) | not)
      | select($slr_author == "" or ((.value | login) == $slr_author))
      | .key] | last)
  else null end) as $slr_idx |

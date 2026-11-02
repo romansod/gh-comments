@@ -51,7 +51,8 @@ Flags:
   hidden comment, a hidden review without threads, or a bot (without
   `--bots`) is not the anchor; the first three still render if later.
 - `--since-last-review[=<user>]` — the last review *object* and everything
-  after it; never looks at comments. Exclusive with `--latest`.
+  after it, passing over a hidden review with no threads; never looks at
+  comments. Exclusive with `--latest`.
 - `--since YYYY-MM-DD[THH:MM[:SS]][Z]` — a time window, UTC.
 - `--bots`, `--merges`, `--hidden` — include bot items, merge commits, and
   the bodies of hidden (minimized) comments and reviews; all three are

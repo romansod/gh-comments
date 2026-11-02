@@ -82,8 +82,9 @@
 #                 a third review, carol's, hidden as SPAM, with a body and no
 #                 threads, last. Pins the marker on the review line, the body
 #                 gate behind --hidden, the hidden tally on `reviews:`, and
-#                 --latest looking past a review whose only substance is a
-#                 hidden body while still anchoring on one with threads.
+#                 --latest and --since-last-review looking past a review
+#                 whose only substance is a hidden body while still
+#                 anchoring on one with threads.
 #
 # Not every case is golden. Directly below the goldens come the invariant
 # cases, which take no golden and build no input: threads-match-header and
@@ -265,6 +266,7 @@ check hidden-review-toc            hidden-review 44 --toc
 check hidden-review-shown          hidden-review 44 --hidden
 check hidden-review-latest         hidden-review 44 --latest
 check hidden-review-toc-unresolved hidden-review 44 --toc --unresolved
+check hidden-review-slr            hidden-review 44 --since-last-review
 
 # ---------------------------------------------------------------------------
 # Non-golden cases. Everything above diffs a committed golden; everything
@@ -354,9 +356,10 @@ threads_match_header
 # rendered output, so the case restates no rendering logic beyond which line
 # is the anchor:
 #   - the items are a suffix of the full render, from its anchor line — the
-#     last review line for --since-last-review, the last substantive line
-#     for --latest (a review with threads or a body, or a comment with a
-#     body that is not hidden), the named author's when one is named — and
+#     last review line for --since-last-review (passing over a hidden one
+#     with no threads), the last substantive line for --latest (a review
+#     with threads or a body, or a comment with a body that is not hidden),
+#     the named author's when one is named — and
 #     nested threads travel with their review, so none can go missing
 #     inside the window;
 #   - a held bot thread is in exactly when its review sits after the anchor,
@@ -395,6 +398,11 @@ _slice_sections() {
 # no (hidden: …) marker. The
 # `[login date time]` header is cut at its closing `HH:MM]`, not the first
 # `]` — `vercel[bot]` has one of its own.
+# A review line --since-last-review passes over: hidden, with no threads.
+_slice_hidden_bare() {
+  local rest=${1#*[0-9][0-9]:[0-9][0-9]\] }
+  [[ ${${rest#*, }%% *} == 0 && $rest == *'open) (hidden: '* ]]
+}
 _slice_substantive() {
   local rest
   case $1 in
@@ -450,13 +458,14 @@ slice_matches_full() {
         slines=("${(@f)slice}")
         note=${(M)slines:#note: no matching *}
         slines=("${(@)slines:#note: *}")
-        # The anchor: the last review line (slr) or substantive line (latest)
+        # The anchor: the last review line (slr, past a hidden one with no
+        # threads) or substantive line (latest)
         # in the full render, by the named author when one is named. None
         # means the fallback is expected.
         ai=0
         for (( i = ${#fitems}; i >= 1; i-- )); do
           l=${fitems[i]}
-          if [[ $mode == slr ]]; then [[ $l == 'review  ['* ]] || continue
+          if [[ $mode == slr ]]; then [[ $l == 'review  ['* ]] && ! _slice_hidden_bare "$l" || continue
           else _slice_substantive "$l" || continue; fi
           [[ -z $v || ${${l#*\[}%% *} == ${v#=} ]] && { ai=i; break; }
         done
@@ -739,6 +748,30 @@ latest_skips_hidden() {
   return 0
 }
 latest_skips_hidden
+# slr-skips-hidden — --since-last-review passes over a review GitHub hid
+# that has no threads, as --latest does: on the hidden-review fixture
+# carol's spam review is last, so the slice starts at bob's approval. alice's
+# hidden review keeps its threads and can still anchor, so naming her slices
+# from it; naming carol, whose only review is hidden, falls back.
+slr_skips_hidden() {
+  local name=slr-skips-hidden out first
+  local -i rc=0
+  local rtl=$fx/hidden-review.tl.json rth=$fx/hidden-review.th.json
+  out=$(zsh "$script" --pr 44 --toc --since-last-review --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("exit $rc"); }
+  first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+  [[ $first == 'review  [bob 2026-08-11 14:00] APPROVED'* ]] \
+    || problems+=("--since-last-review did not pass over carol's hidden review: $first")
+  out=$(zsh "$script" --pr 44 --toc --since-last-review=alice --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("alice exit $rc"); }
+  first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+  [[ $first == 'review  [alice 2026-08-10 12:00] '*'(hidden: outdated)' ]] \
+    || problems+=("--since-last-review=alice did not anchor on her hidden review with threads: $first")
+  out=$(zsh "$script" --pr 44 --toc --since-last-review=carol --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("carol exit $rc"); }
+  [[ "$out" == *"note: no matching earlier review"* ]] \
+    || problems+=("--since-last-review=carol sliced from a hidden review with no threads")
+  report "$name" "since-last-review" $rc "$out"
+  return 0
+}
+slr_skips_hidden
 
 # check_oversized — a payload too large to fit in argv. Passing the two
 # payloads as `jq --argjson` died with "argument list too long: jq" (exit 127,

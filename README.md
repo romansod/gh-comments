@@ -253,7 +253,8 @@ With no number, the current branch's open PR is used.
   Pull requests only:
   --unresolved                  Only reviews with open threads, and those threads
   --since-last-review[=<user>]  Only the last review (optionally by <user>)
-                                and everything after it
+                                and everything after it; a hidden review
+                                with no threads is passed over
   --latest[=<user>]             Only the most recent *substantive* review or
                                 top-level comment (optionally by <user>) and
                                 everything after it. Substantive: a review with
