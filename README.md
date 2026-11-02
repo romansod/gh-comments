@@ -265,8 +265,8 @@ With no number, the current branch's open PR is used.
                                 shows when it comes after the anchor; a bot
                                 is looked past and not shown unless --bots.
                                 Exclusive with --since-last-review, which
-                                anchors on the last review object and
-                                ignores comments.
+                                anchors on the last review object it does
+                                not pass over and ignores comments.
                                 When either flag matches nothing, the TOC is
                                 shown instead of the full timeline, under a
                                 note saying so; with --unresolved or --since

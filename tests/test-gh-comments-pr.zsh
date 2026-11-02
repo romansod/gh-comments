@@ -358,8 +358,8 @@ threads_match_header
 #   - the items are a suffix of the full render, from its anchor line — the
 #     last review line for --since-last-review (passing over a hidden one
 #     with no threads), the last substantive line for --latest (a review
-#     with threads or a body, or a comment with a body that is not hidden),
-#     the named author's when one is named — and
+#     with threads or a body that is not hidden, or a comment with a body
+#     that is not hidden), the named author's when one is named — and
 #     nested threads travel with their review, so none can go missing
 #     inside the window;
 #   - a held bot thread is in exactly when its review sits after the anchor,
