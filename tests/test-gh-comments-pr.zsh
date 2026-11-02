@@ -1231,13 +1231,13 @@ report gh-live-render "stubbed gh" $gh_rc "$gh_out"
 # one right and one wrong.
 gating_case() {
   local name=$1 want=$2; shift 2
-  local -i has_commits=0 has_body=0 has_desc=0 has_hidden=0
+  local -i has_commits=0 has_body=0 has_desc=0 has_hidden=0 has_rev_hidden=0
   gh_reset
   gh_case ok 7 "$@"
   (( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0)")
   grep -q 'PULL_REQUEST_COMMIT' "$qlog" && has_commits=1
   # The IssueComment body follows its createdAt and minimizedReason; a
-  # review's minimizedReason follows its state, and the PR description's body
+  # review's isMinimized follows its state, and the PR description's body
   # follows its createdAt alone, so none of the markers match each other.
   grep -q 'createdAt isMinimized minimizedReason body' "$qlog" && has_body=1
   # The PR's own description hangs off baseRefName, which nothing else in the
@@ -1246,6 +1246,9 @@ gating_case() {
   # isMinimized rides on the comment node, outside the body slot: the counts
   # line reports hidden comments in every mode, lean included.
   grep -q 'createdAt isMinimized minimizedReason' "$qlog" && has_hidden=1
+  # And on the review node, in every mode too: the fixtures carry the field
+  # whatever the query asks for, so only the query text shows it is fetched.
+  grep -q 'state isMinimized minimizedReason body' "$qlog" && has_rev_hidden=1
   if [[ $want == lean ]]; then
     (( has_commits == 0 )) || problems+=("lean query still asks for PULL_REQUEST_COMMIT")
     (( has_body == 0 )) || problems+=("lean query still asks for the IssueComment body")
@@ -1256,6 +1259,7 @@ gating_case() {
     (( has_desc == 1 )) || problems+=("full query dropped the PR description")
   fi
   (( has_hidden == 1 )) || problems+=("$want query dropped isMinimized from the IssueComment node")
+  (( has_rev_hidden == 1 )) || problems+=("$want query dropped isMinimized from the PullRequestReview node")
   # An unsubstituted slot is neither shape, and GraphQL would reject it — but
   # only against the real API, which no test reaches.
   if grep -q '@ITEM_TYPES@\|@COMMIT_FRAGMENT@\|@COMMENT_BODY@' "$qlog"; then
