@@ -11,9 +11,10 @@ mean and which ones change what you should do.
   is different from `inline threads: N (0 open)` (all resolved).
 - `(+N bot filtered)` says how many lines the default view held back;
   `(incl. N bot)` appears when `--bots` puts them back. `(N hidden)` is
-  different: those lines *are* rendered, as markers without a body, and the
-  number already counts them — so it matches a count of `comment` lines (or,
-  on `reviews:`, of `review` lines), and reads the same under `--hidden`.
+  different: those lines *are* rendered, without a body (a hidden review
+  keeps its thread counts and its threads), and the number already counts
+  them — so it matches a count of `comment` lines (or, on `reviews:`, of
+  `review` lines), and reads the same under `--hidden`.
   Merge commits are filtered silently unless `--merges`.
 - A REST review count higher than the number of `review` lines is expected,
   not data loss: the empty review object GitHub creates when someone replies
@@ -48,8 +49,9 @@ mean and which ones change what you should do.
   characters — a preview cut mid-comment, never a summary.
 - `(hidden: <reason>)` marks a comment or review GitHub has minimized
   (outdated, spam, resolved, off-topic, duplicate). Its body is withheld by
-  default; `--hidden` shows it. A hidden review's threads still render. Treat
-  it as stale unless the task is about why it was hidden.
+  default; `--hidden` shows it. Treat the body as stale unless the task is
+  about why it was hidden. A hidden review's threads are not hidden: each
+  keeps its own `OPEN`/`resolved` state, and an `OPEN` one is still open.
 - Commits are interleaved at their timeline position: a fix commit right after
   a review is usually the response to it.
 
