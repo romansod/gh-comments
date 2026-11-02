@@ -77,6 +77,13 @@
 #                 line in all four combinations of --bots and --hidden — the
 #                 bot gate is applied first, so the hidden bot comment counts
 #                 once, as a bot, until --bots puts it back.
+#   hidden-review multi with two minimized reviews: alice's CHANGES_REQUESTED
+#                 review hidden as OUTDATED, which keeps its two threads, and
+#                 a third review, carol's, hidden as SPAM, with a body and no
+#                 threads, last. Pins the marker on the review line, the body
+#                 gate behind --hidden, the hidden tally on `reviews:`, and
+#                 --latest looking past a review whose only substance is a
+#                 hidden body while still anchoring on one with threads.
 #
 # Not every case is golden. Directly below the goldens come the invariant
 # cases, which take no golden and build no input: threads-match-header and
@@ -251,6 +258,13 @@ check hidden-toc             hidden 1001 --toc
 check hidden-shown           hidden 1001 --hidden
 check hidden-toc-unresolved  hidden 1001 --toc --unresolved
 check hidden-bots-shown      hidden 1001 --bots --hidden
+# hidden-review-* — the same treatment on a review: the marker on its line,
+# the body withheld unless --hidden, its threads rendered either way.
+check hidden-review-full           hidden-review 44
+check hidden-review-toc            hidden-review 44 --toc
+check hidden-review-shown          hidden-review 44 --hidden
+check hidden-review-latest         hidden-review 44 --latest
+check hidden-review-toc-unresolved hidden-review 44 --toc --unresolved
 
 # ---------------------------------------------------------------------------
 # Non-golden cases. Everything above diffs a committed golden; everything
@@ -377,13 +391,14 @@ _slice_sections() {
   done
 }
 # A --latest candidate, read off its TOC line: a review with threads or a
-# body preview, or a comment with a preview and no (hidden: …) marker. The
+# body preview (a hidden review shows none), or a comment with a preview and
+# no (hidden: …) marker. The
 # `[login date time]` header is cut at its closing `HH:MM]`, not the first
 # `]` — `vercel[bot]` has one of its own.
 _slice_substantive() {
   local rest
   case $1 in
-    'review  ['*) rest=${1#*[0-9][0-9]:[0-9][0-9]\] }; [[ ${${rest#*, }%% *} != 0 || -n ${rest#*open\)} ]] ;;
+    'review  ['*) rest=${1#*[0-9][0-9]:[0-9][0-9]\] }; [[ ${${rest#*, }%% *} != 0 || -n ${${rest#*open\)}# \(hidden: *\)} ]] ;;
     'comment ['*) rest=${1#*[0-9][0-9]:[0-9][0-9]\]}; [[ -n $rest && $rest != ' (hidden:'* ]] ;;
     *) false ;;
   esac
@@ -668,9 +683,9 @@ fallback_keeps_narrowing() {
 }
 fallback_keeps_narrowing
 
-# latest-skips-hidden — a hidden comment is not substantive. dave's only
-# comment on the hidden fixture is minimized, so --latest=dave has nothing to
-# slice from and falls back.
+# latest-skips-hidden — a hidden comment, or a hidden review's body, is not
+# substantive. dave's only comment on the hidden fixture is minimized, so
+# --latest=dave has nothing to slice from and falls back.
 latest_skips_hidden() {
   local name=latest-skips-hidden out
   local -i rc=0
@@ -682,6 +697,16 @@ latest_skips_hidden() {
   # latest thing said.
   [[ "$out" == *"note: no matching review or comment"* ]] \
     || problems+=("--hidden made a hidden comment substantive")
+  # A review is no different: carol's only review is hidden and has no
+  # threads, so its body is all it had to say. alice's hidden review keeps
+  # its threads, which are substance of their own, so it can still anchor.
+  local rtl=$fx/hidden-review.tl.json rth=$fx/hidden-review.th.json
+  out=$(zsh "$script" --pr 44 --latest=carol --hidden --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("hidden-review exit $rc"); }
+  [[ "$out" == *"note: no matching review or comment"* ]] \
+    || problems+=("--latest sliced from a hidden review with no threads")
+  out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("hidden-review alice exit $rc"); }
+  [[ "$out" != *"note: no matching"* ]] \
+    || problems+=("a hidden review with threads did not count as substantive")
   report "$name" "latest" $rc "$out"
   return 0
 }
@@ -1211,9 +1236,10 @@ gating_case() {
   gh_case ok 7 "$@"
   (( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0)")
   grep -q 'PULL_REQUEST_COMMIT' "$qlog" && has_commits=1
-  # The IssueComment body follows its minimizedReason; the PR description's
-  # body follows its createdAt, so the two markers cannot match each other.
-  grep -q 'minimizedReason body' "$qlog" && has_body=1
+  # The IssueComment body follows its createdAt and minimizedReason; a
+  # review's minimizedReason follows its state, and the PR description's body
+  # follows its createdAt alone, so none of the markers match each other.
+  grep -q 'createdAt isMinimized minimizedReason body' "$qlog" && has_body=1
   # The PR's own description hangs off baseRefName, which nothing else in the
   # query is followed by.
   grep -q 'baseRefName author' "$qlog" && has_desc=1
