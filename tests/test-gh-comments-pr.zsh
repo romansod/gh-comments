@@ -535,7 +535,8 @@ slice_matches_full
 
 # hidden-bodies-gated — said independently of the goldens: a hidden body never
 # renders by default, always renders under --hidden, and the counts line names
-# the hidden count either way, with the bot gate applied first.
+# the hidden count either way, with the bot gate applied first, on the
+# comments and on the reviews alike.
 hidden_bodies_gated() {
   local name=hidden-bodies-gated out def shown
   local -i rc=0
@@ -568,6 +569,22 @@ hidden_bodies_gated() {
   out=$(zsh "$script" --pr 1001 --toc --bots --hidden --fixtures "$tl" "$th" 2>&1) || { rc=$?; problems+=("--bots --hidden run exited $rc"); }
   [[ "$out" == *"top-level comments: 3 (incl. 1 bot) (2 hidden)"* ]] \
     || problems+=("--bots --hidden counts: $(print -r -- "$out" | sed -n 2p)")
+  # The same gate on reviews: carol's hidden review, re-typed as a bot's in a
+  # copy of the hidden-review timeline, counts as a bot until --bots puts it
+  # back among the hidden.
+  local btl rth=$fx/hidden-review.th.json
+  btl=$(mktemp) || { problems+=("mktemp failed"); report "$name" "hidden comments" 1 "$def"; return 0; }
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes[]
+       | select(.__typename == "PullRequestReview" and .author.login == "carol")
+       | .author) |= {login: "carol[bot]", __typename: "Bot"}' \
+    "$fx/hidden-review.tl.json" > "$btl" || problems+=("could not derive the bot-review timeline")
+  out=$(zsh "$script" --pr 44 --toc --fixtures "$btl" "$rth" 2>&1) || { rc=$?; problems+=("bot-review run exited $rc"); }
+  [[ "$out" == *"reviews: 2 (+1 bot filtered) (1 hidden)"* ]] \
+    || problems+=("review counts: $(print -r -- "$out" | sed -n 2p)")
+  out=$(zsh "$script" --pr 44 --toc --bots --fixtures "$btl" "$rth" 2>&1) || { rc=$?; problems+=("bot-review --bots run exited $rc"); }
+  [[ "$out" == *"reviews: 3 (incl. 1 bot) (2 hidden)"* ]] \
+    || problems+=("--bots review counts: $(print -r -- "$out" | sed -n 2p)")
+  rm -f "$btl"
   report "$name" "hidden comments" $rc "$def"
   return 0
 }
