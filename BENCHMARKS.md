@@ -39,10 +39,10 @@ timings and a per-output delta against the 2026-10-22 run, is
   still cheaper once the skill's own instructions are counted, but by much
   less. Trimming each SKILL.md to about 1,000 tokens (from 2,074 and 1,804)
   and the `--only`/`--item` flow cut the four losses from 1,481–2,773 tokens
-  to 178–1,326. Reading one top-level comment on cli/cli#13946 now costs
-  1,369 tokens with `gh pr view --comments` and 1,547 through the skill,
+  to 204–1,351. Reading one top-level comment on cli/cli#13946 now costs
+  1,369 tokens with `gh pr view --comments` and 1,573 through the skill,
   down from 4,106; reading all of cli/cli#14141 costs 732 with `gh pr view`
-  and 1,845 through the skill. The plugin's two skill descriptions also cost
+  and 1,871 through the skill. The plugin's two skill descriptions also cost
   530 tokens in every session, whether or not they are used.
 - **Bytes ÷ 4 undercounts.** Raw JSON runs at 2.25 bytes per token and this
   kind of text at 2.5 to 2.7, so the common rule of four bytes per token
@@ -89,12 +89,12 @@ The targets are labelled by the shape of their discussion:
 |---|---|--:|--:|
 | `pr-comments` description | every session, used or not | 752 | 278 |
 | `issue-comments` description | every session, used or not | 676 | 252 |
-| `pr-comments` SKILL.md | each invocation | 2,769 | 1,070 |
-| `issue-comments` SKILL.md | each invocation | 2,602 | 982 |
+| `pr-comments` SKILL.md | each invocation | 2,834 | 1,096 |
+| `issue-comments` SKILL.md | each invocation | 2,671 | 1,007 |
 | `pr-comments` references/flags.md | for a flag beyond the skill's table | 2,825 | 1,017 |
 | `issue-comments` references/flags.md | for a flag beyond the skill's table | 1,785 | 675 |
-| `pr-comments` references/recipes.md | for a dump read in slices, or a finding to re-check | 1,071 | 445 |
-| `issue-comments` references/recipes.md | for a dump read in slices, or before acting | 1,013 | 399 |
+| `pr-comments` references/recipes.md | for a dump read in slices, or a finding to re-check | 1,078 | 454 |
+| `issue-comments` references/recipes.md | for a dump read in slices, or before acting | 1,013 | 409 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,537 | 1,561 |
 | `issue-comments` references/output.md | when a marker needs interpreting | 3,896 | 1,394 |
 
@@ -155,14 +155,14 @@ Only `O1` has open threads. The naive pair returns all 17 threads with no way to
 
 ### Task 4 — land one specific comment in context
 
-The skill's documented flow for one item needs no dump: a TOC narrowed to the item's kind (`--toc --only <kind>`), then the one item by its TOC line (`--item`). TOC + slice is the earlier flow, TOC first, dump to a file, then slice the one item out, which the skill keeps for many items at once. The expert flow is the same shape by hand: list with `--jq`, then fetch the one body. Every arm lands the same comment text; the slice and `--item` also carry the item's header line and the renderer's two-space indent, which is the few dozen bytes between the payload column and the expert fetch. Each `+ SKILL.md` column adds the cost of loading the skill to the flow before it, paid once per invocation.
+The skill's documented flow for one item needs no dump: a TOC narrowed to the item's kind (`--toc --only <kind>`), then the one item by its TOC line (`--item`). TOC + slice is the earlier flow, TOC first, dump to a file, then slice the one item out, which the skill keeps for many items at once. The expert flow is the same shape by hand: list with `--jq`, then fetch the one body. Every arm lands the same comment text; the slice and `--item` also carry the item's header line and the renderer's two-space indent, which is the few dozen bytes between the payload column and the expert fetch. Each `+ SKILL.md` column adds the cost of loading the skill to the flow before it, paid once per invocation; for TOC + slice it also adds `references/recipes.md`, where the skill keeps that flow.
 
 | Target | `gh … view --comments` | naive complete | `gh-comments` full | TOC + slice | + SKILL.md | **`--only` + `--item`** | + SKILL.md | expert list → fetch | payload |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| cli#13946 top-level comment | 1,369 ✓ | 42,162 | 8,191 | 2,288 | 3,358 | **477** | 1,547 | 372 | 347 |
-| cli#13946 inline thread | 1,369 ✗ | 42,162 | 8,191 | 2,123 | 3,193 | **977** | 2,047 | 816 | 182 |
-| cli#14104 open thread | 6,105 ✗ | 66,488 | 8,502 | 2,721 | 3,791 | **1,249** | 2,319 | 1,104 | 334 |
-| cli#14483 last comment | 772 ✓ | 772 | 907 | 451 | 1,433 | **182** | 1,164 | 158 | 37 |
+| cli#13946 top-level comment | 1,369 ✓ | 42,162 | 8,191 | 2,288 | 3,838 | **477** | 1,573 | 372 | 347 |
+| cli#13946 inline thread | 1,369 ✗ | 42,162 | 8,191 | 2,123 | 3,673 | **977** | 2,073 | 816 | 182 |
+| cli#14104 open thread | 6,105 ✗ | 66,488 | 8,502 | 2,721 | 4,271 | **1,249** | 2,345 | 1,104 | 334 |
+| cli#14483 last comment | 772 ✓ | 772 | 907 | 451 | 1,867 | **182** | 1,189 | 158 | 37 |
 
 ### Task 5 — address the most recent review
 
@@ -223,18 +223,18 @@ one comment, cli#14483: expert vs TOC+slice                           ░░░�
 
 ### Break-even: does loading the skill pay for itself?
 
-The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (1,070 for `pr-comments`, 982 for `issue-comments`). Against the realistic naive path for the same task, with each one-item task taking the skill's `--toc --only` then `--item` flow:
+The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (1,096 for `pr-comments`, 1,007 for `issue-comments`). Against the realistic naive path for the same task, with each one-item task taking the skill's `--toc --only` then `--item` flow:
 
 | Task | naive tokens | skill flow + SKILL.md | net per invocation |
 |---|--:|--:|--:|
-| cli#14104 read all (naive: gh view + REST inline) | 68,324 | 11,959 | saves 56,365 |
-| cli#14104 which threads open (naive: REST inline) | 60,383 | 1,684 | saves 58,699 |
-| cli#13946 read all (naive: gh view + REST inline) | 44,232 | 11,202 | saves 33,030 |
-| cli#13946 one inline thread (naive: gh view --comments + REST inline) | 42,162 | 2,047 | saves 40,115 |
-| cli#13946 one top-level comment (naive: gh pr view --comments) | 1,369 | 1,547 | costs 178 |
-| cli#14141 read all (naive: gh pr view) | 732 | 1,845 | costs 1,113 |
-| cli#14411 read all (naive: gh issue view ×2) | 1,133 | 2,459 | costs 1,326 |
-| cli#14483 one comment (naive: gh issue view --comments) | 772 | 1,164 | costs 392 |
+| cli#14104 read all (naive: gh view + REST inline) | 68,324 | 11,985 | saves 56,339 |
+| cli#14104 which threads open (naive: REST inline) | 60,383 | 1,710 | saves 58,673 |
+| cli#13946 read all (naive: gh view + REST inline) | 44,232 | 11,228 | saves 33,004 |
+| cli#13946 one inline thread (naive: gh view --comments + REST inline) | 42,162 | 2,073 | saves 40,089 |
+| cli#13946 one top-level comment (naive: gh pr view --comments) | 1,369 | 1,573 | costs 204 |
+| cli#14141 read all (naive: gh pr view) | 732 | 1,871 | costs 1,139 |
+| cli#14411 read all (naive: gh issue view ×2) | 1,133 | 2,484 | costs 1,351 |
+| cli#14483 one comment (naive: gh issue view --comments) | 772 | 1,189 | costs 417 |
 
 ## Caveats
 
