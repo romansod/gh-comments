@@ -393,20 +393,22 @@ _slice_sections() {
     esac
   done
 }
-# A --latest candidate, read off its TOC line: a review with threads or a
-# body preview (a hidden review shows none), or a comment with a preview and
-# no (hidden: …) marker. The
-# `[login date time]` header is cut at its closing `HH:MM]`, not the first
-# `]` — `vercel[bot]` has one of its own.
 # A review line --since-last-review passes over: hidden, with no threads.
 _slice_hidden_bare() {
   local rest=${1#*[0-9][0-9]:[0-9][0-9]\] }
   [[ ${${rest#*, }%% *} == 0 && $rest == *'open) (hidden: '* ]]
 }
+# A --latest candidate, read off its TOC line: a review with threads, or one
+# with a body preview that is not hidden (a hidden review with no threads
+# never counts, even when --hidden shows its preview), or a comment with a
+# preview and no (hidden: …) marker. The `[login date time]` header is cut
+# at its closing `HH:MM]`, not the first `]` — `vercel[bot]` has one of its
+# own.
 _slice_substantive() {
   local rest
   case $1 in
-    'review  ['*) rest=${1#*[0-9][0-9]:[0-9][0-9]\] }; [[ ${${rest#*, }%% *} != 0 || -n ${${rest#*open\)}# \(hidden: *\)} ]] ;;
+    'review  ['*) _slice_hidden_bare "$1" && return 1
+                  rest=${1#*[0-9][0-9]:[0-9][0-9]\] }; [[ ${${rest#*, }%% *} != 0 || -n ${rest#*open\)} ]] ;;
     'comment ['*) rest=${1#*[0-9][0-9]:[0-9][0-9]\]}; [[ -n $rest && $rest != ' (hidden:'* ]] ;;
     *) false ;;
   esac
