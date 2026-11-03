@@ -271,9 +271,9 @@ P("The skill's documented flow for one item needs no dump: a TOC narrowed to the
   "then the one item by its TOC line (`--item`). TOC + slice is the earlier flow, TOC first, dump to a file, then slice "
   "the one item out, which the skill keeps for many items at once. "
   "The expert flow is the same shape by hand: list with `--jq`, then fetch the one body. "
-  "Both arms land the same comment text; the slice also carries the item's header line and the renderer's two-space indent, "
+  "Every arm lands the same comment text; the slice and `--item` also carry the item's header line and the renderer's two-space indent, "
   "which is the few dozen bytes between the payload column and the expert fetch. "
-  "The `+ SKILL.md` column adds the cost of loading the skill, paid once per invocation.\n")
+  "Each `+ SKILL.md` column adds the cost of loading the skill to the flow before it, paid once per invocation.\n")
 P("| Target | `gh … view --comments` | naive complete | `gh-comments` full | TOC + slice | + SKILL.md | **`--only` + `--item`** | + SKILL.md | expert list → fetch | payload |")
 P("|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|")
 tg_rows = []
