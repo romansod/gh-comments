@@ -26,8 +26,9 @@
 #                          checkout) and claude stubbed: make bench-check
 #                          fails on an edited skill file and names its row;
 #                          bench/refile-fixed.zsh recounts it into the
-#                          newest run, keeps every captured row as filed,
-#                          rebuilds the tables and leaves bench-check passing
+#                          newest run, keeps every captured row as filed and
+#                          every row in place, rebuilds the tables and
+#                          leaves bench-check passing
 #   bench-check-witness    in a scratch git repo of the tree, make
 #                          bench-check names a reference file with no row,
 #                          and does not report a committed uncounted file
@@ -210,6 +211,12 @@ printf "{\"usage\":{\"input_tokens\":%d},\"total_cost_usd\":0}\n" $(( n / 3 ))' 
   grep -q "^FIX.pr_skillmd	${size// /}	" "$tmp/tree/$run/tokens.tsv" \
     || problems+=("FIX.pr_skillmd was not recounted at ${size// /} bytes")
   [[ -e $tmp/tree/bench/tokens.tsv ]] && problems+=("a FIX-only bench/tokens.tsv was left behind")
+  # Rows stay where a whole count would put them, and the stub's new counts
+  # reach the tables.
+  [[ $(cut -f1 "$root/$run/tokens.tsv") == $(cut -f1 "$tmp/tree/$run/tokens.tsv") ]] \
+    || problems+=("$run/tokens.tsv rows moved")
+  cmp -s "$root/$run/tables.md" "$tmp/tree/$run/tables.md" \
+    && problems+=("$run/tables.md was not rebuilt from the new counts")
   zsh "$tmp/tree/bench/check-skill-bytes.zsh" >/dev/null 2>&1 \
     || problems+=("make bench-check still fails after the refile")
   rm -rf "$tmp"
