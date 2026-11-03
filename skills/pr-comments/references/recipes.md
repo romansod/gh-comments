@@ -5,10 +5,12 @@ inline, for many items at once, or before re-raising a finding.
 
 ## Slice a dump with grep/sed
 
-Dump once to a temp file named for the PR (never the repo; with `-R`, add
-the repo to the name too) and read slices. Each item starts at column 0 with
-a stable prefix (`body`/`commit`/`comment`/`review`/`thread`/`force-push`),
-and `<!-- finding:ID -->` markers are promoted onto thread header lines:
+Dump once to a temp file named for the PR, outside the repo; under `-R`, put
+the repo in the name too (`gh-comments-pr-<owner>-<repo>-<N>.txt`), so two
+repos' PRs with one number do not share a dump. Read slices from it. Each
+item starts at column 0 with a stable prefix
+(`body`/`commit`/`comment`/`review`/`thread`/`force-push`), and
+`<!-- finding:ID -->` markers are promoted onto thread header lines:
 
 ```bash
 gh-comments <N> --pr > "${TMPDIR:-/tmp}/gh-comments-pr-<N>.txt"

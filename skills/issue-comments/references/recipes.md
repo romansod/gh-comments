@@ -5,9 +5,11 @@ read inline, or before acting on what an issue describes.
 
 ## Slice a dump with grep/sed
 
-Dump once to a temp file named for the issue (never the repo; with `-R`, add
-the repo to the name too) and read slices. Each item starts at column 0 with
-a stable prefix (`body`/`comment`/`closed`/`reopened`/`xref`/`renamed`, plus
+Dump once to a temp file named for the issue, outside the repo; under `-R`,
+put the repo in the name too (`gh-comments-issue-<owner>-<repo>-<N>.txt`),
+so two repos' issues with one number do not share a dump. Read slices from
+it. Each item starts at column 0 with a stable prefix
+(`body`/`comment`/`closed`/`reopened`/`xref`/`renamed`, plus
 `label`/`assign`/`milestone` under `--events`):
 
 ```bash
