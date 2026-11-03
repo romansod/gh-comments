@@ -395,6 +395,14 @@ if [[ -n "$ITEM" ]]; then
     exit 1
   fi
 fi
+# No TOC line starts with whitespace, and the several-matches refusal lists
+# its lines indented, so a line copied from that listing keeps the indent:
+# leading whitespace is dropped rather than made part of the prefix. A prefix
+# that was only whitespace is no prefix.
+if [[ -n "$ITEM" ]]; then
+  while [[ $ITEM == [[:space:]]* ]]; do ITEM=${ITEM#?}; done
+  [[ -n "$ITEM" ]] || need_value --item "<header-prefix>" 1
+fi
 # --unresolved renders reviews and threads and nothing else (its lean query
 # does not even fetch comment bodies, commits or the description), so another
 # --only kind could only ever print an empty line under a counts line that

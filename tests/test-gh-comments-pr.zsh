@@ -1121,11 +1121,52 @@ item_miss_hints() {
   local line
   line=$(zsh "$script" --pr 1001 --toc --hidden --only comment --fixtures "$fx/hidden.tl.json" "$fx/hidden.th.json" 2>/dev/null | grep '^comment \[dave')
   err=$(zsh "$script" --pr 1001 --item "$line" --fixtures "$fx/hidden.tl.json" "$fx/hidden.th.json" 2>&1 >/dev/null)
-  [[ $err == *"no item starts with"*"--hidden"* ]] || problems+=("a --toc --hidden line without --hidden: no hint: $err")
+  [[ $err == *"no item starts with"*"rerun --item with --hidden"* ]] || problems+=("a --toc --hidden line without --hidden: no hint: $err")
+  # ...and only then: not with --hidden given, not for a marker alone or a
+  # marker and a trailing space, which a line without --hidden can be.
+  local -a hpair=(--fixtures "$fx/hidden.tl.json" "$fx/hidden.th.json")
+  for p in '--hidden|comment [dave 2026-08-14 22:00] (hidden: outdated) Nope' \
+           '|comment [eve 2026-08-14 22:00] (hidden: outdated)' \
+           '|comment [eve 2026-08-14 22:00] (hidden: outdated) '; do
+    err=$(zsh "$script" --pr 1001 ${=${p%%|*}} --item "${p#*|}" "${hpair[@]}" 2>&1 >/dev/null)
+    [[ $err == *"no item starts with"* && $err != *"rerun --item with --hidden"* ]] \
+      || problems+=("'${p#*|}' (${p%%|*}): hinted wrongly: $err")
+  done
+  # The same hint on an issue, whose hidden comments carry the same marker.
+  local ifx=$here/fixtures/gh-comments/issue-hidden.tl.json
+  line=$(zsh "$script" 21 --toc --hidden --only comment --fixtures "$ifx" 2>/dev/null | grep '(hidden: ' | head -1)
+  err=$(zsh "$script" 21 --item "$line" --fixtures "$ifx" 2>&1 >/dev/null)
+  [[ $err == *"no item starts with"*"rerun --item with --hidden"* ]] || problems+=("issue: a --toc --hidden line without --hidden: no hint: $err")
+  # A line copied from a refusal's listing keeps its indent; no TOC line
+  # starts with a space, so a leading one is dropped and the line still names
+  # its item.
+  local out
+  out=$(zsh "$script" --pr 1001 --item '  commit  e5f6a7b fix(widget): close false-green paths from review' "${pair[@]}" 2>&1) \
+    || { rc=$?; problems+=("an indented line copied from a refusal missed: exit $rc: $out"); }
+  [[ $out == 'commit  e5f6a7b fix(widget): close false-green paths from review' ]] || problems+=("the indented line selected: $out")
   report "$name" "item" $rc "$err"
   return 0
 }
 item_miss_hints
+# item-whole-blocks — item-is-its-block finds each --item output somewhere
+# in the full render, which a block cut short would pass too. Here two are
+# compared whole: the review with both its threads and their replies, and a
+# thread with both of its replies.
+item_whole_blocks() {
+  local name=item-whole-blocks out full want
+  local -i rc=0
+  local -a pair=(--fixtures "$fx/basic.tl.json" "$fx/basic.th.json")
+  full=$(zsh "$script" --pr 1001 "${pair[@]}" 2>&1) || { rc=$?; problems+=("full render exit $rc"); }
+  want=$(print -r -- "$full" | awk '/^review  \[reviewer-bart/ {p=1} p && /^$/ {exit} p')
+  out=$(zsh "$script" --pr 1001 --item 'review  [reviewer-bart' "${pair[@]}" 2>&1) || { rc=$?; problems+=("review exit $rc"); }
+  [[ $out == "$want" && $out == *$'\nthread  src/widget/probe.ts'* ]] || problems+=("the review is not its whole block: $out")
+  want=$(print -r -- "$full" | awk '/^thread  src\/widget\/retry.ts/ {p=1; print; next} p && /^[^ ]/ {exit} p')
+  out=$(zsh "$script" --pr 1001 --item 'thread  src/widget/retry.ts' "${pair[@]}" 2>&1) || { rc=$?; problems+=("thread exit $rc"); }
+  [[ $out == "$want" && $out == *'Fixed in e5f6a7b'* ]] || problems+=("the thread is not its whole block: $out")
+  report "$name" "item" $rc "$out"
+  return 0
+}
+item_whole_blocks
 
 # check_oversized — a payload too large to fit in argv. Passing the two
 # payloads as `jq --argjson` died with "argument list too long: jq" (exit 127,
