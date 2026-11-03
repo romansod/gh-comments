@@ -36,6 +36,8 @@ mean and which ones change what you should do.
   already landed — verify with the anchor-SHA diff before re-raising.
 - `@<sha>` on a thread header is the commit the thread was anchored to;
   `git diff <sha>..HEAD -- <path>` shows what has touched the code since.
+- `[<login> <date>]` at the end of a thread's TOC line is who opened it and
+  when; the full render shows it as the first reply instead.
 - `[TRUNCATED: showing N of M replies]` means the reply list is incomplete —
   fetch that thread's remaining replies via the API if they matter.
 - `threads with no parent review:` holds threads opened outside any review.

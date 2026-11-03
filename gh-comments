@@ -1100,9 +1100,14 @@ def r_thread_comments:
      + comment_body(false; "      ")]
   | join("\n");
 
+# On a TOC line a thread also names who opened it and when, the way a comment
+# line does: two threads on one path:line from one commit differ in nothing
+# else, and --item tells items apart by their TOC line. The full render does
+# not repeat it, since the opening comment is right under the header, which
+# keeps the full header a prefix of the TOC line.
 def r_thread($TOC):
   r_thread_hdr
-  + (if $TOC then ""
+  + (if $TOC then ((.comments.nodes[0] // null) | if . then " [\(login) \(.createdAt | hdate)]" else "" end)
      else (r_thread_comments as $tc | if $tc == "" then "" else "\n" + $tc end) end);
 
 # A titled run of threads that have no review header to hang under: the
@@ -1543,7 +1548,16 @@ elif (( ITEM_N == 0 )); then
   print -r -- "$PROG: no item starts with: $ITEM" >&2
   exit 1
 else
-  print -r -- "$PROG: $ITEM_N items start with: $ITEM — give more of the line:" >&2
+  # Lines that agree in every character cannot be told apart by any prefix:
+  # two threads one person opened on one line in one minute, or two hidden
+  # comments by one author in one minute without --hidden. Asking for more
+  # of the line would send the caller round in a circle.
+  typeset -aU ITEM_LINES=("${(@f)${ITEM_OUT#*$'\n'}}")
+  if (( ${#ITEM_LINES} == 1 )); then
+    print -r -- "$PROG: $ITEM_N items share this exact TOC line, so --item cannot tell them apart; dump the full render and slice it instead:" >&2
+  else
+    print -r -- "$PROG: $ITEM_N items start with: $ITEM — give more of the line:" >&2
+  fi
   print -r -- "${ITEM_OUT#*$'\n'}" | sed 's/^/  /' >&2
   exit 1
 fi

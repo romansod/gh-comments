@@ -95,7 +95,7 @@ This draft PR continues the `api_host` rollout by moving remaining direct …
 ```
 
 `gh-comments 14104 -R cli/cli --toc` is one line per item, every thread in
-its review, with its state and the commit it was anchored to:
+its review, with its state, the commit it was anchored to and who opened it:
 
 ```
 PR #14104 Honour api_host across the CLI, and give api.Client a flexible request surface [MERGED base:trunk]
@@ -104,13 +104,13 @@ reviews: 5 (+1 bot filtered) · inline threads: 17 (7 open) · top-level comment
 body [williammartin 2026-08-07 15:20] Relates to https://github.com/cli/cli/issues/13717 Fixes https://githu… [+3.7k chars]
 force-push  7366aab..9869df6  [2026-08-07 15:45]
 review  [williammartin 2026-08-07 18:26] COMMENTED, 2 threads (2 open)
-thread  api/http_client.go:19 OPEN @ec71021
-thread  docs/api-host-test-harness.md:71 OPEN,outdated @e511aa0
+thread  api/http_client.go:19 OPEN @ec71021 [williammartin 2026-08-07 17:54]
+thread  docs/api-host-test-harness.md:71 OPEN,outdated @e511aa0 [williammartin 2026-08-07 18:01]
 review  [babakks 2026-08-14 14:33] CHANGES_REQUESTED, 13 threads (3 open) Thanks for this, @williammartin! :pray: First off, real appreciation f… [+3.4k chars]
-thread  internal/config/config.go:361 resolved,outdated @9869df6
-thread  internal/config/auth_config_test.go:1025 resolved @9869df6
+thread  internal/config/config.go:361 resolved,outdated @9869df6 [babakks 2026-08-10 12:21]
+thread  internal/config/auth_config_test.go:1025 resolved @9869df6 [babakks 2026-08-10 12:25]
 …
-thread  pkg/cmd/repo/delete/delete_test.go:199 OPEN @9869df6
+thread  pkg/cmd/repo/delete/delete_test.go:199 OPEN @9869df6 [babakks 2026-08-14 10:01]
 …
 review  [babakks 2026-08-28 12:49] APPROVED, 0 threads (0 open) LGTM
 commit  c219743 Add acceptance coverage for gist
@@ -125,16 +125,16 @@ PR #14104 Honour api_host across the CLI, and give api.Client a flexible request
 reviews: 5 (+1 bot filtered) · inline threads: 17 (7 open) · top-level comments: 1
 
 review  [williammartin 2026-08-07 18:26] COMMENTED, 2 threads (2 open)
-thread  api/http_client.go:19 OPEN @ec71021
-thread  docs/api-host-test-harness.md:71 OPEN,outdated @e511aa0
+thread  api/http_client.go:19 OPEN @ec71021 [williammartin 2026-08-07 17:54]
+thread  docs/api-host-test-harness.md:71 OPEN,outdated @e511aa0 [williammartin 2026-08-07 18:01]
 review  [babakks 2026-08-14 14:33] CHANGES_REQUESTED, 13 threads (3 open) Thanks for this, @williammartin! :pray: First off, real appreciation f… [+3.4k chars]
-thread  pkg/cmd/repo/delete/delete_test.go:199 OPEN @9869df6
-thread  api/client.go:229 OPEN @9869df6
-thread  pkg/cmd/auth/shared/oauth_scopes.go:33 OPEN @9869df6
+thread  pkg/cmd/repo/delete/delete_test.go:199 OPEN @9869df6 [babakks 2026-08-14 10:01]
+thread  api/client.go:229 OPEN @9869df6 [babakks 2026-08-14 10:25]
+thread  pkg/cmd/auth/shared/oauth_scopes.go:33 OPEN @9869df6 [babakks 2026-08-14 10:39]
 review  [2cs2vprhyf-creator 2026-08-28 11:59] COMMENTED, 1 thread (1 open)
-thread  acceptance/scriptfilter_unit_test.go:1 OPEN @c8ed76f
+thread  acceptance/scriptfilter_unit_test.go:1 OPEN @c8ed76f [2cs2vprhyf-creator 2026-08-28 11:59]
 threads in filtered bot reviews:
-thread  pkg/cmd/api/http.go:163 OPEN @9869df6
+thread  pkg/cmd/api/http.go:163 OPEN @9869df6 [copilot-pull-request-reviewer 2026-08-07 15:57]
 ```
 
 Drop `--toc` for the bodies. Issues get the same treatment: `gh issue view
@@ -360,7 +360,11 @@ gh-comments 989 --item 'comment [alice 2026-09-21 12:47]'
 ```
 
 `--item` takes any prefix of a TOC line. A prefix two items share is refused
-with both lines listed; copy more of the line to tell them apart.
+with both lines listed; copy more of the line to tell them apart. A thread's
+TOC line ends with who opened it and when, so two threads on one line differ.
+Lines that agree in every character (two threads one person opened on one
+line in one minute, or two hidden comments by one author in one minute
+without `--hidden`) are refused as such, and only the dump can separate them.
 
 The counts line under the header is authoritative and says what the default
 view held back: `(+2 bots filtered)`, `(1 hidden)`, `(+4 housekeeping

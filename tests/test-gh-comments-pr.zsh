@@ -935,6 +935,41 @@ item_refusals() {
   return 0
 }
 item_refusals
+# item-same-line-threads — two threads on one path:line from one commit differ
+# only in who opened them and when, so a thread TOC line ends with its opener
+# and either can be named. Two the same person opened in the same minute
+# still share every character of the line; the refusal says so, and points
+# at the dump, rather than asking for more of a line there is no more of.
+item_same_line_threads() {
+  local name=item-same-line-threads out err dth sth toc
+  local -i rc=0
+  local tl=$fx/basic.tl.json
+  dth=$(mktemp) && sth=$(mktemp) || { problems+=("mktemp failed"); report "$name" "item" 1 ""; return 0; }
+  jq '(.[].data.repository.pullRequest.reviewThreads.nodes) |=
+        (. + [(.[] | select(.path == "README.md") | .id = "dup"
+               | .comments.nodes = [.comments.nodes[0]
+                   | .author.login = "carol" | .createdAt = "2026-08-15T08:02:00Z"
+                   | .body = "A second thread on the same line."])])' "$fx/basic.th.json" > "$dth" \
+    || problems+=("could not derive the second thread")
+  jq '(.[].data.repository.pullRequest.reviewThreads.nodes) |=
+        (. + [(.[] | select(.path == "README.md") | .id = "dup")])' "$fx/basic.th.json" > "$sth" \
+    || problems+=("could not derive the twin thread")
+  toc=$(zsh "$script" --pr 1001 --toc --only thread --fixtures "$tl" "$dth" 2>&1) || { rc=$?; problems+=("toc exit $rc"); }
+  [[ $toc == *$'\nthread  README.md:3 OPEN @bbb2222 ['*$'\nthread  README.md:3 OPEN @bbb2222 [carol 2026-08-15 08:02]'* ]] \
+    || problems+=("the two thread lines do not name their openers: $toc")
+  out=$(zsh "$script" --pr 1001 --item 'thread  README.md:3 OPEN @bbb2222 [carol' --fixtures "$tl" "$dth" 2>&1) \
+    || { rc=$?; problems+=("the opener did not select one: exit $rc"); }
+  [[ $out == 'thread  README.md:3 OPEN @bbb2222'$'\n''    [carol 2026-08-15 08:02]'$'\n''      A second thread'* ]] \
+    || problems+=("the opener selected the wrong thread: $out")
+  err=$(zsh "$script" --pr 1001 --item 'thread  README.md:3' --fixtures "$tl" "$sth" 2>&1 >/dev/null) \
+    && problems+=("two identical lines exited 0")
+  [[ $err == *"2 items share this exact TOC line"*"dump"* ]] \
+    || problems+=("identical lines: the refusal does not say so: $err")
+  rm -f "$dth" "$sth"
+  report "$name" "item" $rc "$out"
+  return 0
+}
+item_same_line_threads
 # item-past-filters — what the default view holds back can still be fetched
 # by name: a bot comment, a merge commit, a thread of a filtered bot review.
 # A hidden comment prints its marker alone unless --hidden, as it renders.
