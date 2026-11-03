@@ -983,6 +983,17 @@ item_refusals() {
     && problems+=("a bot's bare header chose its empty comment: exit 0")
   [[ $err == *"2 items start with: comment [vercel[bot] 2026-08-14 20:02]"* ]] \
     || problems+=("bot bare header: not refused as a prefix: $err")
+  # A preview may itself end in something header-shaped (`see [a 2026-08-16
+  # 18:00]`); only the whole line from its start is a bare header, so this
+  # one still names its comment beside the longer one.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (map(if .__typename == "IssueComment" and .author.login == "romansod" then .body = "see [a 2026-08-16 18:00]" else . end)
+         + [(.[] | select(.__typename == "IssueComment" and .author.login == "romansod") | .body = "see [a 2026-08-16 18:00] more")])' \
+    "$tl" > "$dtl" || problems+=("could not derive the header-shaped previews")
+  out=$(zsh "$script" --pr 1001 --item 'comment [romansod 2026-08-14 23:40] see [a 2026-08-16 18:00]' --fixtures "$dtl" "$fx/basic.th.json" 2>&1) \
+    || { rc=$?; problems+=("a preview ending in a header shape was not selected: exit $rc"); }
+  [[ $out == $'comment [romansod 2026-08-14 23:40]\n  see [a 2026-08-16 18:00]' ]] \
+    || problems+=("the header-shaped preview selected: $out")
   rm -f "$dtl"
   report "$name" "item" $rc "$out"
   return 0
