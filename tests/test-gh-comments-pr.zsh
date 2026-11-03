@@ -1967,6 +1967,11 @@ argcase arg-only-nothing-after-anchor 0 "(no items of kind: review after the anc
   42 --toc --latest --only review --fixtures "$fx/multi.tl.json" "$fx/multi.th.json"
 argcase arg-only-nothing-since    0 "(no items of kind: commit since 2026-08-14T23:30)" \
   1001 --toc --since 2026-08-14T23:30 --only commit --fixtures "$fx/basic.tl.json" "$fx/basic.th.json"
+# --unresolved is a view of its own: bot-review-late has a human review, but
+# none with an open thread, so the line names the view rather than say the PR
+# has no review.
+argcase arg-only-nothing-unresolved 0 "(no items of kind: review in the unresolved view)" \
+  42 --toc --unresolved --only review --fixtures "$fx/bot-review-late.tl.json" "$fx/bot-review-late.th.json"
 # Both at once: the window is after the anchor *and* since the date.
 argcase arg-only-nothing-anchor-since 0 "(no items of kind: review after the anchor and since 2026-08-12)" \
   42 --toc --latest --since 2026-08-12 --only review --fixtures "$fx/multi.tl.json" "$fx/multi.th.json"

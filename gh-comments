@@ -1077,7 +1077,8 @@ def pick: [.[] | select(.toc == $item and .toc != (.full | split("\n")[0]))] as 
 # What --only left of the view, or one line saying it left nothing, so an
 # empty answer is never mistaken for an empty discussion.
 # Under a window (a slice, --since) it names the window: the kind may well be
-# on the PR, before it.
+# on the PR, before it. Likewise the unresolved view, which keeps only the
+# reviews and threads that are still open.
 def nothing_kept($where):
   if length == 0 and $only != "" then "(no items of kind: \($only | split(",") | join(", "))\($where))"
   else .[] end;
@@ -1525,7 +1526,8 @@ def thread_window: if $since != ""
    ($orphans | r_thread_block("threads with no parent review:"; $TOC)),
    ($held | r_thread_block("threads in filtered bot reviews:"; $TOC))
  end)]
- | nothing_kept([(if $sliced then "after the anchor" else empty end),
+ | nothing_kept([(if $UNRES then "in the unresolved view" else empty end),
+                 (if $sliced then "after the anchor" else empty end),
                  (if $since != "" then "since \($since)" else empty end)]
                 | if length == 0 then "" else " " + join(" and ") end))
 end
