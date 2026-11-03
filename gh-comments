@@ -263,7 +263,14 @@ fi
 typeset -a KINDS_ANY=(comment body) KINDS_PR=(review thread commit force-push)
 typeset -a KINDS_ISSUE=(xref closed reopened renamed) ONLY_KINDS=()
 if [[ -n "$ONLY" ]]; then
-  ONLY_KINDS=(${(u)${(s:,:)ONLY//[[:space:]]/}})
+  # Trimmed at both ends only: a space inside a kind is part of what was
+  # typed, and the refusal names the kind as typed.
+  for k in "${(@s:,:)ONLY}"; do
+    while [[ $k == [[:space:]]* ]]; do k=${k#?}; done
+    while [[ $k == *[[:space:]] ]]; do k=${k%?}; done
+    [[ -n $k ]] && ONLY_KINDS+=("$k")
+  done
+  ONLY_KINDS=("${(@u)ONLY_KINDS}")
   if (( ${#ONLY_KINDS} == 0 )); then
     print -r -- "$PROG: --only needs at least one kind; got: $ONLY" >&2
     exit 1

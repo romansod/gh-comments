@@ -969,6 +969,9 @@ argcase arg-only-pr-kind-resolved 1 "--only commit only applies to pull requests
 argcase arg-only-issue-kind-no-number 1 "--only renamed only applies to issues; no number means the current branch's pull request" \
   --only renamed
 argcase arg-only-spaces          0 "renamed [romansod" 21 --toc --only ' renamed , xref' --fixtures "$fx/issue-basic.tl.json"
+# Only the spaces around a kind go: one inside it is part of what was typed,
+# and the refusal names it as typed.
+argcase arg-only-inner-space     1 "--only: unknown kind: force push (kinds:" 21 --only 'comment, force push'
 # A filter that keeps nothing says so instead of rendering an empty discussion.
 argcase arg-only-nothing-kept    0 "(no items of kind: renamed)" 5 --toc --only renamed --fixtures "$fx/issue-closed.tl.json"
 # Under --since the line names the window: the rename is on the issue, before it.
