@@ -1584,7 +1584,11 @@ else
   # comments by one author in one minute without --hidden. Asking for more
   # of the line would send the caller round in a circle.
   typeset -aU ITEM_LINES=("${(@f)${ITEM_OUT#*$'\n'}}")
-  if (( ${#ITEM_LINES} == 1 )); then
+  # Hidden comments without --hidden are the one twin --hidden can part: their
+  # lines then carry previews, which a dump without it would not show either.
+  if (( ${#ITEM_LINES} == 1 )) && (( ! HIDDEN )) && [[ ${ITEM_LINES[1]} == *'(hidden: '* ]]; then
+    print -r -- "$PROG: $ITEM_N items share this exact TOC line, so --item cannot tell them apart; with --hidden their lines carry previews (rerun --toc and --item with --hidden):" >&2
+  elif (( ${#ITEM_LINES} == 1 )); then
     print -r -- "$PROG: $ITEM_N items share this exact TOC line, so --item cannot tell them apart; dump the full render and slice it instead:" >&2
   else
     print -r -- "$PROG: $ITEM_N items start with: $ITEM — give more of the line:" >&2

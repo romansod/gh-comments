@@ -1050,6 +1050,19 @@ item_past_filters() {
   out=$(zsh "$script" --pr 1001 --hidden --item 'comment [dave' --fixtures "$fx/hidden.tl.json" "$fx/hidden.th.json" 2>&1) \
     || { rc=$?; problems+=("hidden --hidden exit $rc"); }
   [[ $out == 'comment [dave 2026-08-14 22:00] (hidden: outdated)'$'\n''  '?* ]] || problems+=("--hidden did not print the body: $out")
+  # Two hidden comments by one author in one minute share their marker-only
+  # line, and a dump without --hidden shows them the same way; --hidden is
+  # what tells them apart, so that is what the refusal points at.
+  local htl
+  htl=$(mktemp) || { problems+=("mktemp failed"); report "$name" "item" 1 ""; return 0; }
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "dave") | .body = "A second hidden note.")])' \
+    "$fx/hidden.tl.json" > "$htl" || problems+=("could not derive the twin hidden comments")
+  err=$(zsh "$script" --pr 1001 --item 'comment [dave' --fixtures "$htl" "$fx/hidden.th.json" 2>&1 >/dev/null) \
+    && problems+=("two hidden twins exited 0")
+  [[ $err == *"share this exact TOC line"*"--hidden"* && $err != *"dump"* ]] \
+    || problems+=("hidden twins: the refusal does not point at --hidden: $err")
+  rm -f "$htl"
   report "$name" "item" $rc "$out"
   return 0
 }

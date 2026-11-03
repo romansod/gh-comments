@@ -369,7 +369,8 @@ as one. A thread's
 TOC line ends with who opened it and when, so two threads on one line differ.
 Lines that agree in every character (two threads one person opened on one
 line in one minute, or two hidden comments by one author in one minute
-without `--hidden`) are refused as such, and only the dump can separate them.
+without `--hidden`) are refused as such: the dump can separate the threads,
+and `--hidden` the comments, whose lines then carry previews.
 
 The counts line under the header is authoritative and says what the default
 view held back: `(+2 bots filtered)`, `(1 hidden)`, `(+4 housekeeping
