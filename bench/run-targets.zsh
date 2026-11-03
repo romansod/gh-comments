@@ -6,8 +6,18 @@
 #
 # Slices are cut from the dumps run-cases.zsh wrote, so run that first. The four
 # items, and the PR or issue each comes from, are the `slices` in targets.json.
+#
+# Beside each slice runs the flow that needs no dump: `--toc --only <kind>`
+# (only_toc), then `--item` with the header from that TOC (item). Both are live
+# calls of the script under test, chosen as run-cases.zsh chooses it.
 set -uo pipefail
 zmodload zsh/datetime zsh/mathfunc
+if [[ -n ${GH_COMMENTS:-} ]]; then
+  S=${GH_COMMENTS:A}
+else
+  S=${0:A:h:h}/gh-comments
+fi
+[[ -x $S ]] || { print -ru2 -- "run-targets: $S is not an executable gh-comments"; exit 1 }
 cd ${0:A:h}
 # New outputs need a new count, as in run-cases.zsh.
 rm -f tokens.tsv
@@ -60,6 +70,11 @@ repo_of() { jq -r --arg l "$1" '(.prs + .issues)[] | select(.label == $l) | "\(.
 L=$(t .slices.TA.from); IFS=$'\t' read -r R N <<< "$(repo_of $L)"
 C=$(t .slices.TA.created)
 run TA skill_slice slice out/$L.s_full.txt "^comment [[][^ ]+ ${C%T*} ${C#*T}[]]"
+# The header an agent copies from the narrowed TOC, up to its closing bracket.
+# None found leaves it empty, which --item refuses, so the exit column says so.
+run TA only_toc $S $N --pr -R $R --toc --only comment
+H=$(grep -m1 -E "^comment \[[^ ]+ ${C%T*} ${C#*T}\]" out/TA.only_toc.txt | sed 's/].*/]/')
+run TA item $S $N --pr -R $R --item "$H"
 run TA expert_list gh api repos/$R/issues/$N/comments --paginate --jq $LIST_IC
 ID=$(awk -F'\t' -v c="$C" 'index($3, c) == 1 {print $1; exit}' out/TA.expert_list.txt)
 run TA expert_fetch gh api repos/$R/issues/comments/$ID --jq .body
@@ -74,6 +89,8 @@ thread_target() { # thread_target <key>
   sel="select(.path == \"$P\" and ((.line // .originalLine) == $LN))"
   run $K skill_slice slice out/$L.s_full.txt "$re"
   [[ $(t ".slices.$K.open // false") == true ]] && run $K unres_slice slice out/$L.s_unres.txt "$re"
+  run $K only_toc $S $N --pr -R $R --toc --only thread
+  run $K item $S $N --pr -R $R --item "thread  $P:$LN "
   run $K expert_list gh api graphql --paginate -F o=$O -F n=$NM -F num=$N -f query=$GQL_LIST --jq $GQL_LIST_JQ
   run $K expert_fetch gh api graphql --paginate -F o=$O -F n=$NM -F num=$N -f query=$GQL_BODIES \
     --jq ".data.repository.pullRequest.reviewThreads.nodes[] | $sel | .comments.nodes[] | \"[\\(.author.login) \\(.createdAt)]\\n\\(.body)\\n\""
@@ -84,6 +101,8 @@ thread_target TC
 # --- TD: the last comment on an issue ------------------------------------------
 L=$(t .slices.TD.from); IFS=$'\t' read -r R N <<< "$(repo_of $L)"
 run TD skill_slice slice_lit out/$L.s_full.txt "$(grep '^comment \[' out/$L.s_full.txt | tail -1)"
+run TD only_toc $S $N --issue -R $R --toc --only comment
+run TD item $S $N --issue -R $R --item "$(grep '^comment \[' out/TD.only_toc.txt | tail -1 | sed 's/].*/]/')"
 run TD expert_list gh api repos/$R/issues/$N/comments --paginate --jq $LIST_IC
 ID=$(tail -1 out/TD.expert_list.txt | cut -f1)
 run TD expert_fetch gh api repos/$R/issues/comments/$ID --jq .body
