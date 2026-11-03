@@ -18,6 +18,10 @@
 #   bench-tables-match-run analyze.py over the newest filed run, with the
 #                          run before it as baseline, reproduces its
 #                          committed tables.md byte for byte
+#   bench-skill-bytes      the newest run's fixed-cost rows for SKILL.md
+#                          and each reference file carry the byte size of
+#                          the file as committed, so a skill edit after the
+#                          count shows up as a stale row
 set -uo pipefail
 
 here=${0:A:h}
@@ -129,5 +133,26 @@ bench_tables_match_run() {
   report "$name" "stale tables"
 }
 bench_tables_match_run
+
+bench_skill_bytes() {
+  local name=bench-skill-bytes run id k key file bytes size
+  local -a runs
+  runs=("$root"/bench/runs/*(/N:t))
+  run=$root/bench/runs/${runs[-1]}
+  while IFS=$'\t' read -r id bytes; do
+    [[ $id == FIX.(pr|issue)_* ]] || continue
+    k=${${id#FIX.}%%_*} key=${id#FIX.${k}_}
+    case $key in
+      (skillmd) file=skills/$k-comments/SKILL.md ;;
+      (ref)     file=skills/$k-comments/references/output.md ;;
+      (flags|recipes) file=skills/$k-comments/references/$key.md ;;
+      (*) continue ;;
+    esac
+    size=$(wc -c < "$root/$file")
+    (( size == bytes )) || problems+=("$id: run counted $bytes bytes, $file is ${size// /} — recount the skill files")
+  done < <(cut -f1,2 "$run/tokens.tsv")
+  report "$name" "stale fixed costs"
+}
+bench_skill_bytes
 
 (( fails == 0 ))

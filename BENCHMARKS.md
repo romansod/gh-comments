@@ -11,7 +11,9 @@ SKILL.md files (#7), which carries every change since v1.0.0: the closer and
 `--closure` (#5), hidden reviews (#9), and `--only`/`--item` with the thread
 opener on each thread's `--toc` line (#6). The targets are nine public PRs
 and issues in [cli/cli](https://github.com/cli/cli), and tokens were counted
-with `claude-opus-5-5`. The harness, the targets and the raw run are in
+with `claude-opus-5-5`. The skill files were re-measured after the review
+fixes that followed changed them, so their fixed costs are the branch's
+final ones; every other output is as captured. The harness, the targets and the raw run are in
 [`bench/`](bench/README.md); the full generated report, with a heatmap,
 timings and a per-output delta against the 2026-10-22 run, is
 [`bench/runs/2026-11-03/tables.md`](bench/runs/2026-11-03/tables.md).
@@ -93,8 +95,8 @@ The targets are labelled by the shape of their discussion:
 | `issue-comments` SKILL.md | each invocation | 2,671 | 1,007 |
 | `pr-comments` references/flags.md | for a flag beyond the skill's table | 2,825 | 1,017 |
 | `issue-comments` references/flags.md | for a flag beyond the skill's table | 1,785 | 675 |
-| `pr-comments` references/recipes.md | for a dump read in slices, or a finding to re-check | 1,078 | 454 |
-| `issue-comments` references/recipes.md | for a dump read in slices, or before acting | 1,013 | 409 |
+| `pr-comments` references/recipes.md | for a dump read in slices, or a finding to re-check | 1,166 | 520 |
+| `issue-comments` references/recipes.md | for a dump read in slices, or before acting | 1,075 | 457 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,537 | 1,561 |
 | `issue-comments` references/output.md | when a marker needs interpreting | 3,896 | 1,394 |
 
@@ -159,10 +161,10 @@ The skill's documented flow for one item needs no dump: a TOC narrowed to the it
 
 | Target | `gh … view --comments` | naive complete | `gh-comments` full | TOC + slice | + SKILL.md | **`--only` + `--item`** | + SKILL.md | expert list → fetch | payload |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| cli#13946 top-level comment | 1,369 ✓ | 42,162 | 8,191 | 2,288 | 3,838 | **477** | 1,573 | 372 | 347 |
-| cli#13946 inline thread | 1,369 ✗ | 42,162 | 8,191 | 2,123 | 3,673 | **977** | 2,073 | 816 | 182 |
-| cli#14104 open thread | 6,105 ✗ | 66,488 | 8,502 | 2,721 | 4,271 | **1,249** | 2,345 | 1,104 | 334 |
-| cli#14483 last comment | 772 ✓ | 772 | 907 | 451 | 1,867 | **182** | 1,189 | 158 | 37 |
+| cli#13946 top-level comment | 1,369 ✓ | 42,162 | 8,191 | 2,288 | 3,904 | **477** | 1,573 | 372 | 347 |
+| cli#13946 inline thread | 1,369 ✗ | 42,162 | 8,191 | 2,123 | 3,739 | **977** | 2,073 | 816 | 182 |
+| cli#14104 open thread | 6,105 ✗ | 66,488 | 8,502 | 2,721 | 4,337 | **1,249** | 2,345 | 1,104 | 334 |
+| cli#14483 last comment | 772 ✓ | 772 | 907 | 451 | 1,915 | **182** | 1,189 | 158 | 37 |
 
 ### Task 5 — address the most recent review
 
