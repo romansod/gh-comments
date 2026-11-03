@@ -219,6 +219,8 @@ check html-heavy-full  html-heavy 9
 check html-heavy-toc   html-heavy 9 --toc
 
 check reply-51-full  reply-51 10
+# On a TOC line the opener follows the TRUNCATED marker, the two in that order.
+check reply-51-toc   reply-51 10 --toc
 
 check late-reply-since  late-reply 11 --since 2026-08-10
 
