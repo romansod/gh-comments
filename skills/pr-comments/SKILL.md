@@ -16,7 +16,7 @@ description: >
 
 You are executing the pr-comments skill.
 
-Invoked as `/gh-comments:pr-comments [<N>] [<owner>/<repo>]` (no `<N>`: the
+Invoked as `/gh-comments:pr-comments [<N> [<owner>/<repo>]]` (no `<N>`: the
 current branch's PR), or whenever a task needs a PR's comments or reviews.
 
 ## The command
