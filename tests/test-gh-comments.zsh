@@ -981,6 +981,29 @@ argcase arg-item-bot-comment     0 "Marking as stale." 21 --item 'comment [githu
 argcase arg-item-body            0 $'body [romansod 2026-08-16 16:32]\n  ## Problem' 21 --item body --fixtures "$fx/issue-basic.tl.json"
 argcase arg-item-none            1 "no item starts with: review" 21 --item review --fixtures "$fx/issue-basic.tl.json"
 argcase arg-item-several         1 "2 items start with: label [romansod" 21 --item 'label [romansod' --fixtures "$fx/issue-basic.tl.json"
+# item-nested-events — a one-line event is all header-and-text: its whole
+# line names it even when a same-minute event's line begins with it, so the
+# label `+design` is selectable beside `+design-system`. Only the bare header
+# form the docs teach, `<kind> [login date]`, never wins as a whole line.
+item_nested_events() {
+  local name=item-nested-events out err dtl
+  local -i rc=0
+  dtl=$(mktemp) || { problems+=("mktemp failed"); report "$name" "item" 1 ""; return 0; }
+  jq '(.[].data.repository.issueOrPullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "LabeledEvent" and .label.name == "design")
+               | .label.name = "design-system")])' "$fx/issue-basic.tl.json" > "$dtl" \
+    || problems+=("could not derive the nested labels")
+  out=$(zsh "$script" 21 --item 'label [romansod 2026-08-16 16:33] +design' --fixtures "$dtl" 2>&1) \
+    || { rc=$?; problems+=("the whole shorter label line was not selected: exit $rc"); }
+  [[ $out == 'label [romansod 2026-08-16 16:33] +design' ]] || problems+=("the shorter label line selected: $out")
+  err=$(zsh "$script" 21 --item 'label [romansod 2026-08-16 16:33]' --fixtures "$dtl" 2>&1 >/dev/null) \
+    && problems+=("the bare header chose one label: exit 0")
+  [[ $err == *"start with: label [romansod 2026-08-16 16:33]"* ]] || problems+=("bare header: not refused as a prefix: $err")
+  rm -f "$dtl"
+  report "$name" "item" $rc "$out"
+  return 0
+}
+item_nested_events
 
 # missing-* — a tool the script needs but PATH lacks is one sentence naming
 # every missing tool, not zsh's "command not found" with a line number. PATH

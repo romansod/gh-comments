@@ -362,9 +362,10 @@ gh-comments 989 --item 'comment [alice 2026-09-21 12:47]'
 
 `--item` takes any prefix of a TOC line. A prefix two items share is refused
 with both lines listed; copy more of the line to tell them apart. A whole
-line names its own item even when it begins a longer line, unless that line
-is only the item's header (an empty comment): that is the header prefix
-itself, and is refused as one. A thread's
+line names its own item even when it begins a longer line (`+design` beside
+`+design-system`), unless that line is only the `<kind> [login date]`
+header (an empty comment): that is the header prefix itself, and is refused
+as one. A thread's
 TOC line ends with who opened it and when, so two threads on one line differ.
 Lines that agree in every character (two threads one person opened on one
 line in one minute, or two hidden comments by one author in one minute

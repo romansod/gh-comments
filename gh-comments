@@ -1066,11 +1066,13 @@ def want($k): $only == "" or (($only | split(",")) | index($k)) != null;
 # between the item and a refusal listing every matching line. A prefix that
 # is some line whole names that line, even when it also begins a longer one
 # (`LGTM` and `LGTM, thanks`): otherwise the shorter could never be named.
-# Only a line with text past its item header does, though (a preview, a
-# thread opener): a line that is the bare header, as an empty comment is, is
-# the same text as the header prefix the docs teach, so it would silently
-# win over the comment beside it.
-def pick: [.[] | select(.toc == $item and .toc != (.full | split("\n")[0]))] as $x
+# Only a line with text past the header form the docs teach does, though,
+# `<kind> [login date]`: a line that is that and nothing more (an empty
+# comment) is the very prefix a caller types, so it would silently win over
+# the comment beside it. A one-line event (`label [..] +design`) and a review
+# line ending in its counts are more than that header, and do win.
+def bareheader: test("^[a-z-]+ +\\[[^]]*\\]$");
+def pick: [.[] | select(.toc == $item and (.toc | bareheader | not))] as $x
   | (if ($x | length) > 0 then $x else [.[] | select(.toc | startswith($item))] end) as $m
   | if ($m | length) == 1 then "1", $m[0].full
     else "\($m | length)", ($m[] | .toc) end;
