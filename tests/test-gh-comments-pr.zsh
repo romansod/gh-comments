@@ -952,6 +952,26 @@ item_refusals() {
     && problems+=("a bare header chose the empty comment beside another: exit 0")
   [[ $err == *"2 items start with: comment [romansod 2026-08-14 23:40]"*"Thanks @reviewer-bart"* ]] \
     || problems+=("bare header: both lines not listed: $err")
+  # A review line with nothing past its counts is more than the bare header
+  # (`review  [carol 2026-08-14 22:30]`), so its whole line names it beside a
+  # same-minute review whose line goes on to a preview; the bare header is
+  # still only a prefix of both.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.id == "PRR_review1")
+               | .id = "PRR_carol_empty" | .author.login = "carol" | .submittedAt = "2026-08-14T22:30:00Z"
+               | .state = "COMMENTED" | .body = ""),
+              (.[] | select(.id == "PRR_review1")
+               | .id = "PRR_carol_ok" | .author.login = "carol" | .submittedAt = "2026-08-14T22:30:00Z"
+               | .state = "COMMENTED" | .body = "ok")])' "$tl" > "$dtl" \
+    || problems+=("could not derive the two reviews")
+  out=$(zsh "$script" --pr 1001 --item 'review  [carol 2026-08-14 22:30] COMMENTED, 0 threads (0 open)' --fixtures "$dtl" "$fx/basic.th.json" 2>&1) \
+    || { rc=$?; problems+=("the whole empty-review line was not selected: exit $rc"); }
+  [[ $out == 'review  [carol 2026-08-14 22:30] COMMENTED, 0 threads (0 open)' ]] \
+    || problems+=("the whole empty-review line selected: $out")
+  err=$(zsh "$script" --pr 1001 --item 'review  [carol 2026-08-14 22:30]' --fixtures "$dtl" "$fx/basic.th.json" 2>&1 >/dev/null) \
+    && problems+=("the bare review header chose one review: exit 0")
+  [[ $err == *"2 items start with: review  [carol 2026-08-14 22:30]"* ]] \
+    || problems+=("bare review header: not refused as a prefix: $err")
   rm -f "$dtl"
   report "$name" "item" $rc "$out"
   return 0
