@@ -999,6 +999,15 @@ item_nested_events() {
   err=$(zsh "$script" 21 --item 'label [romansod 2026-08-16 16:33]' --fixtures "$dtl" 2>&1 >/dev/null) \
     && problems+=("the bare header chose one label: exit 0")
   [[ $err == *"start with: label [romansod 2026-08-16 16:33]"* ]] || problems+=("bare header: not refused as a prefix: $err")
+  # A `]` at the end of the text past the header does not make a line bare:
+  # the label `+[wip]` beside `+[wip] x` is named by its whole line.
+  jq '(.[].data.repository.issueOrPullRequest.timelineItems.nodes) |=
+        (map(if .__typename == "LabeledEvent" and .label.name == "design" then .label.name = "[wip]" else . end)
+         + [(.[] | select(.__typename == "LabeledEvent" and .label.name == "design") | .label.name = "[wip] x")])' \
+    "$fx/issue-basic.tl.json" > "$dtl" || problems+=("could not derive the bracketed labels")
+  out=$(zsh "$script" 21 --item 'label [romansod 2026-08-16 16:33] +[wip]' --fixtures "$dtl" 2>&1) \
+    || { rc=$?; problems+=("the whole +[wip] line was not selected: exit $rc"); }
+  [[ $out == 'label [romansod 2026-08-16 16:33] +[wip]' ]] || problems+=("the +[wip] line selected: $out")
   rm -f "$dtl"
   report "$name" "item" $rc "$out"
   return 0
