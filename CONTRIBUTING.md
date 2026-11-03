@@ -124,9 +124,11 @@ recount until the release, which runs `make bench-check`.
 
 1. `make bench-check`: the newest filed benchmark run's fixed costs must
    match the skill files as they ship. When a skill file changed after the
-   count, it names the stale rows; recount into that run (the script's
-   header has the commands) before tagging. It is not in `make check`,
-   since the recount calls `claude -p` and costs money.
+   count, it names the stale rows; `zsh bench/refile-fixed.zsh` recounts
+   them into that run, keeps its other rows as filed, and rebuilds its
+   tables, then rebuild BENCHMARKS.md's results from them before tagging.
+   It is not in `make check`, since the recount calls `claude -p` and costs
+   money.
 2. Bump `VERSION=` in `gh-comments` and `version` in
    `.claude-plugin/plugin.json` together; `make lint` refuses a mismatch.
 3. `claude plugin tag --push` creates and pushes the `gh-comments--v<version>`

@@ -19,6 +19,12 @@
 #   bench-tables-match-run analyze.py over the newest filed run, with the
 #                          run before it as baseline, reproduces its
 #                          committed tables.md byte for byte
+#   bench-refile-keeps-captures  on a copy with no bench/out/ (a fresh
+#                          checkout) and claude stubbed: make bench-check
+#                          fails on an edited skill file and names its row;
+#                          bench/refile-fixed.zsh recounts it into the
+#                          newest run, keeps every captured row as filed,
+#                          rebuilds the tables and leaves bench-check passing
 #   readme-figures-match-run README's diagram and How it compares table
 #                          quote the newest run's cli/cli#14104 figures and
 #                          name that run, and its per-invocation skill cost
@@ -157,6 +163,39 @@ bench_tables_match_run() {
   report "$name" "stale tables"
 }
 bench_tables_match_run
+
+bench_refile_keeps_captures() {
+  local name=bench-refile-keeps-captures tmp run out size
+  local -a runs
+  runs=("$root"/bench/runs/*(/N:t))
+  run=bench/runs/${runs[-1]}
+  tmp=$(mktemp -d)
+  mkdir -p "$tmp/tree" "$tmp/bin"
+  ( cd "$root" && tar --exclude=.git --exclude=bench/out --exclude=bench/tokens.json \
+      --exclude=bench/tokens.tsv -cf - . ) | tar -C "$tmp/tree" -xf -
+  # Stands in for `claude -p --output-format json`: a third of the bytes read.
+  print -r -- '#!/bin/sh
+n=$(wc -c | tr -d " ")
+printf "{\"usage\":{\"input_tokens\":%d},\"total_cost_usd\":0}\n" $(( n / 3 ))' > "$tmp/bin/claude"
+  chmod +x "$tmp/bin/claude"
+  print -n ' ' >> "$tmp/tree/skills/pr-comments/SKILL.md"
+  out=$(zsh "$tmp/tree/bench/check-skill-bytes.zsh" 2>&1) \
+    && problems+=("make bench-check passed on a skill file edited after the count")
+  [[ $out == *FIX.pr_skillmd* ]] || problems+=("make bench-check did not name FIX.pr_skillmd: ${out%%$'\n'*}")
+  out=$(PATH="$tmp/bin:$PATH" zsh "$tmp/tree/bench/refile-fixed.zsh" 2>&1) \
+    || problems+=("refile-fixed.zsh exited $?: ${out##*$'\n'}")
+  diff <(grep -v '^FIX\.' "$root/$run/tokens.tsv") <(grep -v '^FIX\.' "$tmp/tree/$run/tokens.tsv") >/dev/null \
+    || problems+=("a captured row of $run/tokens.tsv changed or went missing")
+  size=$(wc -c < "$tmp/tree/skills/pr-comments/SKILL.md")
+  grep -q "^FIX.pr_skillmd	${size// /}	" "$tmp/tree/$run/tokens.tsv" \
+    || problems+=("FIX.pr_skillmd was not recounted at ${size// /} bytes")
+  [[ -e $tmp/tree/bench/tokens.tsv ]] && problems+=("a FIX-only bench/tokens.tsv was left behind")
+  zsh "$tmp/tree/bench/check-skill-bytes.zsh" >/dev/null 2>&1 \
+    || problems+=("make bench-check still fails after the refile")
+  rm -rf "$tmp"
+  report "$name" "the refile loses the run"
+}
+bench_refile_keeps_captures
 
 readme_figures_match_run() {
   local name=readme-figures-match-run run readme section id lo hi n

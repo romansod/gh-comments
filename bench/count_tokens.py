@@ -15,6 +15,11 @@ themselves are net of the overhead measured alongside them, so they survive a
 CLI upgrade; they do not survive a model change, which can change the
 tokenizer, so the cache records the model it was counted with and is discarded
 when MODEL differs.
+
+COUNT_ONLY=<prefix> counts only the out/*.txt whose name starts with it, and
+tokens.tsv then holds only those rows: refile-fixed.zsh uses COUNT_ONLY=FIX.
+to recount the skill files without the captures, which a fresh checkout does
+not have (out/ is not tracked).
 """
 import hashlib, json, os, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
@@ -60,7 +65,8 @@ def main():
     tsv = os.path.join(HERE, "tokens.tsv")
     if os.path.exists(tsv):
         os.remove(tsv)
-    files = sorted(f for f in os.listdir(OUT) if f.endswith(".txt"))
+    only = os.environ.get("COUNT_ONLY", "")
+    files = sorted(f for f in os.listdir(OUT) if f.endswith(".txt") and f.startswith(only))
     by_hash, todo = {}, {}
     for f in files:
         data = open(os.path.join(OUT, f), encoding="utf-8", errors="replace").read()
