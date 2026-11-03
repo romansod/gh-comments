@@ -1938,6 +1938,12 @@ argcase arg-only-issue-kind   1 "--only xref, --only closed only apply to issues
 # could only print an empty line under a counts line that says otherwise.
 argcase arg-only-unresolved-kinds 1 "--only comment, --only commit with --unresolved, which renders only reviews and threads" \
   7 --unresolved --only comment,thread,commit
+# Each kind on its own, with a payload that would render: the refusal, not a
+# fetch that cannot run offline, is what must end the run.
+for k in comment body commit force-push; do
+  argcase arg-only-unresolved-$k 1 "--only $k with --unresolved, which renders only reviews and threads" \
+    1001 --unresolved --only $k --fixtures "$fx/basic.tl.json" "$fx/basic.th.json"
+done
 # Under a window, a filter that keeps nothing says the window is empty, not
 # the PR: multi has two reviews, both before the --latest anchor.
 argcase arg-only-nothing-after-anchor 0 "(no items of kind: review after the anchor)" \
