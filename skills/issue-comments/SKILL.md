@@ -45,7 +45,8 @@ Flags: `-R owner/name`; `--toc` (one line per item, no bodies);
 `--only <kind>[,<kind>...]` (only those kinds: `comment`, `body`, `xref`,
 `closed`, `reopened`, `renamed`; the counts header is unchanged);
 `--item '<TOC line prefix>'` (exactly one item, whole; no match, or several,
-listed, is an error; takes no other view flag but `--hidden`);
+listed, is an error; takes no other view flag but `--hidden`, which must
+match the `--toc` the line came from);
 `--closure` (why it was closed and by what: the header, the
 `closed`/`reopened` lines with their closer, and the PR cross-references,
 nothing else; refused on an issue never closed, and takes no other view flag);

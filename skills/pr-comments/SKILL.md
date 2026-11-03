@@ -51,7 +51,7 @@ Flags:
 - `--item '<TOC line prefix>'` — exactly one item, whole: a comment, a
   review with its threads, or a thread with its replies. No match, or
   several (listed), is an error; copy more of the line. Takes no other view
-  flag but `--hidden`.
+  flag but `--hidden`, which must match the `--toc` the line came from.
 - `--unresolved` — only reviews with open threads, and those threads.
 - `--latest[=<user>]` — the last substantive review or top-level comment
   (optionally by `<user>`) and everything after it. A bare approval, a

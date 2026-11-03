@@ -268,7 +268,9 @@ With no number, the current branch's open PR is used.
                                 housekeeping items can be named without the
                                 flags that list them. Exclusive with --toc,
                                 --only, --unresolved, --latest,
-                                --since-last-review and --since
+                                --since-last-review and --since. Give it the
+                                --hidden of the --toc the line came from: a
+                                hidden comment's line differs with it
 
   Pull requests only:
   --unresolved                  Only reviews with open threads, and those threads
