@@ -89,7 +89,9 @@
 #                    closer type the query does not select
 #   stubbed gh       call counts and query shape per resolved type — an issue
 #                    must not pay for the reviewThreads fetch
-#   argument validation  the flag parser's refusals
+#   argument validation  the flag parser's refusals, --only's kinds by name
+#                    and by resource type, and --item on an issue: its
+#                    refusals and the items the default view holds back
 #   missing tools    jq or gh absent from PATH is one sentence naming every
 #                    missing tool, refused before the branch lookup runs gh;
 #                    a --fixtures render needs only jq
@@ -230,6 +232,11 @@ check issue-basic-closure     issue-basic 21 --closure
 # A null closer under --closure: the header and one closed line, nothing else
 # (issue-closed's only xref is to an issue).
 check issue-closed-closure    issue-closed 5 --closure
+
+# issue-basic-only-* — --only on an issue: the events that say what happened
+# to it, or the comments alone. The counts line is unchanged either way.
+check issue-basic-only-events-toc  issue-basic 21 --toc --only closed,reopened,xref,renamed
+check issue-basic-only-comment     issue-basic 21 --only comment
 
 # bot-events-survive-default — the goldens above would happily record the bug
 # again if someone regenerated them after reintroducing it. This says out loud
@@ -946,6 +953,88 @@ argcase arg-closure-with-merges  1 "drop --merges" 21 --closure --merges
 argcase arg-closure-with-many    1 "drop --toc, --since, --events, --bots, --hidden, --unresolved, --latest, --merges" \
   21 --closure --toc --since 2026-01-01 --events --bots --hidden --unresolved --latest --merges
 argcase arg-closure-with-slr     1 "drop --since-last-review" 21 --closure --since-last-review
+argcase arg-closure-with-only    1 "drop --only, --item" 21 --closure --only comment --item x
+
+# --only: an unknown kind is refused by name, every one at once; a kind only
+# a PR has is refused on an issue, before any fetch when the type is pinned
+# and once the payload says so when it is not, and with no number it can
+# only be the current branch's PR.
+argcase arg-only-unknown         1 "--only: unknown kinds: frob, events (kinds: comment, body, review" 21 --only frob,comment,events
+argcase arg-only-no-kind         1 "--only needs at least one kind; got: ," 21 --only ,
+argcase arg-only-missing-value   1 "--only needs <kind>[,<kind>...]" 21 --only
+argcase arg-only-pr-kind-pinned  1 "--only review, --only thread only apply to pull requests; the type is pinned to an issue by --issue" \
+  21 --issue --only review,comment,thread
+argcase arg-only-pr-kind-resolved 1 "--only commit only applies to pull requests; #21 is an issue" \
+  21 --only commit --fixtures "$fx/issue-basic.tl.json"
+argcase arg-only-issue-kind-no-number 1 "--only renamed only applies to issues; no number means the current branch's pull request" \
+  --only renamed
+argcase arg-only-spaces          0 "renamed [romansod" 21 --toc --only ' renamed , xref' --fixtures "$fx/issue-basic.tl.json"
+# Only the spaces around a kind go: one inside it is part of what was typed,
+# and the refusal names it as typed.
+argcase arg-only-inner-space     1 "--only: unknown kind: force push (kinds:" 21 --only 'comment, force push'
+# Padding of several spaces and of tabs is trimmed whole, not one character.
+argcase arg-only-wide-padding    0 "renamed [romansod" 21 --toc --only $'\t  renamed  \t,  xref' --fixtures "$fx/issue-basic.tl.json"
+# A kind repeated with other padding is one kind, and is refused once.
+argcase arg-only-repeat-once     1 "--only: unknown kind: frob (kinds:" 21 --only 'frob, frob '
+# A filter that keeps nothing says so instead of rendering an empty discussion.
+argcase arg-only-nothing-kept    0 "(no items of kind: renamed)" 5 --toc --only renamed --fixtures "$fx/issue-closed.tl.json"
+# Under --since the line names the window: the rename is on the issue, before it.
+argcase arg-only-nothing-since   0 "(no items of kind: renamed since 2026-08-18)" 21 --toc --only renamed --since 2026-08-18 --fixtures "$fx/issue-basic.tl.json"
+
+# --item on an issue: housekeeping and bot comments can be fetched by name
+# though the default view does not list them; the body is an item too.
+argcase arg-item-housekeeping    0 "label [romansod 2026-08-16 16:33] +design" 21 --item 'label [romansod 2026-08-16 16:33]' --fixtures "$fx/issue-basic.tl.json"
+argcase arg-item-bot-comment     0 "Marking as stale." 21 --item 'comment [github-actions' --fixtures "$fx/issue-basic.tl.json"
+argcase arg-item-body            0 $'body [romansod 2026-08-16 16:32]\n  ## Problem' 21 --item body --fixtures "$fx/issue-basic.tl.json"
+argcase arg-item-none            1 "no item starts with: review" 21 --item review --fixtures "$fx/issue-basic.tl.json"
+argcase arg-item-several         1 "2 items start with: label [romansod" 21 --item 'label [romansod' --fixtures "$fx/issue-basic.tl.json"
+# Leading whitespace, tabs too, is dropped from the prefix: a line copied
+# from a refusal's indented listing still names its item. A prefix that was
+# only whitespace is no prefix.
+argcase arg-item-leading-tab     0 "label [romansod 2026-08-16 16:33] +design" 21 --item $'\t label [romansod 2026-08-16 16:33] +design' --fixtures "$fx/issue-basic.tl.json"
+argcase arg-item-only-space      1 "--item needs <header-prefix>" 21 --item $' \t ' --fixtures "$fx/issue-basic.tl.json"
+# item-nested-events — a one-line event is all header-and-text: its whole
+# line names it even when a same-minute event's line begins with it, so the
+# label `+design` is selectable beside `+design-system`. Only the bare header
+# form the docs teach, `<kind> [login date]`, never wins as a whole line.
+item_nested_events() {
+  local name=item-nested-events out err dtl
+  local -i rc=0
+  dtl=$(mktemp) || { problems+=("mktemp failed"); report "$name" "item" 1 ""; return 0; }
+  jq '(.[].data.repository.issueOrPullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "LabeledEvent" and .label.name == "design")
+               | .label.name = "design-system")])' "$fx/issue-basic.tl.json" > "$dtl" \
+    || problems+=("could not derive the nested labels")
+  out=$(zsh "$script" 21 --item 'label [romansod 2026-08-16 16:33] +design' --fixtures "$dtl" 2>&1) \
+    || { rc=$?; problems+=("the whole shorter label line was not selected: exit $rc"); }
+  [[ $out == 'label [romansod 2026-08-16 16:33] +design' ]] || problems+=("the shorter label line selected: $out")
+  err=$(zsh "$script" 21 --item 'label [romansod 2026-08-16 16:33]' --fixtures "$dtl" 2>&1 >/dev/null) \
+    && problems+=("the bare header chose one label: exit 0")
+  [[ $err == *"start with: label [romansod 2026-08-16 16:33]"* ]] || problems+=("bare header: not refused as a prefix: $err")
+  # A `]` at the end of the text past the header does not make a line bare:
+  # the label `+[wip]` beside `+[wip] x` is named by its whole line.
+  jq '(.[].data.repository.issueOrPullRequest.timelineItems.nodes) |=
+        (map(if .__typename == "LabeledEvent" and .label.name == "design" then .label.name = "[wip]" else . end)
+         + [(.[] | select(.__typename == "LabeledEvent" and .label.name == "design") | .label.name = "[wip] x")])' \
+    "$fx/issue-basic.tl.json" > "$dtl" || problems+=("could not derive the bracketed labels")
+  out=$(zsh "$script" 21 --item 'label [romansod 2026-08-16 16:33] +[wip]' --fixtures "$dtl" 2>&1) \
+    || { rc=$?; problems+=("the whole +[wip] line was not selected: exit $rc"); }
+  [[ $out == 'label [romansod 2026-08-16 16:33] +[wip]' ]] || problems+=("the +[wip] line selected: $out")
+  # A bot login with a hyphen and brackets (`github-actions[bot]`): its empty
+  # comment's line is a bare header too, refused beside the bot's other one.
+  jq '(.[].data.repository.issueOrPullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "github-actions[bot]")
+               | .body = "<!-- stale-marker -->")])' "$fx/issue-basic.tl.json" > "$dtl" \
+    || problems+=("could not derive the empty bot comment")
+  err=$(zsh "$script" 21 --item 'comment [github-actions[bot] 2026-08-17 09:00]' --fixtures "$dtl" 2>&1 >/dev/null) \
+    && problems+=("the bot bare header chose its empty comment: exit 0")
+  [[ $err == *"2 items start with: comment [github-actions[bot] 2026-08-17 09:00]"* ]] \
+    || problems+=("bot bare header: not refused as a prefix: $err")
+  rm -f "$dtl"
+  report "$name" "item" $rc "$out"
+  return 0
+}
+item_nested_events
 
 # missing-* — a tool the script needs but PATH lacks is one sentence naming
 # every missing tool, not zsh's "command not found" with a line number. PATH

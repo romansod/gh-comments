@@ -91,7 +91,11 @@
 # slice-matches-full run a rule over every *.th.json in the directory (a new
 # fixture is covered the day it lands), and hidden-bodies-gated,
 # fallback-is-toc, fallback-keeps-narrowing and latest-skips-hidden say out
-# loud what their goldens would otherwise re-record. Then six sections
+# loud what their goldens would otherwise re-record. The --item cases come
+# next: item-is-its-block feeds every TOC line of five renders back to --item
+# and checks the result against the full render; item-refusals and
+# item-past-filters pin the refusals and what the default view holds back.
+# The only-* goldens pin --only. Then six sections
 # assert exit codes and substrings, because their input is built at runtime:
 #
 #   oversized payload  generates a >1 MB timeline rather than committing one
@@ -215,6 +219,8 @@ check html-heavy-full  html-heavy 9
 check html-heavy-toc   html-heavy 9 --toc
 
 check reply-51-full  reply-51 10
+# On a TOC line the opener follows the TRUNCATED marker, the two in that order.
+check reply-51-toc   reply-51 10 --toc
 
 check late-reply-since  late-reply 11 --since 2026-08-10
 
@@ -267,6 +273,17 @@ check hidden-review-shown          hidden-review 44 --hidden
 check hidden-review-latest         hidden-review 44 --latest
 check hidden-review-toc-unresolved hidden-review 44 --toc --unresolved
 check hidden-review-slr            hidden-review 44 --since-last-review
+
+# only-* — --only keeps the kinds of item asked for and leaves the counts
+# line as it was. A review left out keeps its threads when thread is asked
+# for; review alone drops them; a filter that keeps nothing says so.
+check basic-only-comment-toc      basic 1001 --toc --only comment
+check basic-only-comment          basic 1001 --only comment
+check basic-only-thread-toc       basic 1001 --toc --only thread
+check basic-only-review           basic 1001 --only review
+check basic-only-review-thread-toc basic 1001 --toc --only review,thread
+check bot-review-only-thread-toc  bot-review 1001 --toc --only thread
+check multi-only-none-toc         multi 42 --toc --only force-push
 
 # ---------------------------------------------------------------------------
 # Non-golden cases. Everything above diffs a committed golden; everything
@@ -854,6 +871,313 @@ anchor_needs_live_thread() {
   return 0
 }
 anchor_needs_live_thread
+
+# item-is-its-block — --item prints the block the full render prints for that
+# item, chosen by its TOC line. Every TOC line of each fixture that names one
+# item (block titles do not) is fed back whole, under the flags that list
+# every item, and the output must be the header that line starts with and
+# appear verbatim in the full render under the same flags. A line two items
+# share would be refused, and none of these fixtures has one.
+item_is_its_block() {
+  local name=item-is-its-block base pr line out full head
+  local -i rc=0 n=0
+  local -a flags
+  for base pr flags in basic 1001 '--bots --merges' hidden 1001 '--bots' \
+      hidden 1001 '--bots --hidden' bot-review 1001 '--bots' hidden-review 44 ''; do
+    full=$(zsh "$script" --pr $pr ${=flags} --fixtures "$fx/$base.tl.json" "$fx/$base.th.json" 2>&1) \
+      || { rc=$?; problems+=("$base full exit $rc"); continue; }
+    while IFS= read -r line; do
+      [[ $line == (body|comment|review|thread|commit|force-push)' '* ]] || continue
+      (( n += 1 ))
+      out=$(zsh "$script" --pr $pr ${=flags} --item "$line" --fixtures "$fx/$base.tl.json" "$fx/$base.th.json" 2>&1) \
+        || { rc=$?; problems+=("$base ${flags:-(no flags)}: exit $rc on: $line"); continue; }
+      head=${out%%$'\n'*}
+      [[ $line == "$head"* ]] || problems+=("$base: header '$head' does not start the TOC line: $line")
+      [[ $full == *"$out"* ]] || problems+=("$base ${flags:-(no flags)}: not a block of the full render: $line")
+    done < <(zsh "$script" --pr $pr ${=flags} --toc --fixtures "$fx/$base.tl.json" "$fx/$base.th.json" 2>/dev/null)
+  done
+  (( n >= 30 )) || problems+=("only $n TOC lines were tried")
+  report "$name" "item" $rc "$out"
+  return 0
+}
+item_is_its_block
+# item-refusals — a prefix that matches nothing, or more than one item, is an
+# error on stderr with nothing on stdout, and several matches are listed, not
+# the first taken. Two comments by one author in one minute share a header,
+# so a copy of basic with a second such comment is refused on the header
+# and resolved by the preview text the TOC line carries after it.
+item_refusals() {
+  local name=item-refusals out err tl dtl
+  local -i rc=0
+  tl=$fx/basic.tl.json
+  local -a pair=(--fixtures "$tl" "$fx/basic.th.json")
+  err=$(zsh "$script" --pr 1001 --item 'comment [nobody' "${pair[@]}" 2>&1 >/dev/null) && problems+=("no match exited 0")
+  [[ $err == *"no item starts with: comment [nobody"* ]] || problems+=("no match: $err")
+  out=$(zsh "$script" --pr 1001 --item 'comment [nobody' "${pair[@]}" 2>/dev/null) || true
+  [[ -z $out ]] || problems+=("no match printed to stdout: $out")
+  err=$(zsh "$script" --pr 1001 --item 'commit' "${pair[@]}" 2>&1 >/dev/null) && problems+=("several matches exited 0")
+  [[ $err == *"3 items start with: commit"* ]] || problems+=("several: no count: $err")
+  [[ $err == *$'\n  commit  1a2b3c4 '*$'\n  commit  e5f6a7b '*$'\n  commit  9d8c7b6 '* ]] \
+    || problems+=("several: the matching lines are not listed: $err")
+  [[ $err != *"has no body to show"* ]] || problems+=("several: a bare-header note with no bare line listed: $err")
+  dtl=$(mktemp) || { problems+=("mktemp failed"); report "$name" "item" 1 ""; return 0; }
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "romansod")
+               | .body = "A second note in the same minute.")])' "$tl" > "$dtl" \
+    || problems+=("could not derive the same-minute timeline")
+  err=$(zsh "$script" --pr 1001 --item 'comment [romansod 2026-08-14 23:40]' --fixtures "$dtl" "$fx/basic.th.json" 2>&1 >/dev/null) \
+    && problems+=("a header two comments share exited 0")
+  [[ $err == *"2 items start with"*"Thanks @reviewer-bart"*"A second note"* ]] \
+    || problems+=("same minute: both lines not listed: $err")
+  out=$(zsh "$script" --pr 1001 --item 'comment [romansod 2026-08-14 23:40] A second' --fixtures "$dtl" "$fx/basic.th.json" 2>&1) \
+    || { rc=$?; problems+=("the preview did not select one: exit $rc"); }
+  [[ $out == $'comment [romansod 2026-08-14 23:40]\n  A second note in the same minute.' ]] \
+    || problems+=("the preview selected the wrong item: $out")
+  # A whole TOC line that begins another one (`LGTM` and `LGTM, thanks`) is
+  # still a name: an exact line wins over the lines it is a prefix of.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (map(if .__typename == "IssueComment" and .author.login == "romansod" then .body = "LGTM" else . end)
+         + [(.[] | select(.__typename == "IssueComment" and .author.login == "romansod") | .body = "LGTM, thanks")])' \
+    "$tl" > "$dtl" || problems+=("could not derive the nested timeline")
+  out=$(zsh "$script" --pr 1001 --item 'comment [romansod 2026-08-14 23:40] LGTM' --fixtures "$dtl" "$fx/basic.th.json" 2>&1) \
+    || { rc=$?; problems+=("a whole line that begins another was not selected: exit $rc"); }
+  [[ $out == $'comment [romansod 2026-08-14 23:40]\n  LGTM' ]] || problems+=("the exact line selected the wrong item: $out")
+  # ...but a bare header is not a name: a comment whose body cleans to
+  # nothing has a TOC line that is only its header, the same text as the
+  # header prefix the docs teach, so it never wins over the comment beside it.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "romansod")
+               | .body = "<!-- tracking marker -->")])' "$tl" > "$dtl" \
+    || problems+=("could not derive the empty-sibling timeline")
+  err=$(zsh "$script" --pr 1001 --item 'comment [romansod 2026-08-14 23:40]' --fixtures "$dtl" "$fx/basic.th.json" 2>&1 >/dev/null) \
+    && problems+=("a bare header chose the empty comment beside another: exit 0")
+  [[ $err == *"2 items start with: comment [romansod 2026-08-14 23:40]"*"Thanks @reviewer-bart"* ]] \
+    || problems+=("bare header: both lines not listed: $err")
+  # One of those listed lines is only its header: more of it cannot be
+  # given, so the refusal says that one has no body to show.
+  [[ $err == *"has no body to show"* ]] || problems+=("bare header: the refusal still asks for more of a bare line: $err")
+  # A review line with nothing past its counts is more than the bare header
+  # (`review  [carol 2026-08-14 22:30]`), so its whole line names it beside a
+  # same-minute review whose line goes on to a preview; the bare header is
+  # still only a prefix of both.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.id == "PRR_review1")
+               | .id = "PRR_carol_empty" | .author.login = "carol" | .submittedAt = "2026-08-14T22:30:00Z"
+               | .state = "COMMENTED" | .body = ""),
+              (.[] | select(.id == "PRR_review1")
+               | .id = "PRR_carol_ok" | .author.login = "carol" | .submittedAt = "2026-08-14T22:30:00Z"
+               | .state = "COMMENTED" | .body = "ok")])' "$tl" > "$dtl" \
+    || problems+=("could not derive the two reviews")
+  out=$(zsh "$script" --pr 1001 --item 'review  [carol 2026-08-14 22:30] COMMENTED, 0 threads (0 open)' --fixtures "$dtl" "$fx/basic.th.json" 2>&1) \
+    || { rc=$?; problems+=("the whole empty-review line was not selected: exit $rc"); }
+  [[ $out == 'review  [carol 2026-08-14 22:30] COMMENTED, 0 threads (0 open)' ]] \
+    || problems+=("the whole empty-review line selected: $out")
+  err=$(zsh "$script" --pr 1001 --item 'review  [carol 2026-08-14 22:30]' --fixtures "$dtl" "$fx/basic.th.json" 2>&1 >/dev/null) \
+    && problems+=("the bare review header chose one review: exit 0")
+  [[ $err == *"2 items start with: review  [carol 2026-08-14 22:30]"* ]] \
+    || problems+=("bare review header: not refused as a prefix: $err")
+  # A login may itself hold brackets (`vercel[bot]`); the bare header is known
+  # by its shape, not by where the first `]` falls, so a bot's empty comment
+  # is refused on its header like anyone's.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "vercel[bot]")
+               | .body = "<!-- marker only -->")])' "$tl" > "$dtl" \
+    || problems+=("could not derive the empty bot comment")
+  err=$(zsh "$script" --pr 1001 --item 'comment [vercel[bot] 2026-08-14 20:02]' --fixtures "$dtl" "$fx/basic.th.json" 2>&1 >/dev/null) \
+    && problems+=("a bot's bare header chose its empty comment: exit 0")
+  [[ $err == *"2 items start with: comment [vercel[bot] 2026-08-14 20:02]"* ]] \
+    || problems+=("bot bare header: not refused as a prefix: $err")
+  # A preview may itself end in something header-shaped (`see [a 2026-08-16
+  # 18:00]`); only the whole line from its start is a bare header, so this
+  # one still names its comment beside the longer one.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (map(if .__typename == "IssueComment" and .author.login == "romansod" then .body = "see [a 2026-08-16 18:00]" else . end)
+         + [(.[] | select(.__typename == "IssueComment" and .author.login == "romansod") | .body = "see [a 2026-08-16 18:00] more")])' \
+    "$tl" > "$dtl" || problems+=("could not derive the header-shaped previews")
+  out=$(zsh "$script" --pr 1001 --item 'comment [romansod 2026-08-14 23:40] see [a 2026-08-16 18:00]' --fixtures "$dtl" "$fx/basic.th.json" 2>&1) \
+    || { rc=$?; problems+=("a preview ending in a header shape was not selected: exit $rc"); }
+  [[ $out == $'comment [romansod 2026-08-14 23:40]\n  see [a 2026-08-16 18:00]' ]] \
+    || problems+=("the header-shaped preview selected: $out")
+  rm -f "$dtl"
+  report "$name" "item" $rc "$out"
+  return 0
+}
+item_refusals
+# item-same-line-threads — two threads on one path:line from one commit differ
+# only in who opened them and when, so a thread TOC line ends with its opener
+# and either can be named. Two the same person opened in the same minute
+# still share every character of the line; the refusal says so, and points
+# at the dump, rather than asking for more of a line there is no more of.
+item_same_line_threads() {
+  local name=item-same-line-threads out err dth sth toc
+  local -i rc=0
+  local tl=$fx/basic.tl.json
+  dth=$(mktemp) && sth=$(mktemp) || { problems+=("mktemp failed"); report "$name" "item" 1 ""; return 0; }
+  jq '(.[].data.repository.pullRequest.reviewThreads.nodes) |=
+        (. + [(.[] | select(.path == "README.md") | .id = "dup"
+               | .comments.nodes = [.comments.nodes[0]
+                   | .author.login = "carol" | .createdAt = "2026-08-15T08:02:00Z"
+                   | .body = "A second thread on the same line."])])' "$fx/basic.th.json" > "$dth" \
+    || problems+=("could not derive the second thread")
+  jq '(.[].data.repository.pullRequest.reviewThreads.nodes) |=
+        (. + [(.[] | select(.path == "README.md") | .id = "dup")])' "$fx/basic.th.json" > "$sth" \
+    || problems+=("could not derive the twin thread")
+  toc=$(zsh "$script" --pr 1001 --toc --only thread --fixtures "$tl" "$dth" 2>&1) || { rc=$?; problems+=("toc exit $rc"); }
+  [[ $toc == *$'\nthread  README.md:3 OPEN @bbb2222 ['*$'\nthread  README.md:3 OPEN @bbb2222 [carol 2026-08-15 08:02]'* ]] \
+    || problems+=("the two thread lines do not name their openers: $toc")
+  out=$(zsh "$script" --pr 1001 --item 'thread  README.md:3 OPEN @bbb2222 [carol' --fixtures "$tl" "$dth" 2>&1) \
+    || { rc=$?; problems+=("the opener did not select one: exit $rc"); }
+  [[ $out == 'thread  README.md:3 OPEN @bbb2222'$'\n''    [carol 2026-08-15 08:02]'$'\n''      A second thread'* ]] \
+    || problems+=("the opener selected the wrong thread: $out")
+  err=$(zsh "$script" --pr 1001 --item 'thread  README.md:3' --fixtures "$tl" "$sth" 2>&1 >/dev/null) \
+    && problems+=("two identical lines exited 0")
+  [[ $err == *"2 items share this exact TOC line"*"dump"* ]] \
+    || problems+=("identical lines: the refusal does not say so: $err")
+  # The whole twin line, not just a prefix of it: an exact match of two items
+  # is refused like any two matches, never the first of them printed.
+  err=$(zsh "$script" --pr 1001 --item 'thread  README.md:3 OPEN @bbb2222 [reviewer-bart 2026-08-15 10:00]' --fixtures "$tl" "$sth" 2>&1 >/dev/null) \
+    && problems+=("the whole twin line exited 0")
+  [[ $err == *"2 items share this exact TOC line"* ]] \
+    || problems+=("whole twin line: the refusal does not say so: $err")
+  rm -f "$dth" "$sth"
+  report "$name" "item" $rc "$out"
+  return 0
+}
+item_same_line_threads
+# item-past-filters — what the default view holds back can still be fetched
+# by name: a bot comment, a merge commit, a thread of a filtered bot review.
+# A hidden comment prints its marker alone unless --hidden, as it renders.
+item_past_filters() {
+  local name=item-past-filters out
+  local -i rc=0
+  out=$(zsh "$script" --pr 1001 --item 'comment [vercel[bot]' --fixtures "$fx/basic.tl.json" "$fx/basic.th.json" 2>&1) \
+    || { rc=$?; problems+=("bot comment exit $rc"); }
+  [[ $out == 'comment [vercel[bot] 2026-08-14 20:02]'$'\n''  Deployment preview ready'* ]] || problems+=("bot comment: $out")
+  out=$(zsh "$script" --pr 1001 --item 'commit  9d8c7b6' --fixtures "$fx/basic.tl.json" "$fx/basic.th.json" 2>&1) \
+    || { rc=$?; problems+=("merge commit exit $rc"); }
+  [[ $out == 'commit  9d8c7b6 '* ]] || problems+=("merge commit: $out")
+  out=$(zsh "$script" --pr 1001 --item 'thread  src/widget/retry.ts' --fixtures "$fx/bot-review.tl.json" "$fx/bot-review.th.json" 2>&1) \
+    || { rc=$?; problems+=("bot-review thread exit $rc"); }
+  [[ $out == 'thread  src/widget/retry.ts:42 [B-M1] OPEN @1a2b3c4'$'\n''    ['* ]] || problems+=("bot-review thread: $out")
+  out=$(zsh "$script" --pr 1001 --item 'comment [dave' --fixtures "$fx/hidden.tl.json" "$fx/hidden.th.json" 2>&1) \
+    || { rc=$?; problems+=("hidden exit $rc"); }
+  [[ $out == 'comment [dave 2026-08-14 22:00] (hidden: outdated)' ]] || problems+=("hidden comment printed more than its marker: $out")
+  out=$(zsh "$script" --pr 1001 --hidden --item 'comment [dave' --fixtures "$fx/hidden.tl.json" "$fx/hidden.th.json" 2>&1) \
+    || { rc=$?; problems+=("hidden --hidden exit $rc"); }
+  [[ $out == 'comment [dave 2026-08-14 22:00] (hidden: outdated)'$'\n''  '?* ]] || problems+=("--hidden did not print the body: $out")
+  # Two hidden comments by one author in one minute share their marker-only
+  # line, and a dump without --hidden shows them the same way; --hidden is
+  # what tells them apart, so that is what the refusal points at.
+  local htl
+  htl=$(mktemp) || { problems+=("mktemp failed"); report "$name" "item" 1 ""; return 0; }
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "dave") | .body = "A second hidden note.")])' \
+    "$fx/hidden.tl.json" > "$htl" || problems+=("could not derive the twin hidden comments")
+  err=$(zsh "$script" --pr 1001 --item 'comment [dave' --fixtures "$htl" "$fx/hidden.th.json" 2>&1 >/dev/null) \
+    && problems+=("two hidden twins exited 0")
+  [[ $err == *"share this exact TOC line"*"--hidden"* && $err != *"dump"* ]] \
+    || problems+=("hidden twins: the refusal does not point at --hidden: $err")
+  # With --hidden already given and the bodies the same, the lines stay twins
+  # and --hidden has nothing more to give: the dump is the advice again.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "dave"))])' \
+    "$fx/hidden.tl.json" > "$htl" || problems+=("could not derive the same-body hidden twins")
+  err=$(zsh "$script" --pr 1001 --hidden --item 'comment [dave' --fixtures "$htl" "$fx/hidden.th.json" 2>&1 >/dev/null) \
+    && problems+=("same-body hidden twins under --hidden exited 0")
+  [[ $err == *"share this exact TOC line"*"dump"* && $err != *"rerun"* ]] \
+    || problems+=("same-body twins under --hidden: not pointed at the dump: $err")
+  # A hidden comment beside a visible one of the same minute: their lines
+  # differ, so this is the ordinary several-matches refusal, not twins.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "dave")
+               | .isMinimized = false | .minimizedReason = null | .body = "A visible note.")])' \
+    "$fx/hidden.tl.json" > "$htl" || problems+=("could not derive the hidden and visible pair")
+  err=$(zsh "$script" --pr 1001 --item 'comment [dave' --fixtures "$htl" "$fx/hidden.th.json" 2>&1 >/dev/null) \
+    && problems+=("a hidden and a visible comment exited 0")
+  [[ $err == *"2 items start with: comment [dave — give more of the line"* && $err != *"share this exact"* ]] \
+    || problems+=("hidden and visible: not the several-matches refusal: $err")
+  rm -f "$htl"
+  report "$name" "item" $rc "$out"
+  return 0
+}
+item_past_filters
+# item-miss-hints — a miss says why when the reason is knowable. Each of the
+# four kinds whose header takes two spaces, given with one, is told the TOC
+# writes two, naming the kind and its form; a miss that is not that (two
+# spaces already, no space, another kind) gets no such hint, and on an issue,
+# which has none of those kinds, neither does that form. A line copied from
+# --toc --hidden and given without --hidden is told to add --hidden.
+item_miss_hints() {
+  local name=item-miss-hints err k p
+  local -i rc=0
+  local -a pair=(--fixtures "$fx/basic.tl.json" "$fx/basic.th.json")
+  for k p in review '[reviewer-bart' thread 'src/' commit '1a2b3c4' force-push 'aaa'; do
+    err=$(zsh "$script" --pr 1001 --item "$k $p" "${pair[@]}" 2>&1 >/dev/null) && problems+=("$k: one-space miss exited 0")
+    [[ $err == *"no item starts with: $k $p (the TOC writes two spaces after $k: '$k  ')" ]] \
+      || problems+=("$k: no two-space hint: $err")
+  done
+  for p in 'review  [nobody' 'reviewer' 'comment [nobody' 'comment review [x' 'commit'$'\t''x'; do
+    err=$(zsh "$script" --pr 1001 --item "$p" "${pair[@]}" 2>&1 >/dev/null)
+    [[ $err == *"no item starts with: $p" && $err != *"two spaces"* ]] || problems+=("'$p': hinted wrongly: $err")
+  done
+  err=$(zsh "$script" 21 --item 'review [x' --fixtures "$here/fixtures/gh-comments/issue-basic.tl.json" 2>&1 >/dev/null)
+  [[ $err == *"no item starts with: review [x"* && $err != *"two spaces"* ]] || problems+=("issue: two-space hint for a kind issues lack: $err")
+  local line
+  line=$(zsh "$script" --pr 1001 --toc --hidden --only comment --fixtures "$fx/hidden.tl.json" "$fx/hidden.th.json" 2>/dev/null | grep '^comment \[dave')
+  err=$(zsh "$script" --pr 1001 --item "$line" --fixtures "$fx/hidden.tl.json" "$fx/hidden.th.json" 2>&1 >/dev/null)
+  [[ $err == *"no item starts with"*"rerun --item with --hidden"* ]] || problems+=("a --toc --hidden line without --hidden: no hint: $err")
+  # ...and only then: not with --hidden given, not for a marker alone or a
+  # marker and a trailing space, which a line without --hidden can be.
+  local -a hpair=(--fixtures "$fx/hidden.tl.json" "$fx/hidden.th.json")
+  for p in '--hidden|comment [dave 2026-08-14 22:00] (hidden: outdated) Nope' \
+           '|comment [eve 2026-08-14 22:00] (hidden: outdated)' \
+           '|comment [eve 2026-08-14 22:00] (hidden: outdated) '; do
+    err=$(zsh "$script" --pr 1001 ${=${p%%|*}} --item "${p#*|}" "${hpair[@]}" 2>&1 >/dev/null)
+    [[ $err == *"no item starts with"* && $err != *"rerun --item with --hidden"* ]] \
+      || problems+=("'${p#*|}' (${p%%|*}): hinted wrongly: $err")
+  done
+  # The same hint on an issue, whose hidden comments carry the same marker.
+  local ifx=$here/fixtures/gh-comments/issue-hidden.tl.json
+  line=$(zsh "$script" 21 --toc --hidden --only comment --fixtures "$ifx" 2>/dev/null | grep '(hidden: ' | head -1)
+  err=$(zsh "$script" 21 --item "$line" --fixtures "$ifx" 2>&1 >/dev/null)
+  [[ $err == *"no item starts with"*"rerun --item with --hidden"* ]] || problems+=("issue: a --toc --hidden line without --hidden: no hint: $err")
+  # A line copied from a refusal's listing keeps its indent; no TOC line
+  # starts with a space, so a leading one is dropped and the line still names
+  # its item.
+  local out
+  out=$(zsh "$script" --pr 1001 --item '  commit  e5f6a7b fix(widget): close false-green paths from review' "${pair[@]}" 2>&1) \
+    || { rc=$?; problems+=("an indented line copied from a refusal missed: exit $rc: $out"); }
+  [[ $out == 'commit  e5f6a7b fix(widget): close false-green paths from review' ]] || problems+=("the indented line selected: $out")
+  # Trailing whitespace is kept (it could be part of a prefix in principle),
+  # but no TOC line ends in it, so a miss that ends in it says so.
+  err=$(zsh "$script" --pr 1001 --item 'commit  e5f6a7b fix(widget): close false-green paths from review ' "${pair[@]}" 2>&1 >/dev/null) \
+    && problems+=("a line with a trailing space exited 0")
+  [[ $err == *"ends in whitespace"* ]] || problems+=("trailing whitespace: no hint: $err")
+  err=$(zsh "$script" --pr 1001 --item 'comment [nobody' "${pair[@]}" 2>&1 >/dev/null)
+  [[ $err != *"ends in whitespace"* ]] || problems+=("a miss without trailing whitespace hinted about it: $err")
+  report "$name" "item" $rc "$err"
+  return 0
+}
+item_miss_hints
+# item-whole-blocks — item-is-its-block finds each --item output somewhere
+# in the full render, which a block cut short would pass too. Here two are
+# compared whole: the review with both its threads and their replies, and a
+# thread with both of its replies.
+item_whole_blocks() {
+  local name=item-whole-blocks out full want
+  local -i rc=0
+  local -a pair=(--fixtures "$fx/basic.tl.json" "$fx/basic.th.json")
+  full=$(zsh "$script" --pr 1001 "${pair[@]}" 2>&1) || { rc=$?; problems+=("full render exit $rc"); }
+  want=$(print -r -- "$full" | awk '/^review  \[reviewer-bart/ {p=1} p && /^$/ {exit} p')
+  out=$(zsh "$script" --pr 1001 --item 'review  [reviewer-bart' "${pair[@]}" 2>&1) || { rc=$?; problems+=("review exit $rc"); }
+  [[ $out == "$want" && $out == *$'\nthread  src/widget/probe.ts'* ]] || problems+=("the review is not its whole block: $out")
+  want=$(print -r -- "$full" | awk '/^thread  src\/widget\/retry.ts/ {p=1; print; next} p && /^[^ ]/ {exit} p')
+  out=$(zsh "$script" --pr 1001 --item 'thread  src/widget/retry.ts' "${pair[@]}" 2>&1) || { rc=$?; problems+=("thread exit $rc"); }
+  [[ $out == "$want" && $out == *'Fixed in e5f6a7b'* ]] || problems+=("the thread is not its whole block: $out")
+  report "$name" "item" $rc "$out"
+  return 0
+}
+item_whole_blocks
 
 # check_oversized — a payload too large to fit in argv. Passing the two
 # payloads as `jq --argjson` died with "argument list too long: jq" (exit 127,
@@ -1781,6 +2105,44 @@ argcase arg-repo-needs-number 1 "-R needs a number: the current branch's PR is i
 argcase arg-fixtures-pr-needs-threads 1 "needs a threads payload for a PR" 7 --fixtures "$fx/zero-threads.tl.json"
 argcase arg-fixtures-no-number 1 "a number is required with --fixtures" \
   --fixtures "$fx/zero-threads.tl.json" "$fx/zero-threads.th.json"
+# A kind only an issue has is refused on a PR by name, like --events.
+argcase arg-only-issue-kind   1 "--only xref, --only closed only apply to issues; the type is pinned to a pull request by --pr" \
+  7 --only comment,xref,closed
+# --unresolved renders reviews and threads only, so asking it for another kind
+# could only print an empty line under a counts line that says otherwise.
+argcase arg-only-unresolved-kinds 1 "--only comment, --only commit with --unresolved, which renders only reviews and threads" \
+  7 --unresolved --only comment,thread,commit
+# Each kind on its own, with a payload that would render: the refusal, not a
+# fetch that cannot run offline, is what must end the run.
+for k in comment body commit force-push; do
+  argcase arg-only-unresolved-$k 1 "--only $k with --unresolved, which renders only reviews and threads" \
+    1001 --unresolved --only $k --fixtures "$fx/basic.tl.json" "$fx/basic.th.json"
+done
+# Under a window, a filter that keeps nothing says the window is empty, not
+# the PR: multi has two reviews, both before the --latest anchor.
+argcase arg-only-nothing-after-anchor 0 "(no items of kind: review after the anchor)" \
+  42 --toc --latest --only review --fixtures "$fx/multi.tl.json" "$fx/multi.th.json"
+argcase arg-only-nothing-since    0 "(no items of kind: commit since 2026-08-14T23:30)" \
+  1001 --toc --since 2026-08-14T23:30 --only commit --fixtures "$fx/basic.tl.json" "$fx/basic.th.json"
+# --unresolved is a view of its own: bot-review-late has a human review, but
+# none with an open thread, so the line names the view rather than say the PR
+# has no review.
+argcase arg-only-nothing-unresolved 0 "(no items of kind: review in the unresolved view)" \
+  42 --toc --unresolved --only review --fixtures "$fx/bot-review-late.tl.json" "$fx/bot-review-late.th.json"
+# Both at once: the window is after the anchor *and* since the date.
+argcase arg-only-nothing-anchor-since 0 "(no items of kind: review after the anchor and since 2026-08-12)" \
+  42 --toc --latest --since 2026-08-12 --only review --fixtures "$fx/multi.tl.json" "$fx/multi.th.json"
+# --item is a selector: every flag that narrows the view is refused, all at once.
+argcase arg-item-with-views   1 "--item selects one item and takes no view flag; drop --toc, --only, --unresolved, --latest, --since" \
+  7 --item x --toc --only comment --unresolved --latest --since 2026-01-01
+argcase arg-item-with-slr     1 "drop --since-last-review" 7 --item x --since-last-review
+argcase arg-item-missing-value 1 "--item needs <header-prefix>" 7 --item
+argcase arg-item-empty        1 "--item needs <header-prefix>" 7 --item=
+# Review, thread, commit and force-push headers take two spaces after the
+# kind; a prefix typed with one, as a comment's is, finds nothing, and the
+# refusal says why.
+argcase arg-item-one-space    1 "no item starts with: review [reviewer-bart (the TOC writes two spaces after review" \
+  1001 --item 'review [reviewer-bart' --fixtures "$fx/basic.tl.json" "$fx/basic.th.json"
 
 rm -rf "$stubdir"
 

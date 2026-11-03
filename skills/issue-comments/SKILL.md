@@ -42,6 +42,11 @@ pass it when you *know* it should be an issue: a number that turns out to be
 a PR is then refused by name, not rendered as a PR dump you did not ask for.
 
 Flags: `-R owner/name`; `--toc` (one line per item, no bodies);
+`--only <kind>[,<kind>...]` (only those kinds: `comment`, `body`, `xref`,
+`closed`, `reopened`, `renamed`; the counts header is unchanged);
+`--item '<TOC line prefix>'` (exactly one item, whole; no match, or several,
+listed, is an error; takes no other view flag but `--hidden`, which must
+match the `--toc` the line came from);
 `--closure` (why it was closed and by what: the header, the
 `closed`/`reopened` lines with their closer, and the PR cross-references,
 nothing else; refused on an issue never closed, and takes no other view flag);
@@ -84,10 +89,12 @@ The PR-only flags (`--unresolved`, `--since-last-review`, `--latest`,
      `… [+N chars]` preview: it is a cut, not a summary.
    - Most issues are small — if the TOC fits on a screen, the full render,
      inline. There is no thread machinery to explode.
+   - One comment — orient with `--toc --only comment`, then `--item` with
+     its TOC line (`--item 'comment [alice 2026-09-21 12:47]'`).
    - A long issue — `--since <date>` for "what changed this week", or dump
      once to a temp file (never the repo) and read slices.
 
-3. **Slice with grep/sed** — every item starts at column 0 with a stable
+3. **Slice a dump with grep/sed** — each item starts at column 0 with a stable
    prefix (`body`/`comment`/`closed`/`reopened`/`xref`/`renamed`, plus
    `label`/`assign`/`milestone` under `--events`):
 

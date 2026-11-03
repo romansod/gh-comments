@@ -1,0 +1,12 @@
+issue #21 design: support GitHub issue discussion alongside PR comments [OPEN reopened labels:design,enhancement assignees:romansod]
+comments: 2 (+1 bot filtered) · cross-refs: 1 · events: 3 (+4 housekeeping filtered)
+
+comment [alice 2026-08-16 18:00]
+  Option 3, and let the API resolve the type — `issueOrPullRequest`
+  means the number is never ambiguous.
+
+comment [carol 2026-08-21 14:20]
+  Reopening: #44 only fixed the ARG_MAX crash.
+
+  The issue-side render
+  is still missing.

@@ -127,6 +127,12 @@ def tok(ids):
     return sum(TOK[i] for i in ids)
 
 
+def has(ids):
+    """Whether a run captured all of these. Runs filed before --only and --item
+    existed have no only_toc or item captures, and their tables show a dash."""
+    return all(i in TOK for i in ids)
+
+
 def fmt(n):
     return f"{n:,}"
 
@@ -261,13 +267,15 @@ TG = [("TA", "R1", f"{NAME['R1']} top-level comment", G("task4", "TA"), SKILL_PR
       ("TC", "O1", f"{NAME['O1']} open thread", G("task4", "TC"), SKILL_PR),
       ("TD", "I1", f"{NAME['I1']} last comment", G("task4", "TD"), SKILL_IS)]
 P("### Task 4 — land one specific comment in context\n")
-P("The skill's documented flow is TOC first, dump to a file, then slice the one item out. "
+P("The skill's documented flow for one item needs no dump: a TOC narrowed to the item's kind (`--toc --only <kind>`), "
+  "then the one item by its TOC line (`--item`). TOC + slice is the earlier flow, TOC first, dump to a file, then slice "
+  "the one item out, which the skill keeps for many items at once. "
   "The expert flow is the same shape by hand: list with `--jq`, then fetch the one body. "
-  "Both arms land the same comment text; the slice also carries the item's header line and the renderer's two-space indent, "
+  "Every arm lands the same comment text; the slice and `--item` also carry the item's header line and the renderer's two-space indent, "
   "which is the few dozen bytes between the payload column and the expert fetch. "
-  "The `+ SKILL.md` column adds the cost of loading the skill, paid once per invocation.\n")
-P("| Target | `gh … view --comments` | naive complete | `gh-comments` full | **TOC + slice** | + SKILL.md | expert list → fetch | payload |")
-P("|---|--:|--:|--:|--:|--:|--:|--:|")
+  "Each `+ SKILL.md` column adds the cost of loading the skill to the flow before it, paid once per invocation.\n")
+P("| Target | `gh … view --comments` | naive complete | `gh-comments` full | TOC + slice | + SKILL.md | **`--only` + `--item`** | + SKILL.md | expert list → fetch | payload |")
+P("|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|")
 tg_rows = []
 for key, T, label, ghg, sk in TG:
     lazy_gh = tok([f"{T}.gh_view_c"])
@@ -276,15 +284,21 @@ for key, T, label, ghg, sk in TG:
     flow = tok([f"{T}.s_toc", f"{key}.skill_slice"])
     exp = tok([f"{key}.expert_list", f"{key}.expert_fetch"])
     payload = tok([f"{key}.skill_slice"])
-    tg_rows.append((label, lazy_gh, ghg, naive, full, flow, flow + sk, exp, payload))
-    P(f"| {label} | {fmt(lazy_gh)} {ghg} | {fmt(naive)} | {fmt(full)} | **{fmt(flow)}** | {fmt(flow + sk)} | {fmt(exp)} | {fmt(payload)} |")
+    sel_ids = [f"{key}.only_toc", f"{key}.item"]
+    sel = tok(sel_ids) if has(sel_ids) else None
+    tg_rows.append((label, lazy_gh, ghg, naive, full, flow, flow + sk, sel, None if sel is None else sel + sk, exp, payload))
+    sel_cells = f"**{fmt(sel)}** | {fmt(sel + sk)}" if sel is not None else f"{NA} | {NA}"
+    P(f"| {label} | {fmt(lazy_gh)} {ghg} | {fmt(naive)} | {fmt(full)} | {fmt(flow)} | {fmt(flow + sk)} | {sel_cells} | {fmt(exp)} | {fmt(payload)} |")
 P("")
 P("```")
 P("Task 4 — tokens to land one comment (each ▓ ≈ 1k tokens)")
-for label, lazy_gh, ghg, naive, full, flow, flowsk, exp, payload in tg_rows:
+for label, lazy_gh, ghg, naive, full, flow, flowsk, sel, selsk, exp, payload in tg_rows:
     P(f"  {label}")
-    for name, v in [("naive complete", naive), ("gh-comments full", full), ("TOC + slice + SKILL.md", flowsk),
-                    ("TOC + slice", flow), ("expert list → fetch", exp), ("the comment itself", payload)]:
+    bars = [("naive complete", naive), ("gh-comments full", full), ("TOC + slice + SKILL.md", flowsk),
+            ("TOC + slice", flow)]
+    if sel is not None:
+        bars += [("--only + --item + SKILL.md", selsk), ("--only + --item", sel)]
+    for name, v in bars + [("expert list → fetch", exp), ("the comment itself", payload)]:
         n = max(1, round(v / 1000)) if v else 0
         b = "▓" * n if n <= 26 else "▓" * 24 + "»»"
         P(f"    {name:<24} {b:<26} {fmt(v):>6}")
@@ -342,6 +356,12 @@ ladder = [
     (f"one comment, {NAME['I1']}: expert vs TOC+slice", ratio(["TD.expert_list", "TD.expert_fetch"], ["I1.s_toc", "TD.skill_slice"]), LN("one-comment-i1-expert")),
     (f"open bodies, {NAME['O1']}: hand GraphQL vs --unresolved", ratio([f"{C}.gql_open"], [f"{C}.s_unres"]), LN("open-bodies-o1-gql")),
 ]
+# The two one-comment rows again, for the flow that needs no dump.
+if has(["TA.only_toc", "TA.item", "TD.only_toc", "TD.item"]):
+    ladder += [
+        (f"one comment, {NAME['R1']}: gh pr view --comments vs --only+--item", ratio(["R1.gh_view_c"], ["TA.only_toc", "TA.item"]), LN("one-comment-r1-ghview-item")),
+        (f"one comment, {NAME['I1']}: expert vs --only+--item", ratio(["TD.expert_list", "TD.expert_fetch"], ["TD.only_toc", "TD.item"]), LN("one-comment-i1-expert-item")),
+    ]
 ladder.sort(key=lambda r: -(r[1] if r[1] is not None else -1))
 P("```")
 w = max(len(l) for l, _, _ in ladder)

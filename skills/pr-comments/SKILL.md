@@ -45,6 +45,13 @@ Flags:
 - `-R owner/name` — another repo (default: the cwd's; needs `<N>`, since "no
   number" means the cwd branch's PR).
 - `--toc` — one line per item, no bodies.
+- `--only <kind>[,<kind>...]` — only those kinds: `comment`, `body`,
+  `review`, `thread`, `commit`, `force-push`. With `--toc` or the full
+  render; the counts header is unchanged.
+- `--item '<TOC line prefix>'` — exactly one item, whole: a comment, a
+  review with its threads, or a thread with its replies. No match, or
+  several (listed), is an error; copy more of the line. Takes no other view
+  flag but `--hidden`, which must match the `--toc` the line came from.
 - `--unresolved` — only reviews with open threads, and those threads.
 - `--latest[=<user>]` — the last substantive review or top-level comment
   (optionally by `<user>`) and everything after it. A bare approval, a
@@ -97,10 +104,18 @@ state. Do not supplement it with `gh pr view --comments` or
      more. Reach for it once you need the discussion, not to learn whether
      there is any.
    - "Address the latest review" — `--latest`. A time window — `--since`.
-   - Small PR — the full render, inline. Big PR, or repeated consultation —
+   - One comment, review or thread — orient with `--toc --only <kind>`, then
+     `--item` with its TOC line:
+
+     ```bash
+     gh-comments <N> --pr --toc --only comment
+     gh-comments <N> --pr --item 'comment [alice 2026-09-21 12:47]'
+     ```
+
+   - Small PR — the full render, inline. Big PR, or many items at once —
      dump once to a temp file (never the repo) and read slices.
 
-3. **Slice with grep/sed** — every item starts at column 0 with a stable
+3. **Slice a dump with grep/sed** — each item starts at column 0 with a stable
    prefix (`body`/`commit`/`comment`/`review`/`thread`/`force-push`), and
    `<!-- finding:ID -->` markers are promoted onto thread header lines:
 
