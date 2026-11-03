@@ -2057,6 +2057,11 @@ argcase arg-item-with-views   1 "--item selects one item and takes no view flag;
 argcase arg-item-with-slr     1 "drop --since-last-review" 7 --item x --since-last-review
 argcase arg-item-missing-value 1 "--item needs <header-prefix>" 7 --item
 argcase arg-item-empty        1 "--item needs <header-prefix>" 7 --item=
+# Review, thread, commit and force-push headers take two spaces after the
+# kind; a prefix typed with one, as a comment's is, finds nothing, and the
+# refusal says why.
+argcase arg-item-one-space    1 "no item starts with: review [reviewer-bart (the TOC writes two spaces after review" \
+  1001 --item 'review [reviewer-bart' --fixtures "$fx/basic.tl.json" "$fx/basic.th.json"
 
 rm -rf "$stubdir"
 

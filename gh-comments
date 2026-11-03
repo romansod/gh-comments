@@ -1585,7 +1585,13 @@ typeset -i ITEM_N=${ITEM_OUT%%$'\n'*}
 if (( ITEM_N == 1 )); then
   print -r -- "${ITEM_OUT#*$'\n'}"
 elif (( ITEM_N == 0 )); then
-  print -r -- "$PROG: no item starts with: $ITEM" >&2
+  # The four kinds whose header takes two spaces are the ones a caller
+  # copying the one-space comment form gets wrong, so the miss says why.
+  typeset hint=""
+  if [[ $ITEM =~ '^(review|thread|commit|force-push) [^ ]' ]]; then
+    hint=" (the TOC writes two spaces after ${match[1]}: '${match[1]}  ')"
+  fi
+  print -r -- "$PROG: no item starts with: $ITEM$hint" >&2
   exit 1
 else
   # Lines that agree in every character cannot be told apart by any prefix:
