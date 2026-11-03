@@ -71,8 +71,9 @@ Flags:
                                 render; the counts line is unchanged, and a
                                 filter that keeps nothing says so. A review
                                 left out keeps its threads when thread is
-                                asked for. An unknown kind, or one only the
-                                other type has, is refused by name
+                                asked for. An unknown kind, one only the
+                                other type has, or one --unresolved never
+                                renders is refused by name
   --item <header-prefix>        Print the one item whose TOC line starts with
                                 this text, copied from --toc: its header and
                                 body, a review with its threads, or a thread
@@ -382,6 +383,19 @@ if [[ -n "$ITEM" ]]; then
   [[ -n "$SINCE" ]] && with+=(--since)
   if (( ${#with} )); then
     print -r -- "$PROG: --item selects one item and takes no view flag; drop ${(j:, :)with}" >&2
+    exit 1
+  fi
+fi
+# --unresolved renders reviews and threads and nothing else (its lean query
+# does not even fetch comment bodies, commits or the description), so another
+# --only kind could only ever print an empty line under a counts line that
+# says the PR has some: a filtered view read as a complete one. After the
+# pinned-type, --closure and --item refusals, which name more of the line.
+if (( UNRESOLVED )) && [[ -n "$ONLY" ]]; then
+  typeset -a KINDS_UNRESOLVED_DROPS=(comment body commit force-push)
+  typeset -a unrendered=(${ONLY_KINDS:*KINDS_UNRESOLVED_DROPS})
+  if (( ${#unrendered} )); then
+    print -r -- "$PROG: --only ${(j:, --only :)unrendered} with --unresolved, which renders only reviews and threads; drop $( (( ${#unrendered} == 1 )) && print -n it || print -n them ) or --unresolved" >&2
     exit 1
   fi
 fi
@@ -1055,8 +1069,10 @@ def pick: [.[] | select(.toc | startswith($item))] as $m
     else "\($m | length)", ($m[] | .toc) end;
 # What --only left of the view, or one line saying it left nothing, so an
 # empty answer is never mistaken for an empty discussion.
-def nothing_kept:
-  if length == 0 and $only != "" then "(no items of kind: \($only | split(",") | join(", ")))"
+# Under a window (a slice, --since) it names the window: the kind may well be
+# on the PR, before it.
+def nothing_kept($where):
+  if length == 0 and $only != "" then "(no items of kind: \($only | split(",") | join(", "))\($where))"
   else .[] end;
 def ts: if .__typename == "PullRequestCommit" then .commit.committedDate
         elif .__typename == "PullRequestReview" then .submittedAt
@@ -1308,7 +1324,7 @@ else
   else empty end),
   (if ($items | length) == 0 then "(no timeline items)"
    else ($items[] | r_issue_item($repo; $TOC) | ., (if $TOC then empty else "" end)) end)]
- | nothing_kept)
+ | nothing_kept(if $since != "" then " since \($since)" else "" end))
  end)
 end
 
@@ -1502,7 +1518,9 @@ def thread_window: if $since != ""
    ($orphans | r_thread_block("threads with no parent review:"; $TOC)),
    ($held | r_thread_block("threads in filtered bot reviews:"; $TOC))
  end)]
- | nothing_kept)
+ | nothing_kept([(if $sliced then "after the anchor" else empty end),
+                 (if $since != "" then "since \($since)" else empty end)]
+                | if length == 0 then "" else " " + join(" and ") end))
 end
 
 end end

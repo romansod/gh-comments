@@ -1925,6 +1925,16 @@ argcase arg-fixtures-no-number 1 "a number is required with --fixtures" \
 # A kind only an issue has is refused on a PR by name, like --events.
 argcase arg-only-issue-kind   1 "--only xref, --only closed only apply to issues; the type is pinned to a pull request by --pr" \
   7 --only comment,xref,closed
+# --unresolved renders reviews and threads only, so asking it for another kind
+# could only print an empty line under a counts line that says otherwise.
+argcase arg-only-unresolved-kinds 1 "--only comment, --only commit with --unresolved, which renders only reviews and threads" \
+  7 --unresolved --only comment,thread,commit
+# Under a window, a filter that keeps nothing says the window is empty, not
+# the PR: multi has two reviews, both before the --latest anchor.
+argcase arg-only-nothing-after-anchor 0 "(no items of kind: review after the anchor)" \
+  42 --toc --latest --only review --fixtures "$fx/multi.tl.json" "$fx/multi.th.json"
+argcase arg-only-nothing-since    0 "(no items of kind: commit since 2026-08-14T23:30)" \
+  1001 --toc --since 2026-08-14T23:30 --only commit --fixtures "$fx/basic.tl.json" "$fx/basic.th.json"
 # --item is a selector: every flag that narrows the view is refused, all at once.
 argcase arg-item-with-views   1 "--item selects one item and takes no view flag; drop --toc, --only, --unresolved, --latest, --since" \
   7 --item x --toc --only comment --unresolved --latest --since 2026-01-01

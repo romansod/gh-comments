@@ -256,8 +256,9 @@ With no number, the current branch's open PR is used.
                                 render; the counts line is unchanged, and a
                                 filter that keeps nothing says so. A review
                                 left out keeps its threads when thread is
-                                asked for. An unknown kind, or one only the
-                                other type has, is refused by name
+                                asked for. An unknown kind, one only the
+                                other type has, or one --unresolved never
+                                renders is refused by name
   --item <header-prefix>        Print the one item whose TOC line starts with
                                 this text, copied from --toc: its header and
                                 body, a review with its threads, or a thread
