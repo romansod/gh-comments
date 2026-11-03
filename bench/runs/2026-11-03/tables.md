@@ -22,8 +22,8 @@
 | `issue-comments` SKILL.md | each invocation | 2,671 | 1,007 |
 | `pr-comments` references/flags.md | for a flag beyond the skill's table | 2,825 | 1,017 |
 | `issue-comments` references/flags.md | for a flag beyond the skill's table | 1,785 | 675 |
-| `pr-comments` references/recipes.md | for a dump read in slices, or a finding to re-check | 1,166 | 520 |
-| `issue-comments` references/recipes.md | for a dump read in slices, or before acting | 1,075 | 457 |
+| `pr-comments` references/recipes.md | for a dump read in slices, or a finding to re-check | 1,304 | 590 |
+| `issue-comments` references/recipes.md | for a dump read in slices, or before acting | 1,200 | 517 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,537 | 1,561 |
 | `issue-comments` references/output.md | when a marker needs interpreting | 3,896 | 1,394 |
 
@@ -88,17 +88,17 @@ The skill's documented flow for one item needs no dump: a TOC narrowed to the it
 
 | Target | `gh … view --comments` | naive complete | `gh-comments` full | TOC + slice | + SKILL.md | **`--only` + `--item`** | + SKILL.md | expert list → fetch | payload |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| cli#13946 top-level comment | 1,369 ✓ | 42,162 | 8,191 | 2,288 | 3,904 | **477** | 1,573 | 372 | 347 |
-| cli#13946 inline thread | 1,369 ✗ | 42,162 | 8,191 | 2,123 | 3,739 | **977** | 2,073 | 816 | 182 |
-| cli#14104 open thread | 6,105 ✗ | 66,488 | 8,502 | 2,721 | 4,337 | **1,249** | 2,345 | 1,104 | 334 |
-| cli#14483 last comment | 772 ✓ | 772 | 907 | 451 | 1,915 | **182** | 1,189 | 158 | 37 |
+| cli#13946 top-level comment | 1,369 ✓ | 42,162 | 8,191 | 2,288 | 3,974 | **477** | 1,573 | 372 | 347 |
+| cli#13946 inline thread | 1,369 ✗ | 42,162 | 8,191 | 2,123 | 3,809 | **977** | 2,073 | 816 | 182 |
+| cli#14104 open thread | 6,105 ✗ | 66,488 | 8,502 | 2,721 | 4,407 | **1,249** | 2,345 | 1,104 | 334 |
+| cli#14483 last comment | 772 ✓ | 772 | 907 | 451 | 1,975 | **182** | 1,189 | 158 | 37 |
 
 ```
 Task 4 — tokens to land one comment (each ▓ ≈ 1k tokens)
   cli#13946 top-level comment
     naive complete           ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓»» 42,162
     gh-comments full         ▓▓▓▓▓▓▓▓                    8,191
-    TOC + slice + SKILL.md   ▓▓▓▓                        3,904
+    TOC + slice + SKILL.md   ▓▓▓▓                        3,974
     TOC + slice              ▓▓                          2,288
     --only + --item + SKILL.md ▓▓                          1,573
     --only + --item          ▓                             477
@@ -107,7 +107,7 @@ Task 4 — tokens to land one comment (each ▓ ≈ 1k tokens)
   cli#13946 inline thread
     naive complete           ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓»» 42,162
     gh-comments full         ▓▓▓▓▓▓▓▓                    8,191
-    TOC + slice + SKILL.md   ▓▓▓▓                        3,739
+    TOC + slice + SKILL.md   ▓▓▓▓                        3,809
     TOC + slice              ▓▓                          2,123
     --only + --item + SKILL.md ▓▓                          2,073
     --only + --item          ▓                             977
@@ -116,7 +116,7 @@ Task 4 — tokens to land one comment (each ▓ ≈ 1k tokens)
   cli#14104 open thread
     naive complete           ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓»» 66,488
     gh-comments full         ▓▓▓▓▓▓▓▓▓                   8,502
-    TOC + slice + SKILL.md   ▓▓▓▓                        4,337
+    TOC + slice + SKILL.md   ▓▓▓▓                        4,407
     TOC + slice              ▓▓▓                         2,721
     --only + --item + SKILL.md ▓▓                          2,345
     --only + --item          ▓                           1,249
@@ -125,7 +125,7 @@ Task 4 — tokens to land one comment (each ▓ ≈ 1k tokens)
   cli#14483 last comment
     naive complete           ▓                             772
     gh-comments full         ▓                             907
-    TOC + slice + SKILL.md   ▓▓                          1,915
+    TOC + slice + SKILL.md   ▓▓                          1,975
     TOC + slice              ▓                             451
     --only + --item + SKILL.md ▓                           1,189
     --only + --item          ▓                             182
@@ -239,13 +239,13 @@ gql md: GraphQL thread metadata   s *: gh-comments full/--toc/--unresolved/--toc
 | raw JSON (gh api) | 643,735 | 286,588 | 2.25 | 1.8× |
 | gh … view text | 47,509 | 18,258 | 2.60 | 1.5× |
 | gh-comments output | 162,924 | 65,062 | 2.50 | 1.6× |
-| skill files | 22,217 | 8,257 | 2.69 | 1.5× |
+| skill files | 22,480 | 8,387 | 2.68 | 1.5× |
 
 ```
   raw JSON (gh api)        ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░ 2.25 bytes/token
   gh … view text           ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░ 2.60 bytes/token
   gh-comments output       ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░ 2.50 bytes/token
-  skill files              ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░ 2.69 bytes/token
+  skill files              ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░ 2.68 bytes/token
   the bytes ÷ 4 rule       ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ 4.00 bytes/token
 ```
 
