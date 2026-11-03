@@ -780,6 +780,56 @@ slr_skips_hidden() {
   return 0
 }
 slr_skips_hidden
+# anchor-needs-live-thread — a thread makes a hidden review an anchor only
+# while it has a comment that is not hidden. Derived from the hidden-review
+# payloads, since the slice invariant reads TOC lines, which do not show a
+# thread comment's hidden state: with every comment on alice's two threads
+# hidden, her hidden review falls back under both flags; with all hidden but
+# bob's reply on one thread, that reply still anchors it; and a thread with
+# replies past the fetched page anchors it, since those may be visible.
+anchor_needs_live_thread() {
+  local name=anchor-needs-live-thread out first f atl
+  local -i rc=0
+  local rtl=$fx/hidden-review.tl.json rth=$fx/hidden-review.th.json
+  local -A th
+  # As in latest-skips-hidden: without her later comment, --latest=alice can
+  # only anchor on her review.
+  atl=$(mktemp) && th[all]=$(mktemp) && th[one]=$(mktemp) && th[more]=$(mktemp) ||
+    { problems+=("mktemp failed"); report "$name" "anchors" 1 ""; return 0; }
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        map(select((.__typename == "IssueComment" and .author.login == "alice") | not))' \
+    "$rtl" > "$atl" || problems+=("could not derive the alice-only timeline")
+  # hide(a): minimize every comment by a on alice's threads.
+  local hide='def hide(a): (.[].data.repository.pullRequest.reviewThreads.nodes[]
+      | select(.comments.nodes[0].pullRequestReview.id == "PRR_r1")
+      | .comments.nodes[] | select(.author.login | test(a)))
+      |= (.isMinimized = true | .minimizedReason = "OUTDATED");'
+  jq "$hide hide(\".\")" "$rth" > "${th[all]}" || problems+=("could not derive the all-hidden threads")
+  jq "$hide hide(\"alice\")" "$rth" > "${th[one]}" || problems+=("could not derive the one-reply threads")
+  jq "$hide hide(\".\") | (.[].data.repository.pullRequest.reviewThreads.nodes[]
+      | select(.path == \"src/api/cursor.ts\") | .comments.pageInfo) = {hasNextPage: true}" \
+    "$rth" > "${th[more]}" || problems+=("could not derive the truncated thread")
+  out=$(zsh "$script" --pr 44 --toc --since-last-review=alice --fixtures "$rtl" "${th[all]}" 2>&1) || { rc=$?; problems+=("all slr exit $rc"); }
+  [[ "$out" == *"note: no matching earlier review"* ]] \
+    || problems+=("--since-last-review=alice anchored on a hidden review whose thread comments are all hidden")
+  out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$atl" "${th[all]}" 2>&1) || { rc=$?; problems+=("all latest exit $rc"); }
+  [[ "$out" == *"note: no matching review or comment"* ]] \
+    || problems+=("--latest=alice anchored on a hidden review whose thread comments are all hidden")
+  for f in one more; do
+    out=$(zsh "$script" --pr 44 --toc --since-last-review=alice --fixtures "$rtl" "${th[$f]}" 2>&1) || { rc=$?; problems+=("$f slr exit $rc"); }
+    first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+    [[ $first == 'review  [alice 2026-08-10 12:00] '*'(hidden: outdated)' ]] \
+      || problems+=("$f: --since-last-review=alice did not anchor on her hidden review: $first")
+    out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$atl" "${th[$f]}" 2>&1) || { rc=$?; problems+=("$f latest exit $rc"); }
+    first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+    [[ $first == 'review  [alice 2026-08-10 12:00] '*'(hidden: outdated)' ]] \
+      || problems+=("$f: --latest=alice did not anchor on her hidden review: $first")
+  done
+  rm -f "$atl" "${th[@]}"
+  report "$name" "anchors" $rc "$out"
+  return 0
+}
+anchor_needs_live_thread
 
 # check_oversized — a payload too large to fit in argv. Passing the two
 # payloads as `jq --argjson` died with "argument list too long: jq" (exit 127,

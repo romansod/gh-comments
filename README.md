@@ -254,12 +254,14 @@ With no number, the current branch's open PR is used.
   --unresolved                  Only reviews with open threads, and those threads
   --since-last-review[=<user>]  Only the last review (optionally by <user>)
                                 and everything after it; a hidden review
-                                with no threads is passed over
+                                is passed over unless one of its threads
+                                has a comment that is not hidden
   --latest[=<user>]             Only the most recent *substantive* review or
                                 top-level comment (optionally by <user>) and
                                 everything after it. Substantive: a review with
-                                inline threads or a body that is not hidden,
-                                or a comment with a body that is not hidden —
+                                a body, or an inline thread with a comment,
+                                that is not hidden, or a comment with a body
+                                that is not hidden —
                                 so a bare approval or a hidden comment is
                                 looked past as the anchor, though it still
                                 shows when it comes after the anchor; a bot

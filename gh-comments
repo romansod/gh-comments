@@ -69,12 +69,14 @@ Flags:
   --unresolved                  Only reviews with open threads, and those threads
   --since-last-review[=<user>]  Only the last review (optionally by <user>)
                                 and everything after it; a hidden review
-                                with no threads is passed over
+                                is passed over unless one of its threads
+                                has a comment that is not hidden
   --latest[=<user>]             Only the most recent *substantive* review or
                                 top-level comment (optionally by <user>) and
                                 everything after it. Substantive: a review with
-                                inline threads or a body that is not hidden,
-                                or a comment with a body that is not hidden —
+                                a body, or an inline thread with a comment,
+                                that is not hidden, or a comment with a body
+                                that is not hidden —
                                 so a bare approval or a hidden comment is
                                 looked past as the anchor, though it still
                                 shows when it comes after the anchor; a bot
@@ -1222,6 +1224,13 @@ else
    (((($t.comments.nodes[0] // {}).pullRequestReview // {}).id) // "orphan") as $rid
    | (if ($revids | index($rid)) != null then $rid else "orphan" end) as $rid
    | .[$rid] += [$t])) as $tmap |
+# The threads under a review that still have something to read: a comment
+# that is not hidden, or replies past the fetched page, which may be. A
+# thread whose every comment GitHub hid says no more than a hidden body, so
+# it does not make a review an anchor for --latest or --since-last-review.
+def livethreads: [($tmap[.id] // [])[]
+  | select(any(.comments.nodes[]?; hidden | not) or (.comments.pageInfo.hasNextPage // false))]
+  | length;
 
 ([$nodes0[]
   | select(.__typename != "PullRequestReview" or .submittedAt != null)
@@ -1229,21 +1238,22 @@ else
   | select((.__typename == "PullRequestCommit" and (((.commit.parents // {}).totalCount // 1) > 1) and ($MERGES | not)) | not)
  ]) as $nodes1 |
 
-# A review GitHub hid with no threads under it is passed over, body or not:
-# someone judged it spam, off-topic or outdated, and nothing under it keeps
-# a state of its own. A visible bare approval still anchors here; a hidden
-# review with threads does too, since those threads keep their own state.
+# A review GitHub hid with no live threads under it is passed over, body or
+# not: someone judged it spam, off-topic or outdated, and nothing under it
+# is left to read. A visible bare approval still anchors here; a hidden
+# review with a live thread does too, since that thread keeps its own state.
 (if $slr == "1" then
    ([$nodes1 | to_entries[]
      | select(.value.__typename == "PullRequestReview")
-     | select(((.value | hidden) and ((($tmap[.value.id] // []) | length) == 0)) | not)
+     | select(((.value | hidden) and ((.value | livethreads) == 0)) | not)
      | select($slr_author == "" or ((.value | login) == $slr_author))
      | .key] | last)
  else null end) as $slr_idx |
 
 # --latest wants the last item a reader would call "the latest review": a
 # review that said something (a body that is not hidden) or asked something
-# (a thread), or a top-level comment with a body that is not hidden.
+# (a live thread, as above), or a top-level comment with a body that is not
+# hidden.
 # --since-last-review only ever looks at review objects, so a reviewer who
 # followed up in a comment is invisible to it, and a bare approval anchors
 # it. Those are looked past as the anchor here — not dropped: everything
@@ -1251,7 +1261,7 @@ else
 # Candidates come from $nodes1, so a bot is skipped unless --bots put it back.
 def substantive:
   (.__typename == "PullRequestReview"
-   and ((((.body | clean) != "") and (hidden | not)) or ((($tmap[.id] // []) | length) > 0)))
+   and ((((.body | clean) != "") and (hidden | not)) or (livethreads > 0)))
   or (.__typename == "IssueComment" and (hidden | not) and ((.body | clean) != ""));
 (if $latest == "1" then
    ([$nodes1 | to_entries[]
