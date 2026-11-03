@@ -64,6 +64,25 @@ Flags:
                                 a hidden review keeps its line and its threads
                                 and loses its body. The counts line reports
                                 `(N hidden)`.
+  --only <kind>[,<kind>...]     Only these kinds of item: comment and body,
+                                and on a PR review, thread, commit and
+                                force-push, on an issue xref, closed,
+                                reopened and renamed. With --toc or the full
+                                render; the counts line is unchanged, and a
+                                filter that keeps nothing says so. A review
+                                left out keeps its threads when thread is
+                                asked for. An unknown kind, or one only the
+                                other type has, is refused by name
+  --item <header-prefix>        Print the one item whose TOC line starts with
+                                this text, copied from --toc: its header and
+                                body, a review with its threads, or a thread
+                                with its replies. No match is an error, and
+                                so is more than one: the matching lines are
+                                listed, never the first taken. Bot, merge and
+                                housekeeping items can be named without the
+                                flags that list them. Exclusive with --toc,
+                                --only, --unresolved, --latest,
+                                --since-last-review and --since
 
   Pull requests only:
   --unresolved                  Only reviews with open threads, and those threads
@@ -133,7 +152,10 @@ Every item starts at column 0 with a stable prefix, so the output greps:
   grep -A 20 'B-M1'            one finding with its thread
   <!-- finding:ID --> markers are promoted onto thread header lines.
 
-Typical agent flow: dump once, slice locally.
+Typical agent flow: orient with the TOC, then fetch only what you need.
+  @PROG@ 989 --toc --only comment
+  @PROG@ 989 --item 'comment [alice 2026-09-21 12:47]'
+For many items at once, dump once and slice locally:
   @PROG@ 989 > gh989.txt && grep '^review' gh989.txt
 EOF
   )
@@ -141,6 +163,7 @@ EOF
 }
 
 NUM="" REPO="" TOC=0 UNRESOLVED=0 SINCE="" SLR=0 SLR_AUTHOR="" BOTS=0 MERGES=0 EVENTS=0 HIDDEN=0 CLOSURE=0
+ONLY="" ITEM=""
 typeset -i CLOSER_HIDDEN=0
 # The arguments minus the pin, for the wrong-type hint: it suggests the same
 # command again without --pr / --issue, so -R and the view flags survive.
@@ -178,6 +201,10 @@ while (( $# )); do
     --merges) MERGES=1; shift ;;
     --events) EVENTS=1; shift ;;
     --closure) CLOSURE=1; shift ;;
+    --only) need_value "$1" "<kind>[,<kind>...]" $# "${2:-}"; ONLY="$2"; shift 2 ;;
+    --only=*) ONLY="${1#*=}"; [[ -n "$ONLY" ]] || need_value --only "<kind>[,<kind>...]" 1; shift ;;
+    --item) need_value "$1" "<header-prefix>" $# "${2:-}"; ITEM="$2"; shift 2 ;;
+    --item=*) ITEM="${1#*=}"; [[ -n "$ITEM" ]] || need_value --item "<header-prefix>" 1; shift ;;
     --fixtures)
       # The threads payload is optional: an issue has no review threads to
       # save. A second operand is taken only when it is a readable file that
@@ -224,6 +251,29 @@ if (( SLR && LATEST )); then
   print -r -- "$PROG: --latest and --since-last-review are exclusive — each picks the item to slice from" >&2
   exit 1
 fi
+# --only names kinds of item, and a kind is the first word of the item's
+# header line, so the filter can run on rendered text. A kind nobody renders
+# would filter everything out and look like an empty discussion, so it is
+# refused by name; one only the other resource type has is refused with the
+# type flags below. Spaces around the commas are dropped, and a repeat is
+# kept once.
+typeset -a KINDS_ANY=(comment body) KINDS_PR=(review thread commit force-push)
+typeset -a KINDS_ISSUE=(xref closed reopened renamed) ONLY_KINDS=()
+if [[ -n "$ONLY" ]]; then
+  ONLY_KINDS=(${(u)${(s:,:)ONLY//[[:space:]]/}})
+  if (( ${#ONLY_KINDS} == 0 )); then
+    print -r -- "$PROG: --only needs at least one kind; got: $ONLY" >&2
+    exit 1
+  fi
+  typeset -a unknown=(${ONLY_KINDS:|KINDS_ANY})
+  unknown=(${unknown:|KINDS_PR})
+  unknown=(${unknown:|KINDS_ISSUE})
+  if (( ${#unknown} )); then
+    print -r -- "$PROG: --only: unknown kind$( (( ${#unknown} > 1 )) && print -n s): ${(j:, :)unknown} (kinds: ${(j:, :)KINDS_ANY}, ${(j:, :)KINDS_PR}, ${(j:, :)KINDS_ISSUE})" >&2
+    exit 1
+  fi
+  ONLY=${(j:,:)ONLY_KINDS}
+fi
 
 # refuse_type_flags <type> <because> — flags that only the other resource
 # type can honour are an error, never a no-op: silently ignoring one would
@@ -239,6 +289,7 @@ refuse_type_flags() {
     (( SLR )) && bad+=(--since-last-review)
     (( LATEST )) && bad+=(--latest)
     (( MERGES )) && bad+=(--merges)
+    for k in ${ONLY_KINDS:*KINDS_PR}; do bad+=("--only $k"); done
     if (( ${#bad} )); then
       print -r -- "$PROG: ${(j:, :)bad} only appl$( (( ${#bad} == 1 )) && print -n ies || print -n y ) to pull requests; $because" >&2
       exit 1
@@ -246,6 +297,7 @@ refuse_type_flags() {
   else
     (( EVENTS )) && bad+=(--events)
     (( CLOSURE )) && bad+=(--closure)
+    for k in ${ONLY_KINDS:*KINDS_ISSUE}; do bad+=("--only $k"); done
     if (( ${#bad} )); then
       print -r -- "$PROG: ${(j:, :)bad} only appl$( (( ${#bad} == 1 )) && print -n ies || print -n y ) to issues; $because" >&2
       exit 1
@@ -308,8 +360,28 @@ if (( CLOSURE )); then
   (( SLR )) && with+=(--since-last-review)
   (( LATEST )) && with+=(--latest)
   (( MERGES )) && with+=(--merges)
+  [[ -n "$ONLY" ]] && with+=(--only)
+  [[ -n "$ITEM" ]] && with+=(--item)
   if (( ${#with} )); then
     print -r -- "$PROG: --closure is a view of its own and takes no other view flag; drop ${(j:, :)with}" >&2
+    exit 1
+  fi
+fi
+# --item is a selector, not a view: it prints one item whole, so a flag that
+# picks which items or how much of each would either be ignored or make the
+# one item it names disappear. Bot, merge and housekeeping items can be
+# selected without the flags that list them, so those are no-ops here, and
+# --hidden still decides whether a hidden body prints.
+if [[ -n "$ITEM" ]]; then
+  typeset -a with=()
+  (( TOC )) && with+=(--toc)
+  [[ -n "$ONLY" ]] && with+=(--only)
+  (( UNRESOLVED )) && with+=(--unresolved)
+  (( SLR )) && with+=(--since-last-review)
+  (( LATEST )) && with+=(--latest)
+  [[ -n "$SINCE" ]] && with+=(--since)
+  if (( ${#with} )); then
+    print -r -- "$PROG: --item selects one item and takes no view flag; drop ${(j:, :)with}" >&2
     exit 1
   fi
 fi
@@ -970,6 +1042,22 @@ def comment_body($TOC; $pad):
   if hidden and (showhidden | not) then ""
   elif $TOC then (.body | tocsuffix(70))
   else ((.body | clean) as $b | if $b == "" then "" else "\n" + ($b | indent($pad)) end) end;
+# --only: every item header starts with its kind, so a rendered item is kept
+# or dropped by its first word, after rendering, and the header text it keeps
+# is exactly the TOC line. No --only keeps every kind.
+def kind: split(" ")[0];
+def want($k): $only == "" or (($only | split(",")) | index($k)) != null;
+# --item: the one candidate whose TOC line starts with the prefix. The first
+# output line is the number of matches, which the shell reads to decide
+# between the item and a refusal listing every matching line.
+def pick: [.[] | select(.toc | startswith($item))] as $m
+  | if ($m | length) == 1 then "1", $m[0].full
+    else "\($m | length)", ($m[] | .toc) end;
+# What --only left of the view, or one line saying it left nothing, so an
+# empty answer is never mistaken for an empty discussion.
+def nothing_kept:
+  if length == 0 and $only != "" then "(no items of kind: \($only | split(",") | join(", ")))"
+  else .[] end;
 def ts: if .__typename == "PullRequestCommit" then .commit.committedDate
         elif .__typename == "PullRequestReview" then .submittedAt
         else .createdAt end;
@@ -1021,7 +1109,7 @@ def r_thread($TOC):
 # orphans, and the threads of a review that --bots held back. Emits nothing
 # at all for an empty list, so the title never appears over nothing.
 def r_thread_block($title; $TOC):
-  if length == 0 then empty
+  if length == 0 or (want("thread") | not) then empty
   else $title, (.[] | r_thread($TOC), (if $TOC then empty else "" end)) end;
 
 def r_item($tmap; $TOC; $UNRES):
@@ -1038,16 +1126,22 @@ def r_item($tmap; $TOC; $UNRES):
     | ($tmap[$r.id] // []) as $ths
     | ([$ths[] | select(.isResolved | not)]) as $open
     | (if $UNRES then $open else $ths end) as $show
-    | "review  [\($r | login) \($r.submittedAt | hdate)] \($r.state), \($ths | length) thread\(if ($ths | length) == 1 then "" else "s" end) (\($open | length) open)"
-      + (if hidden then hidmark else "" end)
-      # A hidden review loses its body the way a hidden comment does; its
-      # threads are objects of their own and still render.
-      + ((if hidden and (showhidden | not) then "" else ($r.body | clean) end) as $b
-         | if $b == "" then ""
-           elif $TOC then " " + ($r.body | preview(70))
-           else "\n" + ($b | indent("  ")) end)
-      + ([$show[] | "\n" + r_thread($TOC)] | join(""))
-  end;
+    # A review left out by --only keeps its threads when they were asked for:
+    # they are items of their own, not part of the review.
+    | ((if want("review") then
+          ["review  [\($r | login) \($r.submittedAt | hdate)] \($r.state), \($ths | length) thread\(if ($ths | length) == 1 then "" else "s" end) (\($open | length) open)"
+           + (if hidden then hidmark else "" end)
+           # A hidden review loses its body the way a hidden comment does; its
+           # threads are objects of their own and still render.
+           + ((if hidden and (showhidden | not) then "" else ($r.body | clean) end) as $b
+              | if $b == "" then ""
+                elif $TOC then " " + ($r.body | preview(70))
+                else "\n" + ($b | indent("  ")) end)]
+        else [] end)
+       + (if want("thread") then [$show[] | r_thread($TOC)] else [] end))
+    | select(length > 0) | join("\n")
+  end
+  | select(want(kind));
 
 # ── issue rendering ─────────────────────────────────────────────────────────
 # Housekeeping: the events that record project bookkeeping rather than what the
@@ -1117,7 +1211,8 @@ def r_issue_item($repo; $TOC):
     elif .__typename == "UnassignedEvent" then "assign \($by) -\(((.assignee // {}).login) // "?")"
     elif .__typename == "MilestonedEvent" then "milestone \($by) +\(.milestoneTitle // "?")"
     elif .__typename == "DemilestonedEvent" then "milestone \($by) -\(.milestoneTitle // "?")"
-    else "event \($by) \(.__typename)" end;
+    else "event \($by) \(.__typename)" end
+  | select(want(kind));
 
 ($toc == "1") as $TOC |
 ($unresolved == "1") as $UNRES |
@@ -1142,6 +1237,13 @@ def closer_denied: @CLOSER_DENIED@;
   | ([$p.errors[]? | select(closer_denied) | .path | .[(index("nodes") + 1)]]) as $hidden
   | (tgt.timelineItems.nodes // []) | to_entries[] | . as $e
   | $e.value + (if ($hidden | index($e.key)) != null then {closerHidden: true} else {} end)]) as $nodes0 |
+# --item looks past every list filter: bot comments and housekeeping events
+# can be fetched by name though the default view does not list them.
+if $item != "" then
+  ((if ($meta | has_body) then [$meta | {toc: r_body(true), full: r_body(false)}] else [] end)
+   + [$nodes0[] | {toc: r_issue_item($repo; true), full: r_issue_item($repo; false)}])
+  | pick
+else
 ([$nodes0[] | select(.__typename == "IssueComment")]) as $comsall |
 ([$comsall[] | select(isbot)] | length) as $combots |
 # The bot gate comes first: a hidden bot comment is counted once, as a bot,
@@ -1196,12 +1298,14 @@ def closer_denied: @CLOSER_DENIED@;
 "",
 # The opening post is the issue, not a timeline entry: --since narrows the
 # discussion, it does not take away what is being discussed.
-(if ($meta | has_body)
- then ($meta | r_body($TOC)), (if $TOC then empty else "" end)
- else empty end),
-(if ($items | length) == 0 then "(no timeline items)"
- else ($items[] | r_issue_item($repo; $TOC), (if $TOC then empty else "" end)) end)
+([(if ($meta | has_body) and want("body")
+  then ($meta | r_body($TOC)), (if $TOC then empty else "" end)
+  else empty end),
+  (if ($items | length) == 0 then "(no timeline items)"
+   else ($items[] | r_issue_item($repo; $TOC) | ., (if $TOC then empty else "" end)) end)]
+ | nothing_kept)
  end)
+end
 
 else
 
@@ -1233,6 +1337,18 @@ else
 def livethreads: [($tmap[.id] // [])[]
   | select(any(.comments.nodes[]?; hidden | not) or (.comments.pageInfo.hasNextPage // false))]
   | length;
+
+# --item looks past every list filter, as on an issue: bot reviews and
+# comments and merge commits can be fetched by name, and every thread is a
+# candidate of its own, whatever review it hangs under. A review is printed
+# with its threads, as the full render prints it.
+if $item != "" then
+  ((if ($meta | has_body) then [$meta | {toc: r_body(true), full: r_body(false)}] else [] end)
+   + [$nodes0[] | select(.__typename != "PullRequestReview" or .submittedAt != null)
+      | {toc: (r_item($tmap; true; false) | split("\n")[0]), full: r_item($tmap; false; false)}]
+   + [$threads[] | {toc: r_thread(true), full: r_thread(false)}])
+  | pick
+else
 
 ([$nodes0[]
   | select(.__typename != "PullRequestReview" or .submittedAt != null)
@@ -1351,9 +1467,9 @@ def thread_window: if $since != ""
 # --since-last-review, where it is the context those narrowed views otherwise
 # lack. Not under --unresolved, which by contract renders reviews and threads
 # and nothing else; the lean query it takes does not even fetch it.
-(if ($UNRES | not) and ($meta | has_body)
- then ($meta | r_body($TOC)), (if $TOC then empty else "" end)
- else empty end),
+([(if ($UNRES | not) and ($meta | has_body) and want("body")
+  then ($meta | r_body($TOC)), (if $TOC then empty else "" end)
+  else empty end),
 (if $UNRES then
    ([$items[]
      | select(.__typename == "PullRequestReview")
@@ -1369,18 +1485,20 @@ def thread_window: if $since != ""
            then "(no unresolved threads after the anchor; \($topen) open before it)"
            else "(no unresolved threads)" end)
      else
-       ($revs[] | r_item($tmap; $TOC; true), (if $TOC then empty else "" end)),
+       ($revs[] | r_item($tmap; $TOC; true) | ., (if $TOC then empty else "" end)),
        ($orphans | r_thread_block("threads with no parent review:"; $TOC)),
        ($held | r_thread_block("threads in filtered bot reviews:"; $TOC))
      end
  else
    (if ($items | length) == 0 then "(no timeline items)"
-    else ($items[] | r_item($tmap; $TOC; false), (if $TOC then empty else "" end)) end),
+    else ($items[] | r_item($tmap; $TOC; false) | ., (if $TOC then empty else "" end)) end),
    # Both blocks are already cut to the slice when there is one, and the
    # fallback (no review matched) is the full timeline, which shows both.
    ($orphans | r_thread_block("threads with no parent review:"; $TOC)),
    ($held | r_thread_block("threads in filtered bot reviews:"; $TOC))
- end)
+ end)]
+ | nothing_kept)
+end
 
 end end
 '
@@ -1388,22 +1506,44 @@ end end
 # The closer-refusal definition is shared with the shell gate; see
 # CLOSER_DENIED_JQ. Substituted through a variable, like the query slots.
 JQ_PROG=${JQ_PROG//@CLOSER_DENIED@/$CLOSER_DENIED_JQ}
-jq -rn \
-  --slurpfile tl "$TL_FILE" \
-  --slurpfile th "$TH_FILE" \
-  --arg num "$NUM" \
-  --arg rtype "$RTYPE" \
-  --arg repo "$REPO" \
-  --arg toc "$TOC" \
-  --arg unresolved "$UNRESOLVED" \
-  --arg since "$SINCE" \
-  --arg slr "$SLR" \
-  --arg slr_author "$SLR_AUTHOR" \
-  --arg latest "$LATEST" \
-  --arg latest_author "$LATEST_AUTHOR" \
-  --arg bots "$BOTS" \
-  --arg hidden "$HIDDEN" \
-  --arg merges "$MERGES" \
-  --arg events "$EVENTS" \
-  --arg closure "$CLOSURE" \
+typeset -a JQ_ARGS=(
+  --slurpfile tl "$TL_FILE"
+  --slurpfile th "$TH_FILE"
+  --arg num "$NUM"
+  --arg rtype "$RTYPE"
+  --arg repo "$REPO"
+  --arg toc "$TOC"
+  --arg unresolved "$UNRESOLVED"
+  --arg since "$SINCE"
+  --arg slr "$SLR"
+  --arg slr_author "$SLR_AUTHOR"
+  --arg latest "$LATEST"
+  --arg latest_author "$LATEST_AUTHOR"
+  --arg bots "$BOTS"
+  --arg hidden "$HIDDEN"
+  --arg merges "$MERGES"
+  --arg events "$EVENTS"
+  --arg closure "$CLOSURE"
+  --arg only "$ONLY"
+  --arg item "$ITEM"
   "$JQ_PROG"
+)
+if [[ -z "$ITEM" ]]; then
+  jq -rn "${JQ_ARGS[@]}"
+  exit 0
+fi
+# --item: the first line is how many TOC lines start with the prefix. One is
+# printed; none or several is an error, and several are listed rather than
+# the first taken, since the first is a guess the caller cannot see.
+ITEM_OUT=$(jq -rn "${JQ_ARGS[@]}")
+typeset -i ITEM_N=${ITEM_OUT%%$'\n'*}
+if (( ITEM_N == 1 )); then
+  print -r -- "${ITEM_OUT#*$'\n'}"
+elif (( ITEM_N == 0 )); then
+  print -r -- "$PROG: no item starts with: $ITEM" >&2
+  exit 1
+else
+  print -r -- "$PROG: $ITEM_N items start with: $ITEM — give more of the line:" >&2
+  print -r -- "${ITEM_OUT#*$'\n'}" | sed 's/^/  /' >&2
+  exit 1
+fi

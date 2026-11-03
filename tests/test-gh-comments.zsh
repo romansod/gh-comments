@@ -89,7 +89,9 @@
 #                    closer type the query does not select
 #   stubbed gh       call counts and query shape per resolved type — an issue
 #                    must not pay for the reviewThreads fetch
-#   argument validation  the flag parser's refusals
+#   argument validation  the flag parser's refusals, --only's kinds by name
+#                    and by resource type, and --item on an issue: its
+#                    refusals and the items the default view holds back
 #   missing tools    jq or gh absent from PATH is one sentence naming every
 #                    missing tool, refused before the branch lookup runs gh;
 #                    a --fixtures render needs only jq
@@ -230,6 +232,11 @@ check issue-basic-closure     issue-basic 21 --closure
 # A null closer under --closure: the header and one closed line, nothing else
 # (issue-closed's only xref is to an issue).
 check issue-closed-closure    issue-closed 5 --closure
+
+# issue-basic-only-* — --only on an issue: the events that say what happened
+# to it, or the comments alone. The counts line is unchanged either way.
+check issue-basic-only-events-toc  issue-basic 21 --toc --only closed,reopened,xref,renamed
+check issue-basic-only-comment     issue-basic 21 --only comment
 
 # bot-events-survive-default — the goldens above would happily record the bug
 # again if someone regenerated them after reintroducing it. This says out loud
@@ -946,6 +953,32 @@ argcase arg-closure-with-merges  1 "drop --merges" 21 --closure --merges
 argcase arg-closure-with-many    1 "drop --toc, --since, --events, --bots, --hidden, --unresolved, --latest, --merges" \
   21 --closure --toc --since 2026-01-01 --events --bots --hidden --unresolved --latest --merges
 argcase arg-closure-with-slr     1 "drop --since-last-review" 21 --closure --since-last-review
+argcase arg-closure-with-only    1 "drop --only, --item" 21 --closure --only comment --item x
+
+# --only: an unknown kind is refused by name, every one at once; a kind only
+# a PR has is refused on an issue, before any fetch when the type is pinned
+# and once the payload says so when it is not, and with no number it can
+# only be the current branch's PR.
+argcase arg-only-unknown         1 "--only: unknown kinds: frob, events (kinds: comment, body, review" 21 --only frob,comment,events
+argcase arg-only-no-kind         1 "--only needs at least one kind; got: ," 21 --only ,
+argcase arg-only-missing-value   1 "--only needs <kind>[,<kind>...]" 21 --only
+argcase arg-only-pr-kind-pinned  1 "--only review, --only thread only apply to pull requests; the type is pinned to an issue by --issue" \
+  21 --issue --only review,comment,thread
+argcase arg-only-pr-kind-resolved 1 "--only commit only applies to pull requests; #21 is an issue" \
+  21 --only commit --fixtures "$fx/issue-basic.tl.json"
+argcase arg-only-issue-kind-no-number 1 "--only renamed only applies to issues; no number means the current branch's pull request" \
+  --only renamed
+argcase arg-only-spaces          0 "renamed [romansod" 21 --toc --only ' renamed , xref' --fixtures "$fx/issue-basic.tl.json"
+# A filter that keeps nothing says so instead of rendering an empty discussion.
+argcase arg-only-nothing-kept    0 "(no items of kind: renamed)" 5 --toc --only renamed --fixtures "$fx/issue-closed.tl.json"
+
+# --item on an issue: housekeeping and bot comments can be fetched by name
+# though the default view does not list them; the body is an item too.
+argcase arg-item-housekeeping    0 "label [romansod 2026-08-16 16:33] +design" 21 --item 'label [romansod 2026-08-16 16:33]' --fixtures "$fx/issue-basic.tl.json"
+argcase arg-item-bot-comment     0 "Marking as stale." 21 --item 'comment [github-actions' --fixtures "$fx/issue-basic.tl.json"
+argcase arg-item-body            0 $'body [romansod 2026-08-16 16:32]\n  ## Problem' 21 --item body --fixtures "$fx/issue-basic.tl.json"
+argcase arg-item-none            1 "no item starts with: review" 21 --item review --fixtures "$fx/issue-basic.tl.json"
+argcase arg-item-several         1 "2 items start with: label [romansod" 21 --item 'label [romansod' --fixtures "$fx/issue-basic.tl.json"
 
 # missing-* — a tool the script needs but PATH lacks is one sentence naming
 # every missing tool, not zsh's "command not found" with a line number. PATH
