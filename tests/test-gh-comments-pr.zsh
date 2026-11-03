@@ -1073,6 +1073,25 @@ item_past_filters() {
     && problems+=("two hidden twins exited 0")
   [[ $err == *"share this exact TOC line"*"--hidden"* && $err != *"dump"* ]] \
     || problems+=("hidden twins: the refusal does not point at --hidden: $err")
+  # With --hidden already given and the bodies the same, the lines stay twins
+  # and --hidden has nothing more to give: the dump is the advice again.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "dave"))])' \
+    "$fx/hidden.tl.json" > "$htl" || problems+=("could not derive the same-body hidden twins")
+  err=$(zsh "$script" --pr 1001 --hidden --item 'comment [dave' --fixtures "$htl" "$fx/hidden.th.json" 2>&1 >/dev/null) \
+    && problems+=("same-body hidden twins under --hidden exited 0")
+  [[ $err == *"share this exact TOC line"*"dump"* && $err != *"rerun"* ]] \
+    || problems+=("same-body twins under --hidden: not pointed at the dump: $err")
+  # A hidden comment beside a visible one of the same minute: their lines
+  # differ, so this is the ordinary several-matches refusal, not twins.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "dave")
+               | .isMinimized = false | .minimizedReason = null | .body = "A visible note.")])' \
+    "$fx/hidden.tl.json" > "$htl" || problems+=("could not derive the hidden and visible pair")
+  err=$(zsh "$script" --pr 1001 --item 'comment [dave' --fixtures "$htl" "$fx/hidden.th.json" 2>&1 >/dev/null) \
+    && problems+=("a hidden and a visible comment exited 0")
+  [[ $err == *"2 items start with: comment [dave — give more of the line"* && $err != *"share this exact"* ]] \
+    || problems+=("hidden and visible: not the several-matches refusal: $err")
   rm -f "$htl"
   report "$name" "item" $rc "$out"
   return 0
