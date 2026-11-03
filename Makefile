@@ -35,6 +35,7 @@ test-pty:
 	python3 tests/run-pty.py
 
 # Before a release: the newest filed benchmark run's fixed costs match the
-# skill files. Not part of check: a stale row needs a paid recount.
+# skill files, by byte size (an edit that keeps a file's length is not
+# caught). Not part of check: a stale row needs a paid recount.
 bench-check:
 	zsh bench/check-skill-bytes.zsh

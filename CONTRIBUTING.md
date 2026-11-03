@@ -114,7 +114,7 @@ repositories and bodies. Scrub a captured payload before committing it.
 `gh` auth and the `claude` CLI, and counting costs money, so neither
 `make check` nor CI runs it. The suite only rebuilds the newest filed run's
 tables offline (`tests/test-skills.zsh`), and `make bench-check` says when a
-skill file changed after that run counted it. See
+skill file changed size after that run counted it. See
 [bench/README.md](bench/README.md) for how to run it and file a run, and
 rerun it after a change to what the command prints or to the skills, then
 update [BENCHMARKS.md](BENCHMARKS.md); a skill change can wait for the
@@ -123,8 +123,9 @@ recount until the release, which runs `make bench-check`.
 ## Releasing
 
 1. `make bench-check`: the newest filed benchmark run's fixed costs must
-   match the skill files as they ship. When a skill file changed after the
-   count, it names the stale rows; `zsh bench/refile-fixed.zsh` recounts
+   match the skill files as they ship. It compares byte sizes, so an edit
+   that keeps a file's exact length is not caught. When a skill file
+   changed size after the count, or has no row, it names it; `zsh bench/refile-fixed.zsh` recounts
    them into that run, keeps its other rows as filed, and rebuilds its
    tables, then rebuild BENCHMARKS.md's results from them before tagging.
    It is not in `make check`, since the recount calls `claude -p` and costs
