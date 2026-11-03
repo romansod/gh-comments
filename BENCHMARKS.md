@@ -16,6 +16,11 @@ the branch's final ones. Tokens were counted with
 timings and a per-output delta against the 2026-10-09 run of v1.0.0, is
 [`bench/runs/2026-10-22/tables.md`](bench/runs/2026-10-22/tables.md).
 
+Since this run, a thread's `--toc` line ends with who opened it
+(`[login YYYY-MM-DD HH:MM]`, added with `--only` and `--item` in #6), about
+35 bytes more per thread. Every `--toc` figure below predates that, and a
+thread-heavy TOC now costs somewhat more; the next run (#7) re-measures it.
+
 ## Summary
 
 - **Open review threads.** Asking which threads are still open on
