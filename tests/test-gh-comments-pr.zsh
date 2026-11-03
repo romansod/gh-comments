@@ -761,6 +761,12 @@ slr_skips_hidden() {
   first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
   [[ $first == 'review  [bob 2026-08-11 14:00] APPROVED'* ]] \
     || problems+=("--since-last-review did not pass over carol's hidden review: $first")
+  # --hidden shows hidden bodies; it does not make carol's hidden review the
+  # last review said, any more than it does for --latest.
+  out=$(zsh "$script" --pr 44 --toc --since-last-review --hidden --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("--hidden exit $rc"); }
+  first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+  [[ $first == 'review  [bob 2026-08-11 14:00] APPROVED'* ]] \
+    || problems+=("--since-last-review --hidden anchored elsewhere: $first")
   out=$(zsh "$script" --pr 44 --toc --since-last-review=alice --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("alice exit $rc"); }
   first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
   [[ $first == 'review  [alice 2026-08-10 12:00] '*'(hidden: outdated)' ]] \
