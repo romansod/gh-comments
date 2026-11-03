@@ -241,28 +241,36 @@ With no number, the current branch's open PR is used.
                                 under "threads in filtered bot reviews:".
                                 Timeline events are never filtered by author —
                                 a bot closing an issue is still why it closed.
-  --hidden                      Show the bodies of hidden (minimized) comments.
-                                By default a comment hidden as outdated, spam,
-                                resolved, off-topic or duplicate renders as a
-                                single marker line, e.g.
-                                `comment [user date] (hidden: outdated)`, and
-                                the counts line reports `(N hidden)`.
+  --hidden                      Show the bodies of hidden (minimized) comments
+                                and reviews. By default a comment hidden as
+                                outdated, spam, resolved, off-topic or
+                                duplicate renders as a single marker line,
+                                e.g. `comment [user date] (hidden: outdated)`;
+                                a hidden review keeps its line and its threads
+                                and loses its body. The counts line reports
+                                `(N hidden)`.
 
   Pull requests only:
   --unresolved                  Only reviews with open threads, and those threads
   --since-last-review[=<user>]  Only the last review (optionally by <user>)
-                                and everything after it
+                                and everything after it; a hidden review
+                                is passed over unless one of its threads
+                                has a comment that is not hidden, or
+                                replies past the fetched page
   --latest[=<user>]             Only the most recent *substantive* review or
                                 top-level comment (optionally by <user>) and
                                 everything after it. Substantive: a review with
-                                a body or inline threads, or a comment with a
-                                body that is not hidden — so a bare approval
-                                or a hidden comment is looked past as the
-                                anchor, though it still shows when it comes
-                                after the anchor; a bot is looked past and
-                                not shown unless --bots. Exclusive with
-                                --since-last-review, which anchors on the last
-                                review object and ignores comments.
+                                a body, or an inline thread with a comment,
+                                that is not hidden (a thread with replies
+                                past the fetched page counts), or a comment
+                                with a body that is not hidden —
+                                so a bare approval or a hidden comment is
+                                looked past as the anchor, though it still
+                                shows when it comes after the anchor; a bot
+                                is looked past and not shown unless --bots.
+                                Exclusive with --since-last-review, which
+                                anchors on the last review object it does
+                                not pass over and ignores comments.
                                 When either flag matches nothing, the TOC is
                                 shown instead of the full timeline, under a
                                 note saying so; with --unresolved or --since
@@ -344,8 +352,6 @@ the markers is in the skills' reference files:
   after it. A newer reply nested under an older review's thread is outside
   the slice; `--unresolved` is the flag for "what is still open regardless
   of age".
-- Reviews GitHub has minimized are not yet marked the way comments are; their
-  bodies render in full.
 - Pin, lock, transfer, duplicate and sub-issue events are not fetched.
 - Timestamps are UTC. A deleted account renders as `ghost`.
 

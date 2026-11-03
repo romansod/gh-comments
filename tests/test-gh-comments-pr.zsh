@@ -77,6 +77,14 @@
 #                 line in all four combinations of --bots and --hidden — the
 #                 bot gate is applied first, so the hidden bot comment counts
 #                 once, as a bot, until --bots puts it back.
+#   hidden-review multi with two minimized reviews: alice's CHANGES_REQUESTED
+#                 review hidden as OUTDATED, which keeps its two threads, and
+#                 a third review, carol's, hidden as SPAM, with a body and no
+#                 threads, last. Pins the marker on the review line, the body
+#                 gate behind --hidden, the hidden tally on `reviews:`, and
+#                 --latest and --since-last-review looking past a review
+#                 whose only substance is a hidden body while still
+#                 anchoring on one with threads.
 #
 # Not every case is golden. Directly below the goldens come the invariant
 # cases, which take no golden and build no input: threads-match-header and
@@ -251,6 +259,14 @@ check hidden-toc             hidden 1001 --toc
 check hidden-shown           hidden 1001 --hidden
 check hidden-toc-unresolved  hidden 1001 --toc --unresolved
 check hidden-bots-shown      hidden 1001 --bots --hidden
+# hidden-review-* — the same treatment on a review: the marker on its line,
+# the body withheld unless --hidden, its threads rendered either way.
+check hidden-review-full           hidden-review 44
+check hidden-review-toc            hidden-review 44 --toc
+check hidden-review-shown          hidden-review 44 --hidden
+check hidden-review-latest         hidden-review 44 --latest
+check hidden-review-toc-unresolved hidden-review 44 --toc --unresolved
+check hidden-review-slr            hidden-review 44 --since-last-review
 
 # ---------------------------------------------------------------------------
 # Non-golden cases. Everything above diffs a committed golden; everything
@@ -340,9 +356,10 @@ threads_match_header
 # rendered output, so the case restates no rendering logic beyond which line
 # is the anchor:
 #   - the items are a suffix of the full render, from its anchor line — the
-#     last review line for --since-last-review, the last substantive line
-#     for --latest (a review with threads or a body, or a comment with a
-#     body that is not hidden), the named author's when one is named — and
+#     last review line for --since-last-review (passing over a hidden one
+#     with no threads), the last substantive line for --latest (a review
+#     with threads or a body that is not hidden, or a comment with a body
+#     that is not hidden), the named author's when one is named — and
 #     nested threads travel with their review, so none can go missing
 #     inside the window;
 #   - a held bot thread is in exactly when its review sits after the anchor,
@@ -376,14 +393,25 @@ _slice_sections() {
     esac
   done
 }
-# A --latest candidate, read off its TOC line: a review with threads or a
-# body preview, or a comment with a preview and no (hidden: …) marker. The
-# `[login date time]` header is cut at its closing `HH:MM]`, not the first
-# `]` — `vercel[bot]` has one of its own.
+# A review line --since-last-review passes over: hidden, with no threads.
+_slice_hidden_bare() {
+  local rest=${1#*[0-9][0-9]:[0-9][0-9]\] }
+  [[ ${${rest#*, }%% *} == 0 && $rest == *'open) (hidden: '* ]]
+}
+# A --latest candidate, read off its TOC line: a review with threads, or one
+# with a body preview that is not hidden (a hidden review with no threads
+# never counts, even when --hidden shows its preview), or a comment with a
+# preview and no (hidden: …) marker. A TOC line does not show whether a
+# thread's comments are hidden, so this counts every thread; no committed
+# fixture has one whose comments are all hidden, and anchor-needs-live-thread
+# covers that case on derived copies. The `[login date time]` header is cut
+# at its closing `HH:MM]`, not the first `]` — `vercel[bot]` has one of its
+# own.
 _slice_substantive() {
   local rest
   case $1 in
-    'review  ['*) rest=${1#*[0-9][0-9]:[0-9][0-9]\] }; [[ ${${rest#*, }%% *} != 0 || -n ${rest#*open\)} ]] ;;
+    'review  ['*) _slice_hidden_bare "$1" && return 1
+                  rest=${1#*[0-9][0-9]:[0-9][0-9]\] }; [[ ${${rest#*, }%% *} != 0 || -n ${rest#*open\)} ]] ;;
     'comment ['*) rest=${1#*[0-9][0-9]:[0-9][0-9]\]}; [[ -n $rest && $rest != ' (hidden:'* ]] ;;
     *) false ;;
   esac
@@ -435,13 +463,14 @@ slice_matches_full() {
         slines=("${(@f)slice}")
         note=${(M)slines:#note: no matching *}
         slines=("${(@)slines:#note: *}")
-        # The anchor: the last review line (slr) or substantive line (latest)
+        # The anchor: the last review line (slr, past a hidden one with no
+        # threads) or substantive line (latest)
         # in the full render, by the named author when one is named. None
         # means the fallback is expected.
         ai=0
         for (( i = ${#fitems}; i >= 1; i-- )); do
           l=${fitems[i]}
-          if [[ $mode == slr ]]; then [[ $l == 'review  ['* ]] || continue
+          if [[ $mode == slr ]]; then [[ $l == 'review  ['* ]] && ! _slice_hidden_bare "$l" || continue
           else _slice_substantive "$l" || continue; fi
           [[ -z $v || ${${l#*\[}%% *} == ${v#=} ]] && { ai=i; break; }
         done
@@ -520,7 +549,8 @@ slice_matches_full
 
 # hidden-bodies-gated — said independently of the goldens: a hidden body never
 # renders by default, always renders under --hidden, and the counts line names
-# the hidden count either way, with the bot gate applied first.
+# the hidden count either way, with the bot gate applied first, on the
+# comments and on the reviews alike.
 hidden_bodies_gated() {
   local name=hidden-bodies-gated out def shown
   local -i rc=0
@@ -553,6 +583,22 @@ hidden_bodies_gated() {
   out=$(zsh "$script" --pr 1001 --toc --bots --hidden --fixtures "$tl" "$th" 2>&1) || { rc=$?; problems+=("--bots --hidden run exited $rc"); }
   [[ "$out" == *"top-level comments: 3 (incl. 1 bot) (2 hidden)"* ]] \
     || problems+=("--bots --hidden counts: $(print -r -- "$out" | sed -n 2p)")
+  # The same gate on reviews: carol's hidden review, re-typed as a bot's in a
+  # copy of the hidden-review timeline, counts as a bot until --bots puts it
+  # back among the hidden.
+  local btl rth=$fx/hidden-review.th.json
+  btl=$(mktemp) || { problems+=("mktemp failed"); report "$name" "hidden comments" 1 "$def"; return 0; }
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes[]
+       | select(.__typename == "PullRequestReview" and .author.login == "carol")
+       | .author) |= {login: "carol[bot]", __typename: "Bot"}' \
+    "$fx/hidden-review.tl.json" > "$btl" || problems+=("could not derive the bot-review timeline")
+  out=$(zsh "$script" --pr 44 --toc --fixtures "$btl" "$rth" 2>&1) || { rc=$?; problems+=("bot-review run exited $rc"); }
+  [[ "$out" == *"reviews: 2 (+1 bot filtered) (1 hidden)"* ]] \
+    || problems+=("review counts: $(print -r -- "$out" | sed -n 2p)")
+  out=$(zsh "$script" --pr 44 --toc --bots --fixtures "$btl" "$rth" 2>&1) || { rc=$?; problems+=("bot-review --bots run exited $rc"); }
+  [[ "$out" == *"reviews: 3 (incl. 1 bot) (2 hidden)"* ]] \
+    || problems+=("--bots review counts: $(print -r -- "$out" | sed -n 2p)")
+  rm -f "$btl"
   report "$name" "hidden comments" $rc "$def"
   return 0
 }
@@ -668,9 +714,9 @@ fallback_keeps_narrowing() {
 }
 fallback_keeps_narrowing
 
-# latest-skips-hidden — a hidden comment is not substantive. dave's only
-# comment on the hidden fixture is minimized, so --latest=dave has nothing to
-# slice from and falls back.
+# latest-skips-hidden — a hidden comment, or a hidden review's body, is not
+# substantive. dave's only comment on the hidden fixture is minimized, so
+# --latest=dave has nothing to slice from and falls back.
 latest_skips_hidden() {
   local name=latest-skips-hidden out
   local -i rc=0
@@ -682,10 +728,132 @@ latest_skips_hidden() {
   # latest thing said.
   [[ "$out" == *"note: no matching review or comment"* ]] \
     || problems+=("--hidden made a hidden comment substantive")
+  # A review is no different: carol's only review is hidden and has no
+  # threads, so its body is all it had to say. alice's hidden review keeps
+  # its threads, which are substance of their own, so it can still anchor.
+  local rtl=$fx/hidden-review.tl.json rth=$fx/hidden-review.th.json
+  out=$(zsh "$script" --pr 44 --latest=carol --hidden --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("hidden-review exit $rc"); }
+  [[ "$out" == *"note: no matching review or comment"* ]] \
+    || problems+=("--latest sliced from a hidden review with no threads")
+  # On the fixture alice also has a later visible comment, which --latest=alice
+  # would anchor on whatever the rule says about her review, so the check runs
+  # on a copy without that comment: the hidden review is all she said.
+  local atl
+  atl=$(mktemp) || { problems+=("mktemp failed"); report "$name" "latest" 1 ""; return 0; }
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        map(select((.__typename == "IssueComment" and .author.login == "alice") | not))' \
+    "$rtl" > "$atl" || problems+=("could not derive the alice-only timeline")
+  out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$atl" "$rth" 2>&1) || { rc=$?; problems+=("hidden-review alice exit $rc"); }
+  rm -f "$atl"
+  [[ "$out" != *"note: no matching"* ]] \
+    || problems+=("a hidden review with threads did not count as substantive")
+  [[ "$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)" == 'review  [alice 2026-08-10 12:00] '*'(hidden: outdated)' ]] \
+    || problems+=("--latest=alice did not anchor on her hidden review: $(print -r -- "$out" | grep -v '^body ' | sed -n 4p)")
   report "$name" "latest" $rc "$out"
   return 0
 }
 latest_skips_hidden
+# slr-skips-hidden — --since-last-review passes over a review GitHub hid
+# that has no threads, as --latest does: on the hidden-review fixture
+# carol's spam review is last, so the slice starts at bob's approval. alice's
+# hidden review keeps its threads and can still anchor, so naming her slices
+# from it; naming carol, whose only review is hidden, falls back.
+slr_skips_hidden() {
+  local name=slr-skips-hidden out first
+  local -i rc=0
+  local rtl=$fx/hidden-review.tl.json rth=$fx/hidden-review.th.json
+  out=$(zsh "$script" --pr 44 --toc --since-last-review --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("exit $rc"); }
+  first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+  [[ $first == 'review  [bob 2026-08-11 14:00] APPROVED'* ]] \
+    || problems+=("--since-last-review did not pass over carol's hidden review: $first")
+  # --hidden shows hidden bodies; it does not make carol's hidden review the
+  # last review said, any more than it does for --latest.
+  out=$(zsh "$script" --pr 44 --toc --since-last-review --hidden --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("--hidden exit $rc"); }
+  first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+  [[ $first == 'review  [bob 2026-08-11 14:00] APPROVED'* ]] \
+    || problems+=("--since-last-review --hidden anchored elsewhere: $first")
+  out=$(zsh "$script" --pr 44 --toc --since-last-review=alice --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("alice exit $rc"); }
+  first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+  [[ $first == 'review  [alice 2026-08-10 12:00] '*'(hidden: outdated)' ]] \
+    || problems+=("--since-last-review=alice did not anchor on her hidden review with threads: $first")
+  out=$(zsh "$script" --pr 44 --toc --since-last-review=carol --fixtures "$rtl" "$rth" 2>&1) || { rc=$?; problems+=("carol exit $rc"); }
+  [[ "$out" == *"note: no matching earlier review"* ]] \
+    || problems+=("--since-last-review=carol sliced from a hidden review with no threads")
+  report "$name" "since-last-review" $rc "$out"
+  return 0
+}
+slr_skips_hidden
+# anchor-needs-live-thread — a thread makes a hidden review an anchor only
+# while it has a comment that is not hidden. Derived from the hidden-review
+# payloads, since the slice invariant reads TOC lines, which do not show a
+# thread comment's hidden state: with every comment on alice's two threads
+# hidden, her hidden review falls back under both flags; with all hidden but
+# bob's reply on one thread, that reply still anchors it, and so does alice's
+# opening comment when the reply under it is the hidden one; and a thread with
+# replies past the fetched page anchors it, since those may be visible. The
+# --latest rule holds for a visible review too: made visible with an empty
+# body, alice's review with every thread comment hidden falls back, though
+# --since-last-review, which anchors on any visible review, still takes it.
+anchor_needs_live_thread() {
+  local name=anchor-needs-live-thread out first f atl vtl
+  local -i rc=0
+  local rtl=$fx/hidden-review.tl.json rth=$fx/hidden-review.th.json
+  local -A th
+  # As in latest-skips-hidden: without her later comment, --latest=alice can
+  # only anchor on her review.
+  atl=$(mktemp) && vtl=$(mktemp) && th[all]=$(mktemp) && th[one]=$(mktemp) && th[first]=$(mktemp) && th[more]=$(mktemp) ||
+    { problems+=("mktemp failed"); report "$name" "anchors" 1 ""; return 0; }
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        map(select((.__typename == "IssueComment" and .author.login == "alice") | not))' \
+    "$rtl" > "$atl" || problems+=("could not derive the alice-only timeline")
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes[] | select(.id == "PRR_r1"))
+        |= (.isMinimized = false | .minimizedReason = null | .body = "")' \
+    "$atl" > "$vtl" || problems+=("could not derive the visible-review timeline")
+  # hide(a; p): minimize every comment by a on alice's threads whose path
+  # matches p.
+  local hide='def hide(a; p): (.[].data.repository.pullRequest.reviewThreads.nodes[]
+      | select(.comments.nodes[0].pullRequestReview.id == "PRR_r1" and (.path | test(p)))
+      | .comments.nodes[] | select(.author.login | test(a)))
+      |= (.isMinimized = true | .minimizedReason = "OUTDATED");'
+  jq "$hide hide(\".\"; \".\")" "$rth" > "${th[all]}" || problems+=("could not derive the all-hidden threads")
+  jq "$hide hide(\"alice\"; \".\")" "$rth" > "${th[one]}" || problems+=("could not derive the one-reply threads")
+  jq "$hide hide(\"bob\"; \".\") | hide(\".\"; \"cursor\")" "$rth" > "${th[first]}" ||
+    problems+=("could not derive the hidden-reply threads")
+  jq "$hide hide(\".\"; \".\") | (.[].data.repository.pullRequest.reviewThreads.nodes[]
+      | select(.path == \"src/api/cursor.ts\") | .comments.pageInfo) = {hasNextPage: true}" \
+    "$rth" > "${th[more]}" || problems+=("could not derive the truncated thread")
+  out=$(zsh "$script" --pr 44 --toc --since-last-review=alice --fixtures "$rtl" "${th[all]}" 2>&1) || { rc=$?; problems+=("all slr exit $rc"); }
+  [[ "$out" == *"note: no matching earlier review"* ]] \
+    || problems+=("--since-last-review=alice anchored on a hidden review whose thread comments are all hidden")
+  out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$atl" "${th[all]}" 2>&1) || { rc=$?; problems+=("all latest exit $rc"); }
+  [[ "$out" == *"note: no matching review or comment"* ]] \
+    || problems+=("--latest=alice anchored on a hidden review whose thread comments are all hidden")
+  for f in one first more; do
+    out=$(zsh "$script" --pr 44 --toc --since-last-review=alice --fixtures "$rtl" "${th[$f]}" 2>&1) || { rc=$?; problems+=("$f slr exit $rc"); }
+    first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+    [[ $first == 'review  [alice 2026-08-10 12:00] '*'(hidden: outdated)' ]] \
+      || problems+=("$f: --since-last-review=alice did not anchor on her hidden review: $first")
+    out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$atl" "${th[$f]}" 2>&1) || { rc=$?; problems+=("$f latest exit $rc"); }
+    first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+    [[ $first == 'review  [alice 2026-08-10 12:00] '*'(hidden: outdated)' ]] \
+      || problems+=("$f: --latest=alice did not anchor on her hidden review: $first")
+  done
+  out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$vtl" "${th[all]}" 2>&1) || { rc=$?; problems+=("visible latest exit $rc"); }
+  [[ "$out" == *"note: no matching review or comment"* ]] \
+    || problems+=("--latest=alice anchored on a visible bodyless review whose thread comments are all hidden")
+  out=$(zsh "$script" --pr 44 --toc --since-last-review=alice --fixtures "$vtl" "${th[all]}" 2>&1) || { rc=$?; problems+=("visible slr exit $rc"); }
+  first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+  [[ $first == 'review  [alice 2026-08-10 12:00] CHANGES_REQUESTED, 2 threads (1 open)' ]] \
+    || problems+=("--since-last-review=alice did not anchor on her visible review: $first")
+  out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$vtl" "${th[one]}" 2>&1) || { rc=$?; problems+=("visible one latest exit $rc"); }
+  first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+  [[ $first == 'review  [alice 2026-08-10 12:00] CHANGES_REQUESTED, 2 threads (1 open)' ]] \
+    || problems+=("--latest=alice did not anchor on her visible review through bob's reply: $first")
+  rm -f "$atl" "$vtl" "${th[@]}"
+  report "$name" "anchors" $rc "$out"
+  return 0
+}
+anchor_needs_live_thread
 
 # check_oversized — a payload too large to fit in argv. Passing the two
 # payloads as `jq --argjson` died with "argument list too long: jq" (exit 127,
@@ -1206,20 +1374,24 @@ report gh-live-render "stubbed gh" $gh_rc "$gh_out"
 # one right and one wrong.
 gating_case() {
   local name=$1 want=$2; shift 2
-  local -i has_commits=0 has_body=0 has_desc=0 has_hidden=0
+  local -i has_commits=0 has_body=0 has_desc=0 has_hidden=0 has_rev_hidden=0
   gh_reset
   gh_case ok 7 "$@"
   (( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0)")
   grep -q 'PULL_REQUEST_COMMIT' "$qlog" && has_commits=1
-  # The IssueComment body follows its minimizedReason; the PR description's
-  # body follows its createdAt, so the two markers cannot match each other.
-  grep -q 'minimizedReason body' "$qlog" && has_body=1
+  # The IssueComment body follows its createdAt and minimizedReason; a
+  # review's isMinimized follows its state, and the PR description's body
+  # follows its createdAt alone, so none of the markers match each other.
+  grep -q 'createdAt isMinimized minimizedReason body' "$qlog" && has_body=1
   # The PR's own description hangs off baseRefName, which nothing else in the
   # query is followed by.
   grep -q 'baseRefName author' "$qlog" && has_desc=1
   # isMinimized rides on the comment node, outside the body slot: the counts
   # line reports hidden comments in every mode, lean included.
   grep -q 'createdAt isMinimized minimizedReason' "$qlog" && has_hidden=1
+  # And on the review node, in every mode too: the fixtures carry the field
+  # whatever the query asks for, so only the query text shows it is fetched.
+  grep -q 'state isMinimized minimizedReason body' "$qlog" && has_rev_hidden=1
   if [[ $want == lean ]]; then
     (( has_commits == 0 )) || problems+=("lean query still asks for PULL_REQUEST_COMMIT")
     (( has_body == 0 )) || problems+=("lean query still asks for the IssueComment body")
@@ -1230,6 +1402,7 @@ gating_case() {
     (( has_desc == 1 )) || problems+=("full query dropped the PR description")
   fi
   (( has_hidden == 1 )) || problems+=("$want query dropped isMinimized from the IssueComment node")
+  (( has_rev_hidden == 1 )) || problems+=("$want query dropped isMinimized from the PullRequestReview node")
   # An unsubstituted slot is neither shape, and GraphQL would reject it — but
   # only against the real API, which no test reaches.
   if grep -q '@ITEM_TYPES@\|@COMMIT_FRAGMENT@\|@COMMENT_BODY@' "$qlog"; then
