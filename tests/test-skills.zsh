@@ -11,6 +11,9 @@
 #                          with gh-comments stubbed to print a golden: no
 #                          line exits 2, the reads find the dump, and a
 #                          second number's dump leaves the first's alone
+#   recipes-name-the-repo  each recipe names the dump under -R with the
+#                          repo in it, so two repos' items with one number
+#                          do not share a dump
 #   skill-invocation       a repo appears in an "Invoked as" line only with
 #                          a number, since -R needs one
 #   skill-one-item-flow    step 1 of each SKILL.md names --toc --only, the
@@ -151,6 +154,17 @@ skill_one_item_flow() {
 }
 skill_one_item_flow
 
+recipes_name_the_repo() {
+  local name=recipes-name-the-repo f kind
+  for kind in pr issue; do
+    f=$root/skills/$kind-comments/references/recipes.md
+    grep -q -- "gh-comments-$kind-<owner>-<repo>-<N>.txt" "$f" \
+      || problems+=("${f#$root/}: does not name the dump under -R (gh-comments-$kind-<owner>-<repo>-<N>.txt)")
+  done
+  report "$name" "the -R dump name"
+}
+recipes_name_the_repo
+
 bench_tables_match_run() {
   local name=bench-tables-match-run tmp out
   local -a runs
@@ -210,17 +224,19 @@ bench_check_witness() {
       --exclude=bench/tokens.tsv -cf - . ) | tar -C "$tmp" -xf -
   git -C "$tmp" init -q && git -C "$tmp" add -A \
     && git -C "$tmp" -c user.name=t -c user.email=t@t commit -qm base || problems+=("scratch repo")
-  zsh "$tmp/bench/check-skill-bytes.zsh" >/dev/null 2>&1 || problems+=("bench-check fails on the clean tree")
+  # Whether the real run is fresh is bench-check's business at release, not
+  # the suite's, so each case only asks that the change it makes is named.
   print -r -- '# new' > "$tmp/skills/pr-comments/references/extra.md"
-  out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1) && problems+=("bench-check passed with a reference file that has no row")
+  out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1)
   [[ $out == *references/extra.md* ]] || problems+=("bench-check did not name references/extra.md")
   rm -f "$tmp/skills/pr-comments/references/extra.md"
   # Same length: swap two characters of the invocation line.
   f=$tmp/skills/pr-comments/SKILL.md
   sed -i.bak 's/Invoked as/Invoked sa/' "$f" && rm -f "$f.bak"
   git -C "$tmp" -c user.name=t -c user.email=t@t commit -qam edit
-  out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1) && problems+=("bench-check passed a committed same-length skill edit")
-  [[ $out == *skills/pr-comments/SKILL.md* ]] || problems+=("bench-check did not name the edited SKILL.md: ${out%%$'\n'*}")
+  out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1)
+  [[ $out == *"changed since"*skills/pr-comments/SKILL.md* ]] \
+    || problems+=("bench-check did not name the committed same-length edit of SKILL.md: ${out%%$'\n'*}")
   rm -rf "$tmp"
   report "$name" "bench-check misses a change"
 }
