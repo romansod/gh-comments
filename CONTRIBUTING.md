@@ -6,7 +6,8 @@
 gh-comments                       the implementation, one zsh script
 bin/gh-comments                   → ../gh-comments, for the Claude Code plugin
 skills/pr-comments/               Claude Code / Agent Skills: pull requests
-skills/issue-comments/            same, for issues; each has references/output.md
+skills/issue-comments/            same, for issues; each loads references/ on demand:
+                                  flags.md, recipes.md, output.md
 .claude-plugin/plugin.json        the plugin manifest
 .claude-plugin/marketplace.json   the one-entry marketplace that serves it
 tests/                            run.zsh, lib.zsh, run-pty.py, test-*.zsh, fixtures/

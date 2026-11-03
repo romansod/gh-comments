@@ -15,104 +15,50 @@ description: >
 
 You are executing the issue-comments skill.
 
-## Invocation
-
-```
-/gh-comments:issue-comments <N>            — issue N in the current repo
-/gh-comments:issue-comments <N> <o>/<r>    — issue N in another repo
-```
-
-(`/issue-comments …` where the skill directory is installed on its own
-rather than as the gh-comments plugin.)
-
-Also invoke implicitly whenever a task needs an issue's discussion — picking
-up work it describes, checking what was decided, finding out why it was
-closed, or seeing which PR already addressed it.
+Invoked as `/gh-comments:issue-comments <N> [<owner>/<repo>]`, or whenever a
+task needs an issue's discussion: picking up its work, what was decided,
+why it closed, which PR addressed it.
 
 ## The command
 
 ```bash
-gh-comments <N> --issue [flags]
+gh-comments <N> --issue [flags]    # or: gh comments <N> --issue
 ```
 
-`gh comments <N> --issue` is the same command where gh-comments is installed
-as a GitHub CLI extension. `--issue` is optional — the tool resolves the type
-from the API, since a repository numbers issues and PRs in one sequence — but
-pass it when you *know* it should be an issue: a number that turns out to be
-a PR is then refused by name, not rendered as a PR dump you did not ask for.
-
-Flags: `-R owner/name`; `--toc` (one line per item, no bodies);
-`--only <kind>[,<kind>...]` (only those kinds: `comment`, `body`, `xref`,
-`closed`, `reopened`, `renamed`; the counts header is unchanged);
-`--item '<TOC line prefix>'` (exactly one item, whole; no match, or several,
-listed, is an error; takes no other view flag but `--hidden`, which must
-match the `--toc` the line came from);
-`--closure` (why it was closed and by what: the header, the
-`closed`/`reopened` lines with their closer, and the PR cross-references,
-nothing else; refused on an issue never closed, and takes no other view flag);
-`--since YYYY-MM-DD[THH:MM[:SS]][Z]` (UTC); `--bots`, `--hidden`,
-`--events` (include bot comments, the bodies of hidden comments, and
-label/assignee/milestone events; all filtered by default, and the counts
-header says how many were).
-The PR-only flags (`--unresolved`, `--since-last-review`, `--latest`,
-`--merges`) are an error on an issue, not a no-op.
+`--issue` refuses a PR number; `-R owner/name` reads another repo. It
+prints the body, comments and timeline events (closes, cross-references,
+renames) that `gh issue view` does not.
 
 ## Steps
 
-1. **Orient with the TOC** — always safe to read inline:
-
-   ```bash
-   gh-comments <N> --issue --toc
-   ```
-
-   A counts header (`comments: N · cross-refs: N · events: N`, with what was
-   filtered stated), then the opening post and one line per comment and
-   event.
-
+1. **Orient with the TOC**, always safe inline:
+   `gh-comments <N> --issue --toc`. A counts header, then the opening post
+   and one line per comment and event.
 2. **Take the narrowest view that answers the question:**
-   - Why it was closed, or what closed it — `--closure`:
 
-     ```bash
-     gh-comments <N> --issue --closure
-     ```
+   | question | flags |
+   |---|---|
+   | is it closed, which PR references it | the TOC |
+   | why it closed, and by what | `--closure` |
+   | one comment | `--toc --only comment`, then `--item` |
+   | what changed since a date | `--since YYYY-MM-DD` |
+   | most issues: everything | no flags |
 
-     The `closed` line says `by #N PR MERGED "…"`, `by commit <sha>`
-     (`owner/name#N` and `owner/name@<sha>` in another repository),
-     `by a project`, `no closer recorded`, or `closer not visible to this
-     token`. `no closer recorded` means the API returned null: a hand
-     close, or a closer GitHub withheld without saying so; never "closed by
-     hand" on its own. The comments may still explain it, and the TOC shows
-     them. `not visible` means GitHub refused that one field to this token
-     and the rest of the issue rendered.
-   - Structural facts (is it closed, which PR references it, how many people
-     weighed in) — the TOC is the answer. Never conclude from a
-     `… [+N chars]` preview: it is a cut, not a summary.
-   - Most issues are small — if the TOC fits on a screen, the full render,
-     inline. There is no thread machinery to explode.
-   - One comment — orient with `--toc --only comment`, then `--item` with
-     its TOC line (`--item 'comment [alice 2026-09-21 12:47]'`).
-   - A long issue — `--since <date>` for "what changed this week", or dump
-     once to a temp file (never the repo) and read slices.
+   `--item` takes the start of the item's TOC line:
+   `--item 'comment [alice 2026-09-21 12:47]'`.
 
-3. **Slice a dump with grep/sed** — each item starts at column 0 with a stable
-   prefix (`body`/`comment`/`closed`/`reopened`/`xref`/`renamed`, plus
-   `label`/`assign`/`milestone` under `--events`):
+3. **Before concluding:** a `… [+N chars]` preview is a cut, never a
+   summary. The `closed` line is the record of what closed it; an `xref`
+   marked `(closes)` is only a PR's claim. `no closer recorded` means the
+   API returned null, never "closed by hand" on its own.
 
-   ```bash
-   grep '^xref\|^closed\|^reopened' issue.txt   # what happened to it
-   grep -A 15 '^comment \[<user>' issue.txt     # everything one person said
-   sed -n '1,40p' issue.txt                     # the opening post, no refetch
-   ```
+## Load when needed
 
-4. **Before acting on an issue, check the cross-references.** The `closed …
-   by #N` line is authoritative for what closed it. An `xref` line marked
-   `(closes)` only names a PR that claimed the issue; `MERGED` on it means
-   the work may already be done — `gh pr diff <xref-number>` shows what it
-   changed.
-
-## Reading the output
-
-The header's state reason, the counts line, `xref`/`renamed`/`closed` lines,
-`(hidden: …)`, housekeeping events and what is never fetched are explained
-in [references/output.md](references/output.md). Load it only when one of
-them bears on the task.
+- [references/flags.md](references/flags.md), every flag: for a flag not in
+  the table, or a view that surprised you.
+- [references/recipes.md](references/recipes.md), grep over a dump and the
+  cross-reference check: for an issue too long to read inline, or before
+  acting on one.
+- [references/output.md](references/output.md), what the markers mean (the
+  state reason, the counts, `closed … by`, `(hidden: …)`): when one bears on
+  the task.
