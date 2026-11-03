@@ -29,10 +29,12 @@
 #                          bench-check fails on a reference file with no
 #                          row, and on a committed skill edit that keeps the
 #                          file's length
-#   readme-figures-match-run README's diagram and How it compares table
-#                          quote the newest run's cli/cli#14104 figures and
-#                          name that run, and its per-invocation skill cost
-#                          brackets both SKILL.md counts
+#   readme-figures-match-run every arrow and summary row of README's
+#                          diagram and every cell of How it compares quote
+#                          the newest run's cli/cli#14104 figures, the
+#                          section names that run and its description cost,
+#                          and its per-invocation skill cost brackets both
+#                          SKILL.md counts
 #
 # Whether the newest run's fixed costs still match the skill files is not
 # checked here: fixing a stale row needs a paid recount, so that check is
@@ -239,23 +241,36 @@ readme_figures_match_run() {
     while (( ${#n} > 3 )); do out=,${n[-3,-1]}$out; n=${n[1,-4]}; done
     print -r -- $n$out
   }
-  local -a want=(
-    "O1.gh_view_c|$(fmt ${tok[O1.gh_view_c]})"
-    "O1.rest_rc|$(fmt ${tok[O1.rest_rc]})"
-    "O1.rest trio|$(fmt $(( tok[O1.rest_ic] + tok[O1.rest_rv] + tok[O1.rest_rc] )))"
-    "O1.gql_meta|$(fmt ${tok[O1.gql_meta]})"
-    "O1.s_full|$(fmt ${tok[O1.s_full]})"
-    "O1.s_toc_unres|$(fmt ${tok[O1.s_toc_unres]})"
-  )
-  local w
-  for w in $want; do
-    [[ $section == *" ${w#*|}"* ]] || problems+=("How it compares: no ${w#*|} (${w%%|*} in $run)")
-  done
+  local gv rc trio gq full unres desc row
+  gv=$(fmt ${tok[O1.gh_view_c]}) rc=$(fmt ${tok[O1.rest_rc]}) gq=$(fmt ${tok[O1.gql_meta]})
+  trio=$(fmt $(( tok[O1.rest_ic] + tok[O1.rest_rv] + tok[O1.rest_rc] )))
+  full=$(fmt ${tok[O1.s_full]}) unres=$(fmt ${tok[O1.s_toc_unres]})
+  desc=$(fmt $(( tok[FIX.pr_desc] + tok[FIX.issue_desc] )))
+  # line <text> <pattern> <what> — README must have a line matching the
+  # pattern (a zsh glob over one line).
+  line() {
+    # A bare | in a zsh pattern is alternation; the tables need it literal.
+    local l pat=${2//|/\\|}
+    for l in "${(@f)1}"; do [[ $l == ${~pat} ]] && return 0; done
+    problems+=("$3")
+  }
+  # The diagram: one arrow per approach, and the summary table under it.
+  line "$readme" "*│──▶ $gv tokens" "diagram: no '──▶ $gv tokens' (O1.gh_view_c)"
+  line "$readme" "*│──▶ $rc tokens" "diagram: no '──▶ $rc tokens' (O1.rest_rc)"
+  line "$readme" "*│──▶ $gq tokens" "diagram: no '──▶ $gq tokens' (O1.gql_meta)"
+  line "$readme" "*│──▶ $unres tokens" "diagram: no '──▶ $unres tokens' (O1.s_toc_unres)"
+  line "$readme" "   gh pr view --comments *[0-9] *$gv *" "summary table: gh pr view --comments is not $gv"
+  line "$readme" "   REST inline comments *[0-9] *$rc *" "summary table: REST inline comments is not $rc"
+  line "$readme" "   hand-written GraphQL *[0-9] *$gq *" "summary table: hand-written GraphQL is not $gq"
+  line "$readme" "   gh comments *1¹ *$unres *" "summary table: gh comments is not $unres"
+  # How it compares, cell by cell.
+  line "$section" "| \`gh pr view --comments\` | $gv, * | $gv, * |" "How it compares: gh pr view --comments is not $gv in both cells"
+  line "$section" "| REST API, raw JSON | $trio, * | $rc, * |" "How it compares: REST is not $trio and $rc"
+  line "$section" "| hand-written GraphQL |*| $gq |" "How it compares: hand-written GraphQL is not $gq"
+  line "$section" "| \`gh-comments\` | $full, * | $unres with *" "How it compares: gh-comments is not $full and $unres"
+  [[ $section == *"costs $desc tokens in every session"* ]] \
+    || problems+=("How it compares: the descriptions do not cost $desc tokens (FIX.*_desc)")
   [[ $section == *$run* ]] || problems+=("How it compares does not name the run it quotes ($run)")
-  [[ $readme == *"──▶ ${want[6]#*|} tokens"* ]] \
-    || problems+=("diagram: no '──▶ ${want[6]#*|} tokens' (O1.s_toc_unres in $run)")
-  [[ $readme == *"──▶ ${want[2]#*|} tokens"* ]] \
-    || problems+=("diagram: no '──▶ ${want[2]#*|} tokens' (O1.rest_rc in $run)")
   if [[ $section =~ 'about ([0-9,]+) to ([0-9,]+) more when a skill runs' ]]; then
     lo=${match[1]//,/} hi=${match[2]//,/}
     for id in FIX.pr_skillmd FIX.issue_skillmd; do
