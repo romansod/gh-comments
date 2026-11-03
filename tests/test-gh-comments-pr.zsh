@@ -1950,6 +1950,9 @@ argcase arg-only-nothing-after-anchor 0 "(no items of kind: review after the anc
   42 --toc --latest --only review --fixtures "$fx/multi.tl.json" "$fx/multi.th.json"
 argcase arg-only-nothing-since    0 "(no items of kind: commit since 2026-08-14T23:30)" \
   1001 --toc --since 2026-08-14T23:30 --only commit --fixtures "$fx/basic.tl.json" "$fx/basic.th.json"
+# Both at once: the window is after the anchor *and* since the date.
+argcase arg-only-nothing-anchor-since 0 "(no items of kind: review after the anchor and since 2026-08-12)" \
+  42 --toc --latest --since 2026-08-12 --only review --fixtures "$fx/multi.tl.json" "$fx/multi.th.json"
 # --item is a selector: every flag that narrows the view is refused, all at once.
 argcase arg-item-with-views   1 "--item selects one item and takes no view flag; drop --toc, --only, --unresolved, --latest, --since" \
   7 --item x --toc --only comment --unresolved --latest --since 2026-01-01
