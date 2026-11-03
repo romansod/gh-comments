@@ -1063,8 +1063,11 @@ def kind: split(" ")[0];
 def want($k): $only == "" or (($only | split(",")) | index($k)) != null;
 # --item: the one candidate whose TOC line starts with the prefix. The first
 # output line is the number of matches, which the shell reads to decide
-# between the item and a refusal listing every matching line.
-def pick: [.[] | select(.toc | startswith($item))] as $m
+# between the item and a refusal listing every matching line. A prefix that
+# is some line whole names that line, even when it also begins a longer one
+# (`LGTM` and `LGTM, thanks`): otherwise the shorter could never be named.
+def pick: [.[] | select(.toc == $item)] as $x
+  | (if ($x | length) > 0 then $x else [.[] | select(.toc | startswith($item))] end) as $m
   | if ($m | length) == 1 then "1", $m[0].full
     else "\($m | length)", ($m[] | .toc) end;
 # What --only left of the view, or one line saying it left nothing, so an

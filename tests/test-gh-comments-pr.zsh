@@ -930,6 +930,15 @@ item_refusals() {
     || { rc=$?; problems+=("the preview did not select one: exit $rc"); }
   [[ $out == $'comment [romansod 2026-08-14 23:40]\n  A second note in the same minute.' ]] \
     || problems+=("the preview selected the wrong item: $out")
+  # A whole TOC line that begins another one (`LGTM` and `LGTM, thanks`) is
+  # still a name: an exact line wins over the lines it is a prefix of.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (map(if .__typename == "IssueComment" and .author.login == "romansod" then .body = "LGTM" else . end)
+         + [(.[] | select(.__typename == "IssueComment" and .author.login == "romansod") | .body = "LGTM, thanks")])' \
+    "$tl" > "$dtl" || problems+=("could not derive the nested timeline")
+  out=$(zsh "$script" --pr 1001 --item 'comment [romansod 2026-08-14 23:40] LGTM' --fixtures "$dtl" "$fx/basic.th.json" 2>&1) \
+    || { rc=$?; problems+=("a whole line that begins another was not selected: exit $rc"); }
+  [[ $out == $'comment [romansod 2026-08-14 23:40]\n  LGTM' ]] || problems+=("the exact line selected the wrong item: $out")
   rm -f "$dtl"
   report "$name" "item" $rc "$out"
   return 0
