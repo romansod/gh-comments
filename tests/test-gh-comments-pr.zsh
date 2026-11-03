@@ -985,6 +985,12 @@ item_same_line_threads() {
     && problems+=("two identical lines exited 0")
   [[ $err == *"2 items share this exact TOC line"*"dump"* ]] \
     || problems+=("identical lines: the refusal does not say so: $err")
+  # The whole twin line, not just a prefix of it: an exact match of two items
+  # is refused like any two matches, never the first of them printed.
+  err=$(zsh "$script" --pr 1001 --item 'thread  README.md:3 OPEN @bbb2222 [reviewer-bart 2026-08-15 10:00]' --fixtures "$tl" "$sth" 2>&1 >/dev/null) \
+    && problems+=("the whole twin line exited 0")
+  [[ $err == *"2 items share this exact TOC line"* ]] \
+    || problems+=("whole twin line: the refusal does not say so: $err")
   rm -f "$dth" "$sth"
   report "$name" "item" $rc "$out"
   return 0
