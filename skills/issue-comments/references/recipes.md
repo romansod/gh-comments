@@ -11,11 +11,10 @@ at column 0 with a stable prefix
 `label`/`assign`/`milestone` under `--events`):
 
 ```bash
-f="${TMPDIR:-/tmp}/issue.txt"
-gh-comments <N> --issue > "$f"
-grep '^xref\|^closed\|^reopened' "$f"   # what happened to it
-grep -A 15 '^comment \[<user>' "$f"     # everything one person said
-sed -n '1,40p' "$f"                     # the opening post, no refetch
+gh-comments <N> --issue > "${TMPDIR:-/tmp}/issue.txt"
+grep '^xref\|^closed\|^reopened' "${TMPDIR:-/tmp}/issue.txt"   # what happened to it
+grep -A 15 '^comment \[<user>' "${TMPDIR:-/tmp}/issue.txt"     # everything one person said
+sed -n '1,40p' "${TMPDIR:-/tmp}/issue.txt"                     # the opening post, no refetch
 ```
 
 ## Before acting on an issue, check the cross-references

@@ -58,8 +58,11 @@ Everything is offline and deterministic. The suite gets there two ways:
 `tests/test-gh-comments-pr.zsh` pins the pull-request renderer with the type
 pinned (`--pr`); `tests/test-gh-comments.zsh` pins the issue renderer, type
 resolution from the payload, the refusals, and the invoked-name behaviour.
-Each file's header comment lists what every fixture covers and how to add a
-case.
+`tests/test-skills.zsh` pins what the skills tell an agent to run (each
+recipe line in a fresh shell, the invocation grammar, the one-item flow) and
+that the newest filed benchmark run's `tables.md` is what `analyze.py` builds
+from it. Each file's header comment lists what every case covers and how to
+add one.
 
 ### The golden workflow
 
