@@ -28,7 +28,9 @@
 #                          bench/refile-fixed.zsh recounts it into the
 #                          newest run, keeps every captured row as filed and
 #                          every row in place, rebuilds the tables and
-#                          leaves bench-check passing
+#                          leaves bench-check passing; it ignores a
+#                          SKILLS_DIR or SKILL_PREFIX left in the shell and
+#                          refuses to overwrite unfiled counts
 #   bench-check-witness    in a scratch git repo of the tree, make
 #                          bench-check names a reference file with no row,
 #                          and does not report a committed uncounted file
@@ -205,7 +207,15 @@ printf "{\"usage\":{\"input_tokens\":%d},\"total_cost_usd\":0}\n" $(( n / 3 ))' 
   out=$(zsh "$tmp/tree/bench/check-skill-bytes.zsh" 2>&1) \
     && problems+=("make bench-check passed on a skill file edited after the count")
   [[ $out == *FIX.pr_skillmd* ]] || problems+=("make bench-check did not name FIX.pr_skillmd: ${out%%$'\n'*}")
-  out=$(PATH="$tmp/bin:$PATH" zsh "$tmp/tree/bench/refile-fixed.zsh" 2>&1) \
+  # Counts not yet filed must not be thrown away.
+  print -r -- $'id\tbytes\ttokens\nE1.gh_view\t1\t1' > "$tmp/tree/bench/tokens.tsv"
+  PATH="$tmp/bin:$PATH" zsh "$tmp/tree/bench/refile-fixed.zsh" >/dev/null 2>&1 \
+    && problems+=("refile-fixed.zsh ran over a bench/tokens.tsv holding unfiled counts")
+  [[ -s $tmp/tree/bench/tokens.tsv ]] || problems+=("refile-fixed.zsh deleted unfiled counts")
+  rm -f "$tmp/tree/bench/tokens.tsv"
+  # A shell left set up to measure another copy must not leak into the refile.
+  out=$(PATH="$tmp/bin:$PATH" SKILLS_DIR=$tmp/elsewhere SKILL_PREFIX= \
+        zsh "$tmp/tree/bench/refile-fixed.zsh" 2>&1) \
     || problems+=("refile-fixed.zsh exited $?: ${out##*$'\n'}")
   diff <(grep -v '^FIX\.' "$root/$run/tokens.tsv") <(grep -v '^FIX\.' "$tmp/tree/$run/tokens.tsv") >/dev/null \
     || problems+=("a captured row of $run/tokens.tsv changed or went missing")
@@ -213,6 +223,8 @@ printf "{\"usage\":{\"input_tokens\":%d},\"total_cost_usd\":0}\n" $(( n / 3 ))' 
   grep -q "^FIX.pr_skillmd	${size// /}	" "$tmp/tree/$run/tokens.tsv" \
     || problems+=("FIX.pr_skillmd was not recounted at ${size// /} bytes")
   [[ -e $tmp/tree/bench/tokens.tsv ]] && problems+=("a FIX-only bench/tokens.tsv was left behind")
+  [[ $(grep '^FIX\.[a-z]*_desc' "$root/$run/tokens.tsv" | cut -f1,2) == $(grep '^FIX\.[a-z]*_desc' "$tmp/tree/$run/tokens.tsv" | cut -f1,2) ]] \
+    || problems+=("the description rows changed: SKILLS_DIR or SKILL_PREFIX leaked into the refile")
   # Rows stay where a whole count would put them, and the stub's new counts
   # reach the tables.
   [[ $(cut -f1 "$root/$run/tokens.tsv") == $(cut -f1 "$tmp/tree/$run/tokens.tsv") ]] \

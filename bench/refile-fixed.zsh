@@ -16,7 +16,15 @@ typeset -a runs
 runs=(runs/*(/N:t))
 (( ${#runs} )) || { print -ru2 -- "refile-fixed: no filed run under bench/runs"; exit 1; }
 run=runs/${runs[-1]}
-zsh run-fixed.zsh >/dev/null
+# run-fixed.zsh removes bench/tokens.tsv; one holding more than FIX.* rows is a
+# count not yet filed, so stop rather than lose it.
+if [[ -f tokens.tsv ]] && tail -n +2 tokens.tsv | grep -qv '^FIX\.'; then
+  print -ru2 -- "refile-fixed: bench/tokens.tsv holds counts not yet filed; file or remove it first"
+  exit 1
+fi
+# The filed run measures this checkout's skills as the plugin lists them; a
+# shell left set up to measure another copy must not leak in.
+SKILLS_DIR= SKILL_PREFIX=gh-comments: zsh run-fixed.zsh >/dev/null
 COUNT_ONLY=FIX. python3 count_tokens.py
 # The run's rows other than FIX.*, then the fresh FIX.* rows, in the order
 # count_tokens.py writes a whole run in (by output file name).
