@@ -19,6 +19,10 @@
 #   bench-tables-match-run analyze.py over the newest filed run, with the
 #                          run before it as baseline, reproduces its
 #                          committed tables.md byte for byte
+#   readme-figures-match-run README's diagram and How it compares table
+#                          quote the newest run's cli/cli#14104 figures and
+#                          name that run, and its per-invocation skill cost
+#                          brackets both SKILL.md counts
 #
 # Whether the newest run's fixed costs still match the skill files is not
 # checked here: fixing a stale row needs a paid recount, so that check is
@@ -153,5 +157,50 @@ bench_tables_match_run() {
   report "$name" "stale tables"
 }
 bench_tables_match_run
+
+readme_figures_match_run() {
+  local name=readme-figures-match-run run readme section id lo hi n
+  local -a runs
+  local -A tok
+  runs=("$root"/bench/runs/*(/N:t))
+  run=${runs[-1]}
+  while IFS=$'\t' read -r id _ n; do tok[$id]=$n; done < "$root/bench/runs/$run/tokens.tsv"
+  readme=$(<"$root/README.md")
+  section=${${readme#*$'\n'## How it compares$'\n'}%%$'\n'## *}
+  # fmt <n> — thousands with commas, as the docs write them.
+  fmt() {
+    local n=$1 out=
+    while (( ${#n} > 3 )); do out=,${n[-3,-1]}$out; n=${n[1,-4]}; done
+    print -r -- $n$out
+  }
+  local -a want=(
+    "O1.gh_view_c|$(fmt ${tok[O1.gh_view_c]})"
+    "O1.rest_rc|$(fmt ${tok[O1.rest_rc]})"
+    "O1.rest trio|$(fmt $(( tok[O1.rest_ic] + tok[O1.rest_rv] + tok[O1.rest_rc] )))"
+    "O1.gql_meta|$(fmt ${tok[O1.gql_meta]})"
+    "O1.s_full|$(fmt ${tok[O1.s_full]})"
+    "O1.s_toc_unres|$(fmt ${tok[O1.s_toc_unres]})"
+  )
+  local w
+  for w in $want; do
+    [[ $section == *" ${w#*|}"* ]] || problems+=("How it compares: no ${w#*|} (${w%%|*} in $run)")
+  done
+  [[ $section == *$run* ]] || problems+=("How it compares does not name the run it quotes ($run)")
+  [[ $readme == *"──▶ ${want[6]#*|} tokens"* ]] \
+    || problems+=("diagram: no '──▶ ${want[6]#*|} tokens' (O1.s_toc_unres in $run)")
+  [[ $readme == *"──▶ ${want[2]#*|} tokens"* ]] \
+    || problems+=("diagram: no '──▶ ${want[2]#*|} tokens' (O1.rest_rc in $run)")
+  if [[ $section =~ 'about ([0-9,]+) to ([0-9,]+) more when a skill runs' ]]; then
+    lo=${match[1]//,/} hi=${match[2]//,/}
+    for id in FIX.pr_skillmd FIX.issue_skillmd; do
+      (( lo <= tok[$id] && tok[$id] <= hi )) \
+        || problems+=("cost sentence $lo to $hi does not bracket $id ${tok[$id]} in $run")
+    done
+  else
+    problems+=("How it compares has no 'about X to Y more when a skill runs'")
+  fi
+  report "$name" "README quotes another run"
+}
+readme_figures_match_run
 
 (( fails == 0 ))
