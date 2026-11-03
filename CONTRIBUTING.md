@@ -125,11 +125,11 @@ recount until the release, which runs `make bench-check`.
 1. `make bench-check`: the newest filed benchmark run's fixed costs must
    match the skill files as they ship. It compares byte sizes, so an edit
    that keeps a file's exact length is not caught. When a skill file
-   changed size after the count, or has no row, it names it; `zsh bench/refile-fixed.zsh` recounts
-   them into that run, keeps its other rows as filed, and rebuilds its
-   tables, then rebuild BENCHMARKS.md's results from them before tagging.
-   It is not in `make check`, since the recount calls `claude -p` and costs
-   money.
+   changed size after the count, or has no row, it names it; `zsh
+   bench/refile-fixed.zsh` recounts them into that run, keeps its other
+   rows as filed, and rebuilds its tables, then rebuild BENCHMARKS.md's
+   results from them before tagging. It is not in `make check`, since the
+   recount calls `claude -p` and costs money.
 2. Bump `VERSION=` in `gh-comments` and `version` in
    `.claude-plugin/plugin.json` together; `make lint` refuses a mismatch.
 3. `claude plugin tag --push` creates and pushes the `gh-comments--v<version>`
