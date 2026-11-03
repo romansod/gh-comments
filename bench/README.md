@@ -56,6 +56,14 @@ Needs `zsh`, `jq`, `gh`, `python3` and the `claude` CLI.
   in `tokens.json`, so a rerun only pays for outputs that changed. The cache
   records the model and is discarded if `MODEL` changes. A full fresh count
   costs about $4.
+- Who pays: `count_tokens.py` passes its environment to `claude -p`, so the
+  count is billed to whatever the CLI uses. Logged in through claude.ai, it
+  counts against the plan's usage limits. With `ANTHROPIC_API_KEY` set for
+  that one command, it bills the key's Console account, promotional credits
+  included: `ANTHROPIC_API_KEY=… python3 count_tokens.py`. Keep the key out
+  of the shell profile, so everyday sessions stay on the plan. The counts do
+  not depend on which one pays. romansod/agent-evals#3 does the same for the
+  agent benchmark.
 - A capture that fails, or a slice whose header matches nothing, leaves an
   empty file that would count as 0 tokens and read as a saving. The `exit`
   column records it, and `analyze.py` refuses to run while any row's exit is

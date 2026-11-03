@@ -6,7 +6,8 @@
 gh-comments                       the implementation, one zsh script
 bin/gh-comments                   → ../gh-comments, for the Claude Code plugin
 skills/pr-comments/               Claude Code / Agent Skills: pull requests
-skills/issue-comments/            same, for issues; each has references/output.md
+skills/issue-comments/            same, for issues; each loads references/ on demand:
+                                  flags.md, recipes.md, output.md
 .claude-plugin/plugin.json        the plugin manifest
 .claude-plugin/marketplace.json   the one-entry marketplace that serves it
 tests/                            run.zsh, lib.zsh, run-pty.py, test-*.zsh, fixtures/
@@ -57,8 +58,11 @@ Everything is offline and deterministic. The suite gets there two ways:
 `tests/test-gh-comments-pr.zsh` pins the pull-request renderer with the type
 pinned (`--pr`); `tests/test-gh-comments.zsh` pins the issue renderer, type
 resolution from the payload, the refusals, and the invoked-name behaviour.
-Each file's header comment lists what every fixture covers and how to add a
-case.
+`tests/test-skills.zsh` pins what the skills tell an agent to run (each
+recipe line in a fresh shell, the invocation grammar, the one-item flow) and
+that the newest filed benchmark run's `tables.md` is what `analyze.py` builds
+from it. Each file's header comment lists what every case covers and how to
+add one.
 
 ### The golden workflow
 
@@ -108,15 +112,27 @@ repositories and bodies. Scrub a captured payload before committing it.
 `bench/` measures the token cost of the command and the skills against raw
 `gh`, REST and GraphQL reads, on live public targets. It needs network,
 `gh` auth and the `claude` CLI, and counting costs money, so neither
-`make check` nor CI runs it. See [bench/README.md](bench/README.md) for how
-to run it and file a run, and rerun it after a change to what the command
-prints or to the skills, then update [BENCHMARKS.md](BENCHMARKS.md).
+`make check` nor CI runs it. The suite only rebuilds the newest filed run's
+tables offline (`tests/test-skills.zsh`), and `make bench-check` says when a
+skill file changed size after that run counted it. See
+[bench/README.md](bench/README.md) for how to run it and file a run, and
+rerun it after a change to what the command prints or to the skills, then
+update [BENCHMARKS.md](BENCHMARKS.md); a skill change can wait for the
+recount until the release, which runs `make bench-check`.
 
 ## Releasing
 
-1. Bump `VERSION=` in `gh-comments` and `version` in
+1. `make bench-check`: the newest filed benchmark run's fixed costs must
+   match the skill files as they ship. It compares byte sizes, so an edit
+   that keeps a file's exact length is not caught. When a skill file
+   changed size after the count, or has no row, it names it; `zsh
+   bench/refile-fixed.zsh` recounts them into that run, keeps its other
+   rows as filed, and rebuilds its tables, then rebuild BENCHMARKS.md's
+   results from them before tagging. It is not in `make check`, since the
+   recount calls `claude -p` and costs money.
+2. Bump `VERSION=` in `gh-comments` and `version` in
    `.claude-plugin/plugin.json` together; `make lint` refuses a mismatch.
-2. `claude plugin tag --push` creates and pushes the `gh-comments--v<version>`
+3. `claude plugin tag --push` creates and pushes the `gh-comments--v<version>`
    tag the plugin marketplace reads. Also push a plain `v<version>` tag as
    the human-readable release marker. `gh extension upgrade` does not read
    tags: for a script extension it pulls the default branch, so merging to

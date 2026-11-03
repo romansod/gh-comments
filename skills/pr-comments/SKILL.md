@@ -16,127 +16,50 @@ description: >
 
 You are executing the pr-comments skill.
 
-## Invocation
-
-```
-/gh-comments:pr-comments <N>            — PR N in the current repo
-/gh-comments:pr-comments                — the current branch's PR
-/gh-comments:pr-comments <N> <o>/<r>    — PR N in another repo
-```
-
-(`/pr-comments …` where the skill directory is installed on its own rather
-than as the gh-comments plugin.)
-
-Also invoke implicitly whenever a task needs PR comments, reviews or review
-threads — reviewing feedback, addressing findings, checking what is open.
+Invoked as `/gh-comments:pr-comments [<N> [<owner>/<repo>]]` (no `<N>`: the
+current branch's PR), or whenever a task needs a PR's comments or reviews.
 
 ## The command
 
 ```bash
-gh-comments <N> --pr [flags]
+gh-comments <N> --pr [flags]    # or: gh comments <N> --pr
 ```
 
-`gh comments <N> --pr` is the same command where gh-comments is installed as
-a GitHub CLI extension. `--pr` pins the target to a pull request: a number
-that turns out to be an issue is refused with its title, never rendered as
-the wrong thing. With no `<N>` it uses the current branch's PR.
-
-Flags:
-- `-R owner/name` — another repo (default: the cwd's; needs `<N>`, since "no
-  number" means the cwd branch's PR).
-- `--toc` — one line per item, no bodies.
-- `--only <kind>[,<kind>...]` — only those kinds: `comment`, `body`,
-  `review`, `thread`, `commit`, `force-push`. With `--toc` or the full
-  render; the counts header is unchanged.
-- `--item '<TOC line prefix>'` — exactly one item, whole: a comment, a
-  review with its threads, or a thread with its replies. No match, or
-  several (listed), is an error; copy more of the line. Takes no other view
-  flag but `--hidden`, which must match the `--toc` the line came from.
-- `--unresolved` — only reviews with open threads, and those threads.
-- `--latest[=<user>]` — the last substantive review or top-level comment
-  (optionally by `<user>`) and everything after it. A bare approval, a
-  hidden comment, a review with no body that is not hidden and no thread
-  with a comment that is not hidden or with replies past the fetched page
-  (with or without `--hidden`), or a bot (without `--bots`) is not the
-  anchor; the first three still render if later.
-- `--since-last-review[=<user>]` — the last review *object* and everything
-  after it, passing over a hidden review with no visible thread comment and
-  no thread with replies past the fetched page; never looks at comments.
-  Exclusive with `--latest`.
-- `--since YYYY-MM-DD[THH:MM[:SS]][Z]` — a time window, UTC.
-- `--bots`, `--merges`, `--hidden` — include bot items, merge commits, and
-  the bodies of hidden (minimized) comments and reviews; all three are
-  filtered by default. The counts header says how many bot and hidden items
-  were; merge commits are dropped silently.
-
-When `--latest` or `--since-last-review` matches nothing, the output is the
-TOC under a note saying so, not the full timeline — unless `--unresolved` or
-`--since` already narrows the view, in which case that view is shown as it
-is and the note names it.
-
-It renders the whole timeline — commits, reviews with their inline threads
-nested in place, comments, force-pushes — paginated, with thread resolution
-state. Do not supplement it with `gh pr view --comments` or
-`gh api .../comments`; it already covers those surfaces.
+`--pr` refuses an issue number; `-R owner/name` reads another repo. It
+prints the whole paginated timeline, threads nested in their reviews with
+their resolution state, so never add `gh pr view --comments` or `gh api`.
 
 ## Steps
 
-1. **Orient with the TOC** — always safe to read inline:
-
-   ```bash
-   gh-comments <N> --pr --toc
-   ```
-
-   A counts header (`reviews: N · inline threads: N (N open) · top-level
-   comments: N`, with what was filtered stated), then one line per commit,
-   review, thread and comment.
-
+1. **Orient with the TOC**, always safe inline: `gh-comments <N> --pr --toc`.
+   A counts header, then one line per commit, review, thread and comment.
+   For one item, `--toc --only <kind>` is the TOC to start from.
 2. **Take the narrowest view that answers the question:**
-   - Structural facts (who reviewed, which threads are `OPEN`) — the TOC is
-     the answer. Never conclude from a `… [+N chars]` preview: it is a cut,
-     not a summary. Findings pasted as top-level prose are invisible to
-     thread state; `(0 open)` speaks only for review threads.
-   - "Which threads are still open" — `--toc --unresolved`. The cheapest
-     correct answer, and it keeps the position of outdated threads that a
-     hand-written query loses (`line` is null there; only `originalLine`
-     has it).
-   - "What do the open threads say" — `--unresolved`, an order of magnitude
-     more. Reach for it once you need the discussion, not to learn whether
-     there is any.
-   - "Address the latest review" — `--latest`. A time window — `--since`.
-   - One comment, review or thread — orient with `--toc --only <kind>`, then
-     `--item` with its TOC line:
 
-     ```bash
-     gh-comments <N> --pr --toc --only comment
-     gh-comments <N> --pr --item 'comment [alice 2026-09-21 12:47]'
-     ```
+   | question | flags |
+   |---|---|
+   | who reviewed, what is there | the TOC |
+   | which threads are still open | `--toc --unresolved` |
+   | what the open threads say | `--unresolved` |
+   | address the latest review | `--latest` (`=<user>` for one reviewer) |
+   | what happened since a date | `--since YYYY-MM-DD` |
+   | one comment, review or thread | `--toc --only <kind>`, then `--item` |
+   | a small PR, everything | no flags |
 
-   - Small PR — the full render, inline. Big PR, or many items at once —
-     dump once to a temp file (never the repo) and read slices.
+   `--item` takes the start of the item's TOC line:
+   `--item 'comment [alice 2026-09-21 12:47]'`.
 
-3. **Slice a dump with grep/sed** — each item starts at column 0 with a stable
-   prefix (`body`/`commit`/`comment`/`review`/`thread`/`force-push`), and
-   `<!-- finding:ID -->` markers are promoted onto thread header lines:
+3. **Before concluding:** a `… [+N chars]` preview is a cut, never a
+   summary. `(0 open)` speaks only for review threads: findings posted as
+   top-level prose are invisible to thread state, so read the comments too.
 
-   ```bash
-   grep '^commit \|^review \|^force-push' pr.txt   # timeline skeleton
-   grep 'thread.*OPEN' pr.txt                      # unaddressed inline threads
-   grep -A 30 '\[B-M1\]' pr.txt                    # one finding + its discussion
-   grep -A 15 '^\(comment\|review\) *\[<user>' pr.txt   # everything one reviewer said
-   ```
+## Load when needed
 
-4. **Verify findings against the anchor SHA** on the thread header
-   (`@0f5aef9`) before re-raising anything:
-
-   ```bash
-   git diff <anchor-sha>..HEAD -- <thread-path>
-   ```
-
-## Reading the output
-
-The markers — `OPEN`/`resolved`/`outdated`, `[TRUNCATED …]`, `(hidden: …)`,
-`threads in filtered bot reviews:`, the reply-wrapper discrepancy, what a
-slice cannot show — are explained in
-[references/output.md](references/output.md). Load it only when one of them
-bears on the task.
+- [references/flags.md](references/flags.md), every flag and how the
+  slices anchor: for a flag not in the table, or a view that surprised you.
+- [references/recipes.md](references/recipes.md), grep over a dump and the
+  anchor-SHA check: for a PR too big to read inline, or before re-raising
+  a finding.
+- [references/output.md](references/output.md), what the markers mean
+  (`outdated`, `[TRUNCATED …]`, `(hidden: …)`, the counts): when one bears
+  on the task.

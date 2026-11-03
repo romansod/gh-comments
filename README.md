@@ -34,7 +34,7 @@ outdated thread, because `line` is null there and only `originalLine` has it.
 
   ② REST: gh api repos/cli/cli/pulls/14104/comments --paginate
      ┌──────────────────────────────────────────────┐
-     │ every inline comment as raw JSON             │──▶ 59,629 tokens
+     │ every inline comment as raw JSON             │──▶ 60,383 tokens
      └──────────────────────────────────────────────┘
         ✗ REST has no resolved/unresolved field
         ✗ thread replies must be grouped by hand (in_reply_to_id)
@@ -58,7 +58,7 @@ outdated thread, because `line` is null there and only `originalLine` has it.
      ┌──────────────────────────────────────────────┐
      │ 2 paginated GraphQL queries, run for you:    │
      │   timeline ─┐                                │
-     │   threads  ─┴─▶ joined, filtered, rendered   │──▶ 475 tokens
+     │   threads  ─┴─▶ joined, filtered, rendered   │──▶ 614 tokens
      └──────────────────────────────────────────────┘
         ✓ 7 of 7 open threads, each with file:line
           and the commit it was anchored to
@@ -68,9 +68,9 @@ outdated thread, because `line` is null there and only `originalLine` has it.
    approach                 calls   tokens    answers the question?
    ─────────────────────    ─────   ──────    ─────────────────────
    gh pr view --comments      1      6,105    ✗ no threads
-   REST inline comments       1     59,629    ✗ no resolved state
+   REST inline comments       1     60,383    ✗ no resolved state
    hand-written GraphQL       1        930    ✓ after you write it
-   gh comments                1¹       475    ✓ out of the box
+   gh comments                1¹       614    ✓ out of the box
   ════════════════════════════════════════════════════════════════════════
    ¹ one command; it runs 2 GraphQL queries itself
 ```
@@ -163,19 +163,21 @@ closed [BagToad 2026-07-23 02:20] as completed by #13927 PR MERGED "docs(project
 
 ## How it compares
 
-Measured in exact Claude tokens on the same PR, cli/cli#14104, with
-`gh-comments` v1.0.0:
+Measured in exact Claude tokens on the same PR, cli/cli#14104, in the
+2026-11-03 benchmark run:
 
 | Approach | Read the whole discussion | Which threads are still open |
 |---|--:|--:|
 | `gh pr view --comments` | 6,105, no inline threads | 6,105, cannot tell |
-| REST API, raw JSON | 78,083, no open or resolved state | 59,629, cannot tell |
+| REST API, raw JSON | 79,297, no open or resolved state | 60,383, cannot tell |
 | hand-written GraphQL | | 930 |
-| `gh-comments` | 8,502, all 17 threads | 475 with `--toc --unresolved`, 7 of 7 |
+| `gh-comments` | 8,502, all 17 threads | 614 with `--toc --unresolved`, 7 of 7 |
 
 The Claude Code plugin costs 530 tokens in every session for its two skill
-descriptions, and about 1,500 to 2,100 more when a skill runs. On a PR or
-issue with little discussion, plain `gh` is cheaper once that is counted.
+descriptions, and about 1,000 to 1,100 more when a skill runs, plus a
+reference file only when the skill's pointer to it applies. On a PR or
+issue with little discussion, plain `gh` is still cheaper once that is
+counted.
 [BENCHMARKS.md](BENCHMARKS.md) has the method, nine targets and seven tasks,
 and where the tool does and does not pay.
 
