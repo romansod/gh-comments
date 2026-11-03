@@ -971,6 +971,8 @@ argcase arg-only-issue-kind-no-number 1 "--only renamed only applies to issues; 
 argcase arg-only-spaces          0 "renamed [romansod" 21 --toc --only ' renamed , xref' --fixtures "$fx/issue-basic.tl.json"
 # A filter that keeps nothing says so instead of rendering an empty discussion.
 argcase arg-only-nothing-kept    0 "(no items of kind: renamed)" 5 --toc --only renamed --fixtures "$fx/issue-closed.tl.json"
+# Under --since the line names the window: the rename is on the issue, before it.
+argcase arg-only-nothing-since   0 "(no items of kind: renamed since 2026-08-18)" 21 --toc --only renamed --since 2026-08-18 --fixtures "$fx/issue-basic.tl.json"
 
 # --item on an issue: housekeeping and bot comments can be fetched by name
 # though the default view does not list them; the body is an item too.
