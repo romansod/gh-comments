@@ -67,7 +67,8 @@ The skill rows add the cost of loading the skill. A Claude Code session pays
 for both skill descriptions every time, and invoking a skill adds its
 `SKILL.md`. Its `references/` files load only when the SKILL.md's pointer
 to one applies, so they are listed with what triggers them and left out of
-the flows.
+the flows, except where a reference teaches the flow: Task 4's TOC + slice
+adds `references/recipes.md`, where the dump recipes live.
 
 The targets are labelled by the shape of their discussion:
 
