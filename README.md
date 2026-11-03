@@ -249,6 +249,25 @@ With no number, the current branch's open PR is used.
                                 a hidden review keeps its line and its threads
                                 and loses its body. The counts line reports
                                 `(N hidden)`.
+  --only <kind>[,<kind>...]     Only these kinds of item: comment and body,
+                                and on a PR review, thread, commit and
+                                force-push, on an issue xref, closed,
+                                reopened and renamed. With --toc or the full
+                                render; the counts line is unchanged, and a
+                                filter that keeps nothing says so. A review
+                                left out keeps its threads when thread is
+                                asked for. An unknown kind, or one only the
+                                other type has, is refused by name
+  --item <header-prefix>        Print the one item whose TOC line starts with
+                                this text, copied from --toc: its header and
+                                body, a review with its threads, or a thread
+                                with its replies. No match is an error, and
+                                so is more than one: the matching lines are
+                                listed, never the first taken. Bot, merge and
+                                housekeeping items can be named without the
+                                flags that list them. Exclusive with --toc,
+                                --only, --unresolved, --latest,
+                                --since-last-review and --since
 
   Pull requests only:
   --unresolved                  Only reviews with open threads, and those threads
@@ -316,6 +335,9 @@ A flag that only the other type can honour is an error, not a no-op:
 `--unresolved` on an issue, `--events` or `--closure` on a PR. Ignoring it
 would report a filtered view as a complete one. So is `--closure` on an issue
 that was never closed, or with any other view flag: it is a view of its own.
+An `--only` kind is refused the same way when only the other type has it
+(`--only review` on an issue), and `--item` takes none of the flags that
+narrow the view: it names one item, which is printed whole.
 
 ### Reading the output
 
@@ -328,6 +350,17 @@ grep 'thread.*OPEN' pr.txt           # unaddressed inline threads
 grep -A 20 '\[B-M1\]' pr.txt         # one finding with its thread
 grep '^xref\|^closed' issue.txt      # what happened to an issue
 ```
+
+To land one item in context without dumping the whole discussion, orient
+with a TOC narrowed to the kind you need, then name the item by its line:
+
+```bash
+gh-comments 989 --toc --only comment
+gh-comments 989 --item 'comment [alice 2026-09-21 12:47]'
+```
+
+`--item` takes any prefix of a TOC line. A prefix two items share is refused
+with both lines listed; copy more of the line to tell them apart.
 
 The counts line under the header is authoritative and says what the default
 view held back: `(+2 bots filtered)`, `(1 hidden)`, `(+4 housekeeping
