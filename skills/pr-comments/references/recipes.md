@@ -11,11 +11,12 @@ at column 0 with a stable prefix
 `<!-- finding:ID -->` markers are promoted onto thread header lines:
 
 ```bash
-gh-comments <N> --pr > "$TMPDIR/pr.txt"
-grep '^commit \|^review \|^force-push' pr.txt   # timeline skeleton
-grep 'thread.*OPEN' pr.txt                      # unaddressed inline threads
-grep -A 30 '\[B-M1\]' pr.txt                    # one finding + its discussion
-grep -A 15 '^\(comment\|review\) *\[<user>' pr.txt   # everything one reviewer said
+f="${TMPDIR:-/tmp}/pr.txt"
+gh-comments <N> --pr > "$f"
+grep '^commit \|^review \|^force-push' "$f"   # timeline skeleton
+grep 'thread.*OPEN' "$f"                      # unaddressed inline threads
+grep -A 30 '\[B-M1\]' "$f"                    # one finding + its discussion
+grep -A 15 '^\(comment\|review\) *\[<user>' "$f"   # everything one reviewer said
 ```
 
 ## Verify a finding against the anchor SHA
