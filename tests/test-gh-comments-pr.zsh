@@ -1097,6 +1097,35 @@ item_past_filters() {
   return 0
 }
 item_past_filters
+# item-miss-hints — a miss says why when the reason is knowable. Each of the
+# four kinds whose header takes two spaces, given with one, is told the TOC
+# writes two, naming the kind and its form; a miss that is not that (two
+# spaces already, no space, another kind) gets no such hint, and on an issue,
+# which has none of those kinds, neither does that form. A line copied from
+# --toc --hidden and given without --hidden is told to add --hidden.
+item_miss_hints() {
+  local name=item-miss-hints err k p
+  local -i rc=0
+  local -a pair=(--fixtures "$fx/basic.tl.json" "$fx/basic.th.json")
+  for k p in review '[reviewer-bart' thread 'src/' commit '1a2b3c4' force-push 'aaa'; do
+    err=$(zsh "$script" --pr 1001 --item "$k $p" "${pair[@]}" 2>&1 >/dev/null) && problems+=("$k: one-space miss exited 0")
+    [[ $err == *"no item starts with: $k $p (the TOC writes two spaces after $k: '$k  ')" ]] \
+      || problems+=("$k: no two-space hint: $err")
+  done
+  for p in 'review  [nobody' 'reviewer' 'comment [nobody' 'comment review [x' 'commit'$'\t''x'; do
+    err=$(zsh "$script" --pr 1001 --item "$p" "${pair[@]}" 2>&1 >/dev/null)
+    [[ $err == *"no item starts with: $p" && $err != *"two spaces"* ]] || problems+=("'$p': hinted wrongly: $err")
+  done
+  err=$(zsh "$script" 21 --item 'review [x' --fixtures "$here/fixtures/gh-comments/issue-basic.tl.json" 2>&1 >/dev/null)
+  [[ $err == *"no item starts with: review [x"* && $err != *"two spaces"* ]] || problems+=("issue: two-space hint for a kind issues lack: $err")
+  local line
+  line=$(zsh "$script" --pr 1001 --toc --hidden --only comment --fixtures "$fx/hidden.tl.json" "$fx/hidden.th.json" 2>/dev/null | grep '^comment \[dave')
+  err=$(zsh "$script" --pr 1001 --item "$line" --fixtures "$fx/hidden.tl.json" "$fx/hidden.th.json" 2>&1 >/dev/null)
+  [[ $err == *"no item starts with"*"--hidden"* ]] || problems+=("a --toc --hidden line without --hidden: no hint: $err")
+  report "$name" "item" $rc "$err"
+  return 0
+}
+item_miss_hints
 
 # check_oversized — a payload too large to fit in argv. Passing the two
 # payloads as `jq --argjson` died with "argument list too long: jq" (exit 127,

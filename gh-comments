@@ -1587,9 +1587,14 @@ if (( ITEM_N == 1 )); then
 elif (( ITEM_N == 0 )); then
   # The four kinds whose header takes two spaces are the ones a caller
   # copying the one-space comment form gets wrong, so the miss says why.
+  # Only on a PR, the one type that has those kinds. A line copied from a
+  # --toc --hidden run carries a hidden comment's preview, which the TOC
+  # without --hidden does not, so that miss is told to add it.
   typeset hint=""
-  if [[ $ITEM =~ '^(review|thread|commit|force-push) [^ ]' ]]; then
+  if [[ $RTYPE == pr && $ITEM =~ '^(review|thread|commit|force-push) [^ ]' ]]; then
     hint=" (the TOC writes two spaces after ${match[1]}: '${match[1]}  ')"
+  elif (( ! HIDDEN )) && [[ $ITEM == *'(hidden: '*') '?* ]]; then
+    hint=" (a hidden comment's TOC line carries a preview only with --hidden: rerun --item with --hidden)"
   fi
   print -r -- "$PROG: no item starts with: $ITEM$hint" >&2
   exit 1
