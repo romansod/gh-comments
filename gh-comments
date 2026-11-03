@@ -1066,7 +1066,11 @@ def want($k): $only == "" or (($only | split(",")) | index($k)) != null;
 # between the item and a refusal listing every matching line. A prefix that
 # is some line whole names that line, even when it also begins a longer one
 # (`LGTM` and `LGTM, thanks`): otherwise the shorter could never be named.
-def pick: [.[] | select(.toc == $item)] as $x
+# Only a line with text past its item header does, though (a preview, a
+# thread opener): a line that is the bare header, as an empty comment is, is
+# the same text as the header prefix the docs teach, so it would silently
+# win over the comment beside it.
+def pick: [.[] | select(.toc == $item and .toc != (.full | split("\n")[0]))] as $x
   | (if ($x | length) > 0 then $x else [.[] | select(.toc | startswith($item))] end) as $m
   | if ($m | length) == 1 then "1", $m[0].full
     else "\($m | length)", ($m[] | .toc) end;

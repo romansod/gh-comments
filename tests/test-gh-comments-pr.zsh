@@ -939,6 +939,17 @@ item_refusals() {
   out=$(zsh "$script" --pr 1001 --item 'comment [romansod 2026-08-14 23:40] LGTM' --fixtures "$dtl" "$fx/basic.th.json" 2>&1) \
     || { rc=$?; problems+=("a whole line that begins another was not selected: exit $rc"); }
   [[ $out == $'comment [romansod 2026-08-14 23:40]\n  LGTM' ]] || problems+=("the exact line selected the wrong item: $out")
+  # ...but a bare header is not a name: a comment whose body cleans to
+  # nothing has a TOC line that is only its header, the same text as the
+  # header prefix the docs teach, so it never wins over the comment beside it.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "romansod")
+               | .body = "<!-- tracking marker -->")])' "$tl" > "$dtl" \
+    || problems+=("could not derive the empty-sibling timeline")
+  err=$(zsh "$script" --pr 1001 --item 'comment [romansod 2026-08-14 23:40]' --fixtures "$dtl" "$fx/basic.th.json" 2>&1 >/dev/null) \
+    && problems+=("a bare header chose the empty comment beside another: exit 0")
+  [[ $err == *"2 items start with: comment [romansod 2026-08-14 23:40]"*"Thanks @reviewer-bart"* ]] \
+    || problems+=("bare header: both lines not listed: $err")
   rm -f "$dtl"
   report "$name" "item" $rc "$out"
   return 0
