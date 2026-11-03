@@ -1229,10 +1229,10 @@ else
   | select((.__typename == "PullRequestCommit" and (((.commit.parents // {}).totalCount // 1) > 1) and ($MERGES | not)) | not)
  ]) as $nodes1 |
 
-# A review GitHub hid with no threads under it is passed over, as --latest
-# passes it over: its body is all it had, and someone judged that spam,
-# off-topic or outdated. A bare approval still anchors here; a hidden
-# review with threads does too, since those keep their own state.
+# A review GitHub hid with no threads under it is passed over, body or not:
+# someone judged it spam, off-topic or outdated, and nothing under it keeps
+# a state of its own. A visible bare approval still anchors here; a hidden
+# review with threads does too, since those threads keep their own state.
 (if $slr == "1" then
    ([$nodes1 | to_entries[]
      | select(.value.__typename == "PullRequestReview")
