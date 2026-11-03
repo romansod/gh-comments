@@ -1008,6 +1008,16 @@ item_nested_events() {
   out=$(zsh "$script" 21 --item 'label [romansod 2026-08-16 16:33] +[wip]' --fixtures "$dtl" 2>&1) \
     || { rc=$?; problems+=("the whole +[wip] line was not selected: exit $rc"); }
   [[ $out == 'label [romansod 2026-08-16 16:33] +[wip]' ]] || problems+=("the +[wip] line selected: $out")
+  # A bot login with a hyphen and brackets (`github-actions[bot]`): its empty
+  # comment's line is a bare header too, refused beside the bot's other one.
+  jq '(.[].data.repository.issueOrPullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "github-actions[bot]")
+               | .body = "<!-- stale-marker -->")])' "$fx/issue-basic.tl.json" > "$dtl" \
+    || problems+=("could not derive the empty bot comment")
+  err=$(zsh "$script" 21 --item 'comment [github-actions[bot] 2026-08-17 09:00]' --fixtures "$dtl" 2>&1 >/dev/null) \
+    && problems+=("the bot bare header chose its empty comment: exit 0")
+  [[ $err == *"2 items start with: comment [github-actions[bot] 2026-08-17 09:00]"* ]] \
+    || problems+=("bot bare header: not refused as a prefix: $err")
   rm -f "$dtl"
   report "$name" "item" $rc "$out"
   return 0
