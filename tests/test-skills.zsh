@@ -37,6 +37,10 @@
 #                          under skills/ or a mode change
 #   benchmarks-match-tables every table row of BENCHMARKS.md's results is
 #                          a row of the newest run's tables.md
+#   benchmarks-prose-match-run BENCHMARKS.md's break-even lead-in is the
+#                          run's, its Summary quotes the run's loss range and
+#                          one-comment and read-all costs, and its Method
+#                          names the Task 4 flow that adds recipes.md
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -70,6 +74,13 @@ report() {
   fi
   problems=()
   return 0
+}
+
+# fmt <n> — thousands with commas, as the docs write them, without the locale.
+fmt() {
+  local n=$1 out=
+  while (( ${#n} > 3 )); do out=,${n[-3,-1]}$out; n=${n[1,-4]}; done
+  print -r -- $n$out
 }
 
 # block <file> — the first ```bash fenced block of a markdown file.
@@ -298,6 +309,41 @@ benchmarks_match_tables() {
 }
 benchmarks_match_tables
 
+benchmarks_prose_match_run() {
+  local name=benchmarks-prose-match-run run bm summary lead
+  local -a runs costs
+  runs=("$root"/bench/runs/*(/N:t))
+  run=$root/bench/runs/${runs[-1]}
+  bm=$(<"$root/BENCHMARKS.md")
+  # The break-even lead-in is generated into tables.md; BENCHMARKS.md carries it.
+  lead=$(grep -m1 '^The two descriptions cost' "$run/tables.md")
+  [[ -n $lead ]] && grep -qxF -- "$lead" "$root/BENCHMARKS.md" \
+    || problems+=("the break-even lead-in differs from ${runs[-1]}/tables.md")
+  # The Summary's figures, joined into one line, against the break-even rows.
+  summary=${${bm#*$'\n'## Summary$'\n'}%%$'\n'## *}
+  summary=${(j: :)${=summary}}
+  costs=(${(f)"$(grep -o '| costs [0-9,]* |$' "$run/tables.md" | tr -d '|,' | awk '{print $2}' | sort -n)"})
+  if (( ${#costs} )); then
+    local lo=$(fmt ${costs[1]}) hi=$(fmt ${costs[-1]})
+    [[ $summary == *"to $lo–$hi."* ]] || problems+=("Summary: the losses are not $lo–$hi")
+  else
+    problems+=("no break-even losses in ${runs[-1]}/tables.md")
+  fi
+  local label flow
+  for label in 'cli#13946 one top-level comment' 'cli#14141 read all'; do
+    flow=$(grep -F "| $label " "$run/tables.md" | awk -F' [|] ' '{print $3}')
+    [[ -n $flow && $summary == *"and $flow through the skill"* ]] \
+      || problems+=("Summary: $label is not ${flow:-?} through the skill")
+  done
+  # The method says which flow carries a reference file's cost.
+  if grep -q '^FIX.pr_recipes' "$run/tokens.tsv"; then
+    [[ ${${bm#*$'\n'## Method$'\n'}%%$'\n'## *} == *'Task 4'*'references/recipes.md'* ]] \
+      || problems+=("Method: does not say Task 4's TOC + slice adds references/recipes.md")
+  fi
+  report "$name" "BENCHMARKS.md prose quotes another run"
+}
+benchmarks_prose_match_run
+
 readme_figures_match_run() {
   local name=readme-figures-match-run run readme section id lo hi n
   local -a runs
@@ -307,12 +353,6 @@ readme_figures_match_run() {
   while IFS=$'\t' read -r id _ n; do tok[$id]=$n; done < "$root/bench/runs/$run/tokens.tsv"
   readme=$(<"$root/README.md")
   section=${${readme#*$'\n'## How it compares$'\n'}%%$'\n'## *}
-  # fmt <n> — thousands with commas, as the docs write them.
-  fmt() {
-    local n=$1 out=
-    while (( ${#n} > 3 )); do out=,${n[-3,-1]}$out; n=${n[1,-4]}; done
-    print -r -- $n$out
-  }
   local gv rc trio gq full unres desc row
   gv=$(fmt ${tok[O1.gh_view_c]}) rc=$(fmt ${tok[O1.rest_rc]}) gq=$(fmt ${tok[O1.gql_meta]})
   trio=$(fmt $(( tok[O1.rest_ic] + tok[O1.rest_rv] + tok[O1.rest_rc] )))
