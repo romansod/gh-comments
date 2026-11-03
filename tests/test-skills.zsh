@@ -25,6 +25,10 @@
 #                          bench/refile-fixed.zsh recounts it into the
 #                          newest run, keeps every captured row as filed,
 #                          rebuilds the tables and leaves bench-check passing
+#   bench-check-witness    in a scratch git repo of the tree, make
+#                          bench-check fails on a reference file with no
+#                          row, and on a committed skill edit that keeps the
+#                          file's length
 #   readme-figures-match-run README's diagram and How it compares table
 #                          quote the newest run's cli/cli#14104 figures and
 #                          name that run, and its per-invocation skill cost
@@ -196,6 +200,29 @@ printf "{\"usage\":{\"input_tokens\":%d},\"total_cost_usd\":0}\n" $(( n / 3 ))' 
   report "$name" "the refile loses the run"
 }
 bench_refile_keeps_captures
+
+bench_check_witness() {
+  local name=bench-check-witness tmp out f
+  tmp=$(mktemp -d)
+  ( cd "$root" && tar --exclude=.git --exclude=bench/out --exclude=bench/tokens.json \
+      --exclude=bench/tokens.tsv -cf - . ) | tar -C "$tmp" -xf -
+  git -C "$tmp" init -q && git -C "$tmp" add -A \
+    && git -C "$tmp" -c user.name=t -c user.email=t@t commit -qm base || problems+=("scratch repo")
+  zsh "$tmp/bench/check-skill-bytes.zsh" >/dev/null 2>&1 || problems+=("bench-check fails on the clean tree")
+  print -r -- '# new' > "$tmp/skills/pr-comments/references/extra.md"
+  out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1) && problems+=("bench-check passed with a reference file that has no row")
+  [[ $out == *references/extra.md* ]] || problems+=("bench-check did not name references/extra.md")
+  rm -f "$tmp/skills/pr-comments/references/extra.md"
+  # Same length: swap two characters of the invocation line.
+  f=$tmp/skills/pr-comments/SKILL.md
+  sed -i.bak 's/Invoked as/Invoked sa/' "$f" && rm -f "$f.bak"
+  git -C "$tmp" -c user.name=t -c user.email=t@t commit -qam edit
+  out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1) && problems+=("bench-check passed a committed same-length skill edit")
+  [[ $out == *skills/pr-comments/SKILL.md* ]] || problems+=("bench-check did not name the edited SKILL.md: ${out%%$'\n'*}")
+  rm -rf "$tmp"
+  report "$name" "bench-check misses a change"
+}
+bench_check_witness
 
 readme_figures_match_run() {
   local name=readme-figures-match-run run readme section id lo hi n
