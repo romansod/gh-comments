@@ -33,7 +33,8 @@ renames) that `gh issue view` does not.
 
 1. **Orient with the TOC**, always safe inline:
    `gh-comments <N> --issue --toc`. A counts header, then the opening post
-   and one line per comment and event.
+   and one line per comment and event. For one comment,
+   `--toc --only comment` is the TOC to start from.
 2. **Take the narrowest view that answers the question:**
 
    | question | flags |

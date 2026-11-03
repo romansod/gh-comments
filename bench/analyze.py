@@ -121,6 +121,9 @@ if NOFIX:
              f"\n  missing: {', '.join(NOFIX)}")
 OK, PART, BAD, NA = "✓", "◐", "✗", "–"
 SKILL_PR, SKILL_IS = TOK["FIX.pr_skillmd"], TOK["FIX.issue_skillmd"]
+# The dump recipes moved out of SKILL.md into references/recipes.md with #7, so the
+# TOC + slice flow loads that file too; a run from before the split has none (0).
+REC_PR, REC_IS = TOK.get("FIX.pr_recipes", 0), TOK.get("FIX.issue_recipes", 0)
 
 
 def tok(ids):
@@ -267,10 +270,10 @@ matrix("Task 3 — what the open threads say", ["O1"], [
 ], note=N("task3"))
 
 # ── Targeted retrieval ───────────────────────────────────────────────────────
-TG = [("TA", "R1", f"{NAME['R1']} top-level comment", G("task4", "TA"), SKILL_PR),
-      ("TB", "R1", f"{NAME['R1']} inline thread", G("task4", "TB"), SKILL_PR),
-      ("TC", "O1", f"{NAME['O1']} open thread", G("task4", "TC"), SKILL_PR),
-      ("TD", "I1", f"{NAME['I1']} last comment", G("task4", "TD"), SKILL_IS)]
+TG = [("TA", "R1", f"{NAME['R1']} top-level comment", G("task4", "TA"), SKILL_PR, REC_PR),
+      ("TB", "R1", f"{NAME['R1']} inline thread", G("task4", "TB"), SKILL_PR, REC_PR),
+      ("TC", "O1", f"{NAME['O1']} open thread", G("task4", "TC"), SKILL_PR, REC_PR),
+      ("TD", "I1", f"{NAME['I1']} last comment", G("task4", "TD"), SKILL_IS, REC_IS)]
 P("### Task 4 — land one specific comment in context\n")
 P("The skill's documented flow for one item needs no dump: a TOC narrowed to the item's kind (`--toc --only <kind>`), "
   "then the one item by its TOC line (`--item`). TOC + slice is the earlier flow, TOC first, dump to a file, then slice "
@@ -278,11 +281,12 @@ P("The skill's documented flow for one item needs no dump: a TOC narrowed to the
   "The expert flow is the same shape by hand: list with `--jq`, then fetch the one body. "
   "Every arm lands the same comment text; the slice and `--item` also carry the item's header line and the renderer's two-space indent, "
   "which is the few dozen bytes between the payload column and the expert fetch. "
-  "Each `+ SKILL.md` column adds the cost of loading the skill to the flow before it, paid once per invocation.\n")
+  "Each `+ SKILL.md` column adds the cost of loading the skill to the flow before it, paid once per invocation"
+  + ("; for TOC + slice it also adds `references/recipes.md`, where the skill keeps that flow.\n" if REC_PR else ".\n"))
 P("| Target | `gh … view --comments` | naive complete | `gh-comments` full | TOC + slice | + SKILL.md | **`--only` + `--item`** | + SKILL.md | expert list → fetch | payload |")
 P("|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|")
 tg_rows = []
-for key, T, label, ghg, sk in TG:
+for key, T, label, ghg, sk, rec in TG:
     lazy_gh = tok([f"{T}.gh_view_c"])
     naive = tok([f"{T}.gh_view_c", f"{T}.rest_rc"]) if T != "I1" else lazy_gh
     full = tok([f"{T}.s_full"])
@@ -291,9 +295,9 @@ for key, T, label, ghg, sk in TG:
     payload = tok([f"{key}.skill_slice"])
     sel_ids = [f"{key}.only_toc", f"{key}.item"]
     sel = tok(sel_ids) if has(sel_ids) else None
-    tg_rows.append((label, lazy_gh, ghg, naive, full, flow, flow + sk, sel, None if sel is None else sel + sk, exp, payload))
+    tg_rows.append((label, lazy_gh, ghg, naive, full, flow, flow + sk + rec, sel, None if sel is None else sel + sk, exp, payload))
     sel_cells = f"**{fmt(sel)}** | {fmt(sel + sk)}" if sel is not None else f"{NA} | {NA}"
-    P(f"| {label} | {fmt(lazy_gh)} {ghg} | {fmt(naive)} | {fmt(full)} | {fmt(flow)} | {fmt(flow + sk)} | {sel_cells} | {fmt(exp)} | {fmt(payload)} |")
+    P(f"| {label} | {fmt(lazy_gh)} {ghg} | {fmt(naive)} | {fmt(full)} | {fmt(flow)} | {fmt(flow + sk + rec)} | {sel_cells} | {fmt(exp)} | {fmt(payload)} |")
 P("")
 P("```")
 P("Task 4 — tokens to land one comment (each ▓ ≈ 1k tokens)")

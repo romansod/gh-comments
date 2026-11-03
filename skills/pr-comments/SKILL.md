@@ -33,6 +33,7 @@ their resolution state, so never add `gh pr view --comments` or `gh api`.
 
 1. **Orient with the TOC**, always safe inline: `gh-comments <N> --pr --toc`.
    A counts header, then one line per commit, review, thread and comment.
+   For one item, `--toc --only <kind>` is the TOC to start from.
 2. **Take the narrowest view that answers the question:**
 
    | question | flags |
