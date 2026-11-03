@@ -29,9 +29,9 @@
 #                          newest run, keeps every captured row as filed,
 #                          rebuilds the tables and leaves bench-check passing
 #   bench-check-witness    in a scratch git repo of the tree, make
-#                          bench-check fails on a reference file with no
-#                          row, and on a committed skill edit that keeps the
-#                          file's length
+#                          bench-check names a reference file with no row,
+#                          and does not report a committed uncounted file
+#                          under skills/ or a mode change
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -218,7 +218,7 @@ printf "{\"usage\":{\"input_tokens\":%d},\"total_cost_usd\":0}\n" $(( n / 3 ))' 
 bench_refile_keeps_captures
 
 bench_check_witness() {
-  local name=bench-check-witness tmp out f
+  local name=bench-check-witness tmp out
   tmp=$(mktemp -d)
   ( cd "$root" && tar --exclude=.git --exclude=bench/out --exclude=bench/tokens.json \
       --exclude=bench/tokens.tsv -cf - . ) | tar -C "$tmp" -xf -
@@ -230,13 +230,14 @@ bench_check_witness() {
   out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1)
   [[ $out == *references/extra.md* ]] || problems+=("bench-check did not name references/extra.md")
   rm -f "$tmp/skills/pr-comments/references/extra.md"
-  # Same length: swap two characters of the invocation line.
-  f=$tmp/skills/pr-comments/SKILL.md
-  sed -i.bak 's/Invoked as/Invoked sa/' "$f" && rm -f "$f.bak"
-  git -C "$tmp" -c user.name=t -c user.email=t@t commit -qam edit
+  # A committed file under skills/ that is not counted, and a mode change,
+  # change no fixed cost, so they must not be reported as stale.
+  print -r -- notes > "$tmp/skills/pr-comments/notes.txt"
+  chmod +x "$tmp/skills/pr-comments/SKILL.md"
+  git -C "$tmp" add -A && git -C "$tmp" -c user.name=t -c user.email=t@t commit -qm uncounted
   out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1)
-  [[ $out == *"changed since"*skills/pr-comments/SKILL.md* ]] \
-    || problems+=("bench-check did not name the committed same-length edit of SKILL.md: ${out%%$'\n'*}")
+  [[ $out == *notes.txt* || $out == *"changed since"* ]] \
+    && problems+=("bench-check reported an uncounted file or a mode change: ${out%%$'\n'*}")
   rm -rf "$tmp"
   report "$name" "bench-check misses a change"
 }
