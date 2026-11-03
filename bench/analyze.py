@@ -267,13 +267,14 @@ TG = [("TA", "R1", f"{NAME['R1']} top-level comment", G("task4", "TA"), SKILL_PR
       ("TC", "O1", f"{NAME['O1']} open thread", G("task4", "TC"), SKILL_PR),
       ("TD", "I1", f"{NAME['I1']} last comment", G("task4", "TD"), SKILL_IS)]
 P("### Task 4 — land one specific comment in context\n")
-P("The skill's documented flow is TOC first, dump to a file, then slice the one item out. "
-  "The `--only` + `--item` flow needs no dump: a TOC narrowed to the item's kind, then the one item by its header line. "
+P("The skill's documented flow for one item needs no dump: a TOC narrowed to the item's kind (`--toc --only <kind>`), "
+  "then the one item by its TOC line (`--item`). TOC + slice is the earlier flow, TOC first, dump to a file, then slice "
+  "the one item out, which the skill keeps for many items at once. "
   "The expert flow is the same shape by hand: list with `--jq`, then fetch the one body. "
   "Both arms land the same comment text; the slice also carries the item's header line and the renderer's two-space indent, "
   "which is the few dozen bytes between the payload column and the expert fetch. "
   "The `+ SKILL.md` column adds the cost of loading the skill, paid once per invocation.\n")
-P("| Target | `gh … view --comments` | naive complete | `gh-comments` full | **TOC + slice** | + SKILL.md | **`--only` + `--item`** | + SKILL.md | expert list → fetch | payload |")
+P("| Target | `gh … view --comments` | naive complete | `gh-comments` full | TOC + slice | + SKILL.md | **`--only` + `--item`** | + SKILL.md | expert list → fetch | payload |")
 P("|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|")
 tg_rows = []
 for key, T, label, ghg, sk in TG:
@@ -287,7 +288,7 @@ for key, T, label, ghg, sk in TG:
     sel = tok(sel_ids) if has(sel_ids) else None
     tg_rows.append((label, lazy_gh, ghg, naive, full, flow, flow + sk, sel, None if sel is None else sel + sk, exp, payload))
     sel_cells = f"**{fmt(sel)}** | {fmt(sel + sk)}" if sel is not None else f"{NA} | {NA}"
-    P(f"| {label} | {fmt(lazy_gh)} {ghg} | {fmt(naive)} | {fmt(full)} | **{fmt(flow)}** | {fmt(flow + sk)} | {sel_cells} | {fmt(exp)} | {fmt(payload)} |")
+    P(f"| {label} | {fmt(lazy_gh)} {ghg} | {fmt(naive)} | {fmt(full)} | {fmt(flow)} | {fmt(flow + sk)} | {sel_cells} | {fmt(exp)} | {fmt(payload)} |")
 P("")
 P("```")
 P("Task 4 — tokens to land one comment (each ▓ ≈ 1k tokens)")
