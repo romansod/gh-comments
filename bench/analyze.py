@@ -204,9 +204,14 @@ for k, label, when in [("pr_desc", "`pr-comments` description", "every session, 
                        ("issue_desc", "`issue-comments` description", "every session, used or not"),
                        ("pr_skillmd", "`pr-comments` SKILL.md", "each invocation"),
                        ("issue_skillmd", "`issue-comments` SKILL.md", "each invocation"),
-                       # The reference files are loaded only when an output marker needs
-                       # interpreting; they exist from the skills-slim change on, so a run
-                       # captured before it has no row for them.
+                       # The reference files are loaded only when the SKILL.md's pointer to
+                       # them applies. output.md exists from the skills-slim change on, and
+                       # flags.md and recipes.md from the SKILL.md trim (#7), so a run
+                       # captured before either has no row for them.
+                       ("pr_flags", "`pr-comments` references/flags.md", "for a flag beyond the skill's table"),
+                       ("issue_flags", "`issue-comments` references/flags.md", "for a flag beyond the skill's table"),
+                       ("pr_recipes", "`pr-comments` references/recipes.md", "for a dump read in slices, or a finding to re-check"),
+                       ("issue_recipes", "`issue-comments` references/recipes.md", "for a dump read in slices, or before acting"),
                        ("pr_ref", "`pr-comments` references/output.md", "when a marker needs interpreting"),
                        ("issue_ref", "`issue-comments` references/output.md", "when a marker needs interpreting")]:
     if "FIX." + k in TOK:
@@ -403,18 +408,25 @@ desc = TOK["FIX.pr_desc"] + TOK["FIX.issue_desc"]
 P("### Break-even: does loading the skill pay for itself?\n")
 P(f"The two descriptions cost **{desc} tokens in every session**, whether or not either skill is used. "
   f"Invoking a skill then adds its SKILL.md ({fmt(SKILL_PR)} for `pr-comments`, {fmt(SKILL_IS)} for `issue-comments`). "
-  "Against the realistic naive path for the same task:\n")
+  "Against the realistic naive path for the same task"
+  + (", with each one-item task taking the skill's `--toc --only` then `--item` flow:\n"
+     if has(["TA.only_toc", "TA.item"]) else ":\n"))
 P("| Task | naive tokens | skill flow + SKILL.md | net per invocation |")
 P("|---|--:|--:|--:|")
+# One item: the flow the SKILL.md teaches, `--toc --only` then `--item`, when the
+# run captured it; a run from before #6 has only TOC + slice.
+def one(key, T):
+    sel = [f"{key}.only_toc", f"{key}.item"]
+    return tok(sel) if has(sel) else tok([f"{T}.s_toc", f"{key}.skill_slice"])
 be = [
     (f"{NAME['O1']} read all (naive: gh view + REST inline)", tok([f"{C}.gh_view", f"{C}.gh_view_c", f"{C}.rest_rc"]), tok([f"{C}.s_toc", f"{C}.s_full"]) + SKILL_PR),
     (f"{NAME['O1']} which threads open (naive: REST inline)", tok([f"{C}.rest_rc"]), tok([f"{C}.s_toc_unres"]) + SKILL_PR),
     (f"{NAME['R1']} read all (naive: gh view + REST inline)", tok(["R1.gh_view", "R1.gh_view_c", "R1.rest_rc"]), tok(["R1.s_toc", "R1.s_full"]) + SKILL_PR),
-    (f"{NAME['R1']} one inline thread (naive: gh view --comments + REST inline)", tok(["R1.gh_view_c", "R1.rest_rc"]), tok(["R1.s_toc", "TB.skill_slice"]) + SKILL_PR),
-    (f"{NAME['R1']} one top-level comment (naive: gh pr view --comments)", tok(["R1.gh_view_c"]), tok(["R1.s_toc", "TA.skill_slice"]) + SKILL_PR),
+    (f"{NAME['R1']} one inline thread (naive: gh view --comments + REST inline)", tok(["R1.gh_view_c", "R1.rest_rc"]), one("TB", "R1") + SKILL_PR),
+    (f"{NAME['R1']} one top-level comment (naive: gh pr view --comments)", tok(["R1.gh_view_c"]), one("TA", "R1") + SKILL_PR),
     (f"{NAME['E2']} read all (naive: gh pr view)", tok(["E2.gh_view"]), tok(["E2.s_toc", "E2.s_full"]) + SKILL_PR),
     (f"{NAME['I4']} read all (naive: gh issue view ×2)", tok(["I4.gh_view", "I4.gh_view_c"]), tok(["I4.s_toc", "I4.s_full"]) + SKILL_IS),
-    (f"{NAME['I1']} one comment (naive: gh issue view --comments)", tok(["I1.gh_view_c"]), tok(["I1.s_toc", "TD.skill_slice"]) + SKILL_IS),
+    (f"{NAME['I1']} one comment (naive: gh issue view --comments)", tok(["I1.gh_view_c"]), one("TD", "I1") + SKILL_IS),
 ]
 for label, naive, flow in be:
     d = naive - flow
