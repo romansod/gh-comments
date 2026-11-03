@@ -401,7 +401,10 @@ _slice_hidden_bare() {
 # A --latest candidate, read off its TOC line: a review with threads, or one
 # with a body preview that is not hidden (a hidden review with no threads
 # never counts, even when --hidden shows its preview), or a comment with a
-# preview and no (hidden: …) marker. The `[login date time]` header is cut
+# preview and no (hidden: …) marker. A TOC line does not show whether a
+# thread's comments are hidden, so this counts every thread; no committed
+# fixture has one whose comments are all hidden, and anchor-needs-live-thread
+# covers that case on derived copies. The `[login date time]` header is cut
 # at its closing `HH:MM]`, not the first `]` — `vercel[bot]` has one of its
 # own.
 _slice_substantive() {
@@ -787,19 +790,25 @@ slr_skips_hidden
 # hidden, her hidden review falls back under both flags; with all hidden but
 # bob's reply on one thread, that reply still anchors it, and so does alice's
 # opening comment when the reply under it is the hidden one; and a thread with
-# replies past the fetched page anchors it, since those may be visible.
+# replies past the fetched page anchors it, since those may be visible. The
+# --latest rule holds for a visible review too: made visible with an empty
+# body, alice's review with every thread comment hidden falls back, though
+# --since-last-review, which anchors on any visible review, still takes it.
 anchor_needs_live_thread() {
-  local name=anchor-needs-live-thread out first f atl
+  local name=anchor-needs-live-thread out first f atl vtl
   local -i rc=0
   local rtl=$fx/hidden-review.tl.json rth=$fx/hidden-review.th.json
   local -A th
   # As in latest-skips-hidden: without her later comment, --latest=alice can
   # only anchor on her review.
-  atl=$(mktemp) && th[all]=$(mktemp) && th[one]=$(mktemp) && th[first]=$(mktemp) && th[more]=$(mktemp) ||
+  atl=$(mktemp) && vtl=$(mktemp) && th[all]=$(mktemp) && th[one]=$(mktemp) && th[first]=$(mktemp) && th[more]=$(mktemp) ||
     { problems+=("mktemp failed"); report "$name" "anchors" 1 ""; return 0; }
   jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
         map(select((.__typename == "IssueComment" and .author.login == "alice") | not))' \
     "$rtl" > "$atl" || problems+=("could not derive the alice-only timeline")
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes[] | select(.id == "PRR_r1"))
+        |= (.isMinimized = false | .minimizedReason = null | .body = "")' \
+    "$atl" > "$vtl" || problems+=("could not derive the visible-review timeline")
   # hide(a; p): minimize every comment by a on alice's threads whose path
   # matches p.
   local hide='def hide(a; p): (.[].data.repository.pullRequest.reviewThreads.nodes[]
@@ -829,7 +838,18 @@ anchor_needs_live_thread() {
     [[ $first == 'review  [alice 2026-08-10 12:00] '*'(hidden: outdated)' ]] \
       || problems+=("$f: --latest=alice did not anchor on her hidden review: $first")
   done
-  rm -f "$atl" "${th[@]}"
+  out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$vtl" "${th[all]}" 2>&1) || { rc=$?; problems+=("visible latest exit $rc"); }
+  [[ "$out" == *"note: no matching review or comment"* ]] \
+    || problems+=("--latest=alice anchored on a visible bodyless review whose thread comments are all hidden")
+  out=$(zsh "$script" --pr 44 --toc --since-last-review=alice --fixtures "$vtl" "${th[all]}" 2>&1) || { rc=$?; problems+=("visible slr exit $rc"); }
+  first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+  [[ $first == 'review  [alice 2026-08-10 12:00] CHANGES_REQUESTED, 2 threads (1 open)' ]] \
+    || problems+=("--since-last-review=alice did not anchor on her visible review: $first")
+  out=$(zsh "$script" --pr 44 --toc --latest=alice --fixtures "$vtl" "${th[one]}" 2>&1) || { rc=$?; problems+=("visible one latest exit $rc"); }
+  first=$(print -r -- "$out" | grep -v '^body ' | sed -n 4p)
+  [[ $first == 'review  [alice 2026-08-10 12:00] CHANGES_REQUESTED, 2 threads (1 open)' ]] \
+    || problems+=("--latest=alice did not anchor on her visible review through bob's reply: $first")
+  rm -f "$atl" "$vtl" "${th[@]}"
   report "$name" "anchors" $rc "$out"
   return 0
 }
