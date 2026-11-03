@@ -1,4 +1,4 @@
-.PHONY: check lint test test-pty
+.PHONY: check lint test test-pty bench-check
 
 # Runs every pass even when an earlier one fails, as CI does, so a failure in
 # one does not hide the result of the next. Fails if any pass failed.
@@ -33,3 +33,8 @@ test:
 # The same suite under a real controlling terminal.
 test-pty:
 	python3 tests/run-pty.py
+
+# Before a release: the newest filed benchmark run's fixed costs match the
+# skill files. Not part of check: a stale row needs a paid recount.
+bench-check:
+	zsh bench/check-skill-bytes.zsh
