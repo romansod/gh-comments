@@ -9,7 +9,8 @@
 #                          line per fresh shell (an agent's Bash tool keeps
 #                          no shell state between calls) from an empty cwd,
 #                          with gh-comments stubbed to print a golden: no
-#                          line exits 2, and the reads find the dump
+#                          line exits 2, the reads find the dump, and a
+#                          second number's dump leaves the first's alone
 #   skill-invocation       a repo appears in an "Invoked as" line only with
 #                          a number, since -R needs one
 #   skill-one-item-flow    step 1 of each SKILL.md names --toc --only, the
@@ -53,34 +54,53 @@ block() {
 }
 
 recipes_read_the_dump() {
-  local name=recipes-read-the-dump tmp kind golden user line rc out
-  local -i reads hits
+  local name=recipes-read-the-dump tmp kind golden golden2 user line rc out
+  local -i reads hits k
+  local -a lines first
   tmp=$(mktemp -d)
   mkdir -p "$tmp/bin" "$tmp/cwd" "$tmp/tmpdir"
-  for kind golden user in \
-    pr "$here/fixtures/pr-comments/expected/basic-full.txt" reviewer-bart \
-    issue "$here/fixtures/gh-comments/expected/issue-basic-full.txt" alice; do
+  # Each line runs in its own shell, as an agent's Bash calls do; the stub
+  # prints one golden for number 1 and another for number 2.
+  run_line() {  # run_line <line> <n> — sets rc and out
+    line=${1//<N>/$2}
+    line=${line//<user>/$user}
+    out=$(cd "$tmp/cwd" && PATH="$tmp/bin:$PATH" TMPDIR="$tmp/tmpdir" zsh -fc "$line" 2>&1)
+    rc=$?
+  }
+  for kind golden golden2 user in \
+    pr "$here/fixtures/pr-comments/expected/basic-full.txt" \
+       "$here/fixtures/pr-comments/expected/multi-full.txt" reviewer-bart \
+    issue "$here/fixtures/gh-comments/expected/issue-basic-full.txt" \
+       "$here/fixtures/gh-comments/expected/issue-closed-full.txt" alice; do
     print -r -- "#!/bin/sh
-cat '$golden'" > "$tmp/bin/gh-comments"
+case \$1 in 1) cat '$golden' ;; *) cat '$golden2' ;; esac" > "$tmp/bin/gh-comments"
     chmod +x "$tmp/bin/gh-comments"
     rm -f "$tmp/tmpdir"/*(N)
-    reads=0 hits=0
-    while IFS= read -r line; do
-      [[ -n $line ]] || continue
-      line=${line//<N>/1}
-      line=${line//<user>/$user}
-      out=$(cd "$tmp/cwd" && PATH="$tmp/bin:$PATH" TMPDIR="$tmp/tmpdir" zsh -fc "$line" 2>&1)
-      rc=$?
+    lines=("${(@f)$(block "$root/skills/$kind-comments/references/recipes.md")}")
+    lines=(${lines:#})
+    reads=0 hits=0 first=()
+    for line in $lines; do
+      run_line "$line" 1
       (( rc == 2 )) || [[ $out == *"No such file"* ]] \
         && problems+=("$kind: exit $rc: $line: ${out%%$'\n'*}")
       if [[ $line != *'gh-comments '* ]]; then
         (( reads += 1 ))
         [[ -n $out ]] && (( hits += 1 ))
+        first+=("$out")
       fi
-    done < <(block "$root/skills/$kind-comments/references/recipes.md")
+    done
     (( reads > 0 )) || problems+=("$kind: the recipe block has no reads")
     (( hits > 0 )) || problems+=("$kind: no read printed anything from the dump")
     [[ -z $(print -l "$tmp/cwd"/*(N)) ]] || problems+=("$kind: the recipe wrote into the cwd")
+    # A second number's dump must not change what the first number's reads see.
+    for line in ${(M)lines:#*gh-comments *}; do run_line "$line" 2; done
+    k=0
+    for line in ${lines:#*gh-comments *}; do
+      (( k += 1 ))
+      run_line "$line" 1
+      [[ $out == "${first[k]}" ]] \
+        || problems+=("$kind: after dumping number 2, number 1's read reads another dump: $line")
+    done
   done
   rm -rf "$tmp"
   report "$name" "a recipe line misses the dump"

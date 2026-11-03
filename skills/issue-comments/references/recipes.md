@@ -5,16 +5,16 @@ read inline, or before acting on what an issue describes.
 
 ## Slice a dump with grep/sed
 
-Dump once to a temp file (never the repo) and read slices. Each item starts
-at column 0 with a stable prefix
-(`body`/`comment`/`closed`/`reopened`/`xref`/`renamed`, plus
+Dump once to a temp file named for the issue (never the repo; with `-R`, add
+the repo to the name too) and read slices. Each item starts at column 0 with
+a stable prefix (`body`/`comment`/`closed`/`reopened`/`xref`/`renamed`, plus
 `label`/`assign`/`milestone` under `--events`):
 
 ```bash
-gh-comments <N> --issue > "${TMPDIR:-/tmp}/issue.txt"
-grep '^xref\|^closed\|^reopened' "${TMPDIR:-/tmp}/issue.txt"   # what happened to it
-grep -A 15 '^comment \[<user>' "${TMPDIR:-/tmp}/issue.txt"     # everything one person said
-sed -n '1,40p' "${TMPDIR:-/tmp}/issue.txt"                     # the opening post, no refetch
+gh-comments <N> --issue > "${TMPDIR:-/tmp}/gh-comments-issue-<N>.txt"
+grep '^xref\|^closed\|^reopened' "${TMPDIR:-/tmp}/gh-comments-issue-<N>.txt"   # what happened to it
+grep -A 15 '^comment \[<user>' "${TMPDIR:-/tmp}/gh-comments-issue-<N>.txt"     # everything one person said
+sed -n '1,40p' "${TMPDIR:-/tmp}/gh-comments-issue-<N>.txt"                     # the opening post, no refetch
 ```
 
 ## Before acting on an issue, check the cross-references
