@@ -1071,7 +1071,9 @@ def want($k): $only == "" or (($only | split(",")) | index($k)) != null;
 # comment) is the very prefix a caller types, so it would silently win over
 # the comment beside it. A one-line event (`label [..] +design`) and a review
 # line ending in its counts are more than that header, and do win.
-def bareheader: test("^[a-z-]+ +\\[[^]]*\\]$");
+# Known by its shape, a login with no spaces and then the date, not by where
+# the first `]` falls: a login may hold brackets of its own (`vercel[bot]`).
+def bareheader: test("^[a-z-]+ +\\[[^ ]+ [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}\\]$");
 def pick: [.[] | select(.toc == $item and (.toc | bareheader | not))] as $x
   | (if ($x | length) > 0 then $x else [.[] | select(.toc | startswith($item))] end) as $m
   | if ($m | length) == 1 then "1", $m[0].full

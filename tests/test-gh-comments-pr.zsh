@@ -972,6 +972,17 @@ item_refusals() {
     && problems+=("the bare review header chose one review: exit 0")
   [[ $err == *"2 items start with: review  [carol 2026-08-14 22:30]"* ]] \
     || problems+=("bare review header: not refused as a prefix: $err")
+  # A login may itself hold brackets (`vercel[bot]`); the bare header is known
+  # by its shape, not by where the first `]` falls, so a bot's empty comment
+  # is refused on its header like anyone's.
+  jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
+        (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "vercel[bot]")
+               | .body = "<!-- marker only -->")])' "$tl" > "$dtl" \
+    || problems+=("could not derive the empty bot comment")
+  err=$(zsh "$script" --pr 1001 --item 'comment [vercel[bot] 2026-08-14 20:02]' --fixtures "$dtl" "$fx/basic.th.json" 2>&1 >/dev/null) \
+    && problems+=("a bot's bare header chose its empty comment: exit 0")
+  [[ $err == *"2 items start with: comment [vercel[bot] 2026-08-14 20:02]"* ]] \
+    || problems+=("bot bare header: not refused as a prefix: $err")
   rm -f "$dtl"
   report "$name" "item" $rc "$out"
   return 0
