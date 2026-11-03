@@ -33,6 +33,8 @@
 #                          bench-check names a reference file with no row,
 #                          and does not report a committed uncounted file
 #                          under skills/ or a mode change
+#   benchmarks-match-tables every table row of BENCHMARKS.md's results is
+#                          a row of the newest run's tables.md
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -249,6 +251,22 @@ bench_check_witness() {
   report "$name" "bench-check misses a change"
 }
 bench_check_witness
+
+benchmarks_match_tables() {
+  local name=benchmarks-match-tables run results row
+  local -a runs
+  runs=("$root"/bench/runs/*(/N:t))
+  run=$root/bench/runs/${runs[-1]}
+  # BENCHMARKS.md's results are the run's tables.md, rebuilt by hand: every
+  # table row between the fixed costs and the caveats must be one of its rows.
+  results=$(awk '/^### Fixed costs of the skills$/ { p = 1 } /^## Caveats$/ { p = 0 } p && /^\|/' "$root/BENCHMARKS.md")
+  [[ -n $results ]] || problems+=("BENCHMARKS.md has no results tables")
+  for row in "${(@f)results}"; do
+    grep -qxF -- "$row" "$run/tables.md" || problems+=("not in ${runs[-1]}/tables.md: $row")
+  done
+  report "$name" "BENCHMARKS.md is not the run's tables"
+}
+benchmarks_match_tables
 
 readme_figures_match_run() {
   local name=readme-figures-match-run run readme section id lo hi n
