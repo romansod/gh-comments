@@ -919,6 +919,7 @@ item_refusals() {
   [[ $err == *"3 items start with: commit"* ]] || problems+=("several: no count: $err")
   [[ $err == *$'\n  commit  1a2b3c4 '*$'\n  commit  e5f6a7b '*$'\n  commit  9d8c7b6 '* ]] \
     || problems+=("several: the matching lines are not listed: $err")
+  [[ $err != *"has no body to show"* ]] || problems+=("several: a bare-header note with no bare line listed: $err")
   dtl=$(mktemp) || { problems+=("mktemp failed"); report "$name" "item" 1 ""; return 0; }
   jq '(.[].data.repository.pullRequest.timelineItems.nodes) |=
         (. + [(.[] | select(.__typename == "IssueComment" and .author.login == "romansod")
@@ -952,6 +953,9 @@ item_refusals() {
     && problems+=("a bare header chose the empty comment beside another: exit 0")
   [[ $err == *"2 items start with: comment [romansod 2026-08-14 23:40]"*"Thanks @reviewer-bart"* ]] \
     || problems+=("bare header: both lines not listed: $err")
+  # One of those listed lines is only its header: more of it cannot be
+  # given, so the refusal says that one has no body to show.
+  [[ $err == *"has no body to show"* ]] || problems+=("bare header: the refusal still asks for more of a bare line: $err")
   # A review line with nothing past its counts is more than the bare header
   # (`review  [carol 2026-08-14 22:30]`), so its whole line names it beside a
   # same-minute review whose line goes on to a preview; the bare header is
@@ -1144,6 +1148,13 @@ item_miss_hints() {
   out=$(zsh "$script" --pr 1001 --item '  commit  e5f6a7b fix(widget): close false-green paths from review' "${pair[@]}" 2>&1) \
     || { rc=$?; problems+=("an indented line copied from a refusal missed: exit $rc: $out"); }
   [[ $out == 'commit  e5f6a7b fix(widget): close false-green paths from review' ]] || problems+=("the indented line selected: $out")
+  # Trailing whitespace is kept (it could be part of a prefix in principle),
+  # but no TOC line ends in it, so a miss that ends in it says so.
+  err=$(zsh "$script" --pr 1001 --item 'commit  e5f6a7b fix(widget): close false-green paths from review ' "${pair[@]}" 2>&1 >/dev/null) \
+    && problems+=("a line with a trailing space exited 0")
+  [[ $err == *"ends in whitespace"* ]] || problems+=("trailing whitespace: no hint: $err")
+  err=$(zsh "$script" --pr 1001 --item 'comment [nobody' "${pair[@]}" 2>&1 >/dev/null)
+  [[ $err != *"ends in whitespace"* ]] || problems+=("a miss without trailing whitespace hinted about it: $err")
   report "$name" "item" $rc "$err"
   return 0
 }

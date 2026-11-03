@@ -988,6 +988,11 @@ argcase arg-item-bot-comment     0 "Marking as stale." 21 --item 'comment [githu
 argcase arg-item-body            0 $'body [romansod 2026-08-16 16:32]\n  ## Problem' 21 --item body --fixtures "$fx/issue-basic.tl.json"
 argcase arg-item-none            1 "no item starts with: review" 21 --item review --fixtures "$fx/issue-basic.tl.json"
 argcase arg-item-several         1 "2 items start with: label [romansod" 21 --item 'label [romansod' --fixtures "$fx/issue-basic.tl.json"
+# Leading whitespace, tabs too, is dropped from the prefix: a line copied
+# from a refusal's indented listing still names its item. A prefix that was
+# only whitespace is no prefix.
+argcase arg-item-leading-tab     0 "label [romansod 2026-08-16 16:33] +design" 21 --item $'\t label [romansod 2026-08-16 16:33] +design' --fixtures "$fx/issue-basic.tl.json"
+argcase arg-item-only-space      1 "--item needs <header-prefix>" 21 --item $' \t ' --fixtures "$fx/issue-basic.tl.json"
 # item-nested-events — a one-line event is all header-and-text: its whole
 # line names it even when a same-minute event's line begins with it, so the
 # label `+design` is selectable beside `+design-system`. Only the bare header

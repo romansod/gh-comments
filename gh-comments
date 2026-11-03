@@ -1603,6 +1603,8 @@ elif (( ITEM_N == 0 )); then
     hint=" (the TOC writes two spaces after ${match[1]}: '${match[1]}  ')"
   elif (( ! HIDDEN )) && [[ $ITEM == *'(hidden: '*') '?* ]]; then
     hint=" (a hidden comment's TOC line carries a preview only with --hidden: rerun --item with --hidden)"
+  elif [[ $ITEM == *[[:space:]] ]]; then
+    hint=" (the prefix ends in whitespace, which no TOC line does)"
   fi
   print -r -- "$PROG: no item starts with: $ITEM$hint" >&2
   exit 1
@@ -1619,7 +1621,16 @@ else
   elif (( ${#ITEM_LINES} == 1 )); then
     print -r -- "$PROG: $ITEM_N items share this exact TOC line, so --item cannot tell them apart; dump the full render and slice it instead:" >&2
   else
-    print -r -- "$PROG: $ITEM_N items start with: $ITEM — give more of the line:" >&2
+    # A listed line that is only its header (an empty comment) has no more
+    # to give, and by the bare-header rule is never chosen; say so, rather
+    # than ask for more of a line that has none.
+    typeset bare="" l
+    for l in "${ITEM_LINES[@]}"; do
+      if [[ $l =~ '^[a-z-]+ +\[[^ ]+ [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}\]$' ]]; then
+        bare="; a line that is only its header has no body to show and is not selected"
+      fi
+    done
+    print -r -- "$PROG: $ITEM_N items start with: $ITEM — give more of the line$bare:" >&2
   fi
   print -r -- "${ITEM_OUT#*$'\n'}" | sed 's/^/  /' >&2
   exit 1
