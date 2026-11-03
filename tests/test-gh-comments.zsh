@@ -972,6 +972,10 @@ argcase arg-only-spaces          0 "renamed [romansod" 21 --toc --only ' renamed
 # Only the spaces around a kind go: one inside it is part of what was typed,
 # and the refusal names it as typed.
 argcase arg-only-inner-space     1 "--only: unknown kind: force push (kinds:" 21 --only 'comment, force push'
+# Padding of several spaces and of tabs is trimmed whole, not one character.
+argcase arg-only-wide-padding    0 "renamed [romansod" 21 --toc --only $'\t  renamed  \t,  xref' --fixtures "$fx/issue-basic.tl.json"
+# A kind repeated with other padding is one kind, and is refused once.
+argcase arg-only-repeat-once     1 "--only: unknown kind: frob (kinds:" 21 --only 'frob, frob '
 # A filter that keeps nothing says so instead of rendering an empty discussion.
 argcase arg-only-nothing-kept    0 "(no items of kind: renamed)" 5 --toc --only renamed --fixtures "$fx/issue-closed.tl.json"
 # Under --since the line names the window: the rename is on the issue, before it.
