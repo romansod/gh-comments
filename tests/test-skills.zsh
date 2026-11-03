@@ -243,12 +243,31 @@ bench_check_witness() {
   tmp=$(mktemp -d)
   ( cd "$root" && tar --exclude=.git --exclude=bench/out --exclude=bench/tokens.json \
       --exclude=bench/tokens.tsv -cf - . ) | tar -C "$tmp" -xf -
+  # Whether the real run is fresh is bench-check's business at release, not
+  # the suite's: the copy's run is first made to match its skill files, so
+  # each case below starts from a passing bench-check.
+  python3 -I - "$tmp" <<'PY'
+import os, sys
+root = sys.argv[1]
+runs = sorted(d for d in os.listdir(f"{root}/bench/runs") if os.path.isdir(f"{root}/bench/runs/{d}"))
+p = f"{root}/bench/runs/{runs[-1]}/tokens.tsv"
+files = {"skillmd": "SKILL.md", "ref": "references/output.md",
+         "flags": "references/flags.md", "recipes": "references/recipes.md"}
+rows = []
+for r in open(p).read().splitlines():
+    f = r.split("\t")
+    if f[0].startswith("FIX.") and "_" in f[0]:
+        k, key = f[0][4:].split("_", 1)
+        if key in files:
+            f[1] = str(os.path.getsize(f"{root}/skills/{k}-comments/{files[key]}"))
+    rows.append("\t".join(f))
+open(p, "w").write("\n".join(rows) + "\n")
+PY
   git -C "$tmp" init -q && git -C "$tmp" add -A \
     && git -C "$tmp" -c user.name=t -c user.email=t@t commit -qm base || problems+=("scratch repo")
-  # Whether the real run is fresh is bench-check's business at release, not
-  # the suite's, so each case only asks that the change it makes is named.
+  zsh "$tmp/bench/check-skill-bytes.zsh" >/dev/null 2>&1 || problems+=("bench-check fails on a run made to match")
   print -r -- '# new' > "$tmp/skills/pr-comments/references/extra.md"
-  out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1)
+  out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1) && problems+=("bench-check passed with a reference file that has no row")
   [[ $out == *references/extra.md* ]] || problems+=("bench-check did not name references/extra.md")
   rm -f "$tmp/skills/pr-comments/references/extra.md"
   # A committed file under skills/ that is not counted, and a mode change,
@@ -256,9 +275,8 @@ bench_check_witness() {
   print -r -- notes > "$tmp/skills/pr-comments/notes.txt"
   chmod +x "$tmp/skills/pr-comments/SKILL.md"
   git -C "$tmp" add -A && git -C "$tmp" -c user.name=t -c user.email=t@t commit -qm uncounted
-  out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1)
-  [[ $out == *notes.txt* || $out == *"changed since"* ]] \
-    && problems+=("bench-check reported an uncounted file or a mode change: ${out%%$'\n'*}")
+  out=$(zsh "$tmp/bench/check-skill-bytes.zsh" 2>&1) \
+    || problems+=("bench-check failed on an uncounted file or a mode change: ${out%%$'\n'*}")
   rm -rf "$tmp"
   report "$name" "bench-check misses a change"
 }
