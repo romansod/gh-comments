@@ -19,6 +19,11 @@
 #   skill-one-item-flow    step 1 of each SKILL.md names --toc --only, the
 #                          one-item TOC that analyze.py prices, and the
 #                          question table names --item
+#   skill-prose-wraps      no prose line of a skill file (outside code
+#                          fences and tables) is over 80 characters
+#   skill-closed-line-actor every doc that says whose name is who closed
+#                          an issue names the `closed` line's brackets, so
+#                          the name cannot be read as an xref line's
 #   bench-tables-match-run analyze.py over the newest filed run, with the
 #                          run before it as baseline, reproduces its
 #                          committed tables.md byte for byte
@@ -41,6 +46,11 @@
 #                          run's, its Summary quotes the run's loss range and
 #                          one-comment and read-all costs, and its Method
 #                          names the Task 4 flow that adds recipes.md
+#   benchmarks-closer-wording BENCHMARKS.md says the closed line now
+#                          prints the null-closer suffix the script prints,
+#                          and Results, which quotes the run's notes, says
+#                          they show the output as it was when the run was
+#                          filed
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -169,6 +179,32 @@ skill_one_item_flow() {
   report "$name" "one-item flow"
 }
 skill_one_item_flow
+
+skill_closed_line_actor() {
+  local name=skill-closed-line-actor f text
+  local -i said named
+  for f in "$root"/skills/issue-comments/SKILL.md "$root"/skills/issue-comments/references/output.md "$root"/README.md; do
+    text=$(tr '\n' ' ' <"$f" | tr -s ' ')
+    said=$(print -r -- "$text" | grep -o 'brackets is who closed it' | wc -l)
+    named=$(print -r -- "$text" | grep -o 'the `closed` line'"'"'s brackets is who closed it' | wc -l)
+    (( said > 0 )) || problems+=("${f#$root/}: does not say whose name is who closed the issue")
+    (( said == named )) \
+      || problems+=("${f#$root/}: says whose name is who closed it without naming the closed line")
+  done
+  report "$name" "the closed line's actor"
+}
+skill_closed_line_actor
+
+skill_prose_wraps() {
+  local name=skill-prose-wraps f line
+  for f in "$root"/skills/*/SKILL.md "$root"/skills/*/references/*.md; do
+    for line in ${(f)"$(awk '/^ *```/ { c = !c; next } !c && length > 80 && !/^ *\|/ { print FNR }' "$f")"}; do
+      problems+=("${f#$root/}:$line: a prose line over 80 characters")
+    done
+  done
+  report "$name" "skill prose wraps"
+}
+skill_prose_wraps
 
 recipes_name_the_repo() {
   local name=recipes-name-the-repo f kind
@@ -343,6 +379,22 @@ benchmarks_prose_match_run() {
   report "$name" "BENCHMARKS.md prose quotes another run"
 }
 benchmarks_prose_match_run
+
+benchmarks_closer_wording() {
+  local name=benchmarks-closer-wording suffix text results
+  suffix=$(sed -n 's/.*elif \$c == null then ", \([^"]*\)".*/\1/p' "$root/gh-comments")
+  [[ -n $suffix ]] || problems+=("gh-comments: no null-closer suffix found in r_closer")
+  text=$(tr '\n' ' ' <"$root/BENCHMARKS.md" | tr -s ' ')
+  [[ -z $suffix || $text == *"it now says \`$suffix\`"* ]] \
+    || problems+=("BENCHMARKS.md: does not say the closed line now says the null-closer suffix the script prints ($suffix)")
+  [[ $text != *"run's said"* ]] \
+    || problems+=("BENCHMARKS.md: says \"run's said\" with no noun after the possessive")
+  results=$(awk '/^## Results/ { p = 1; next } /^## / { p = 0 } p' "$root/BENCHMARKS.md" | tr '\n' ' ' | tr -s ' ')
+  [[ -z $suffix || $results != *'`no closer recorded`'* || $results == *"as it was when the run was filed"*"now reads \`$suffix\`"* ]] \
+    || problems+=("BENCHMARKS.md: Results quotes the old null-closer suffix without saying it quotes the run's output")
+  report "$name" "the null-closer wording"
+}
+benchmarks_closer_wording
 
 readme_figures_match_run() {
   local name=readme-figures-match-run run readme section id lo hi n
