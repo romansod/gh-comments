@@ -45,8 +45,8 @@ ones change what you should do.
   repository), `by a project` (a Projects workflow closed it; naming
   the project needs the `read:project` scope, which the query does not ask
   for), `, no closing PR, commit or project recorded`, or `, closing PR,
-  commit or project not visible to this token`. The name in the brackets is
-  who closed it, whichever of these follows. `no closing PR, commit or
+  commit or project not visible to this token`. The name in the `closed`
+  line's brackets is who closed it, whichever of these follows. `no closing PR, commit or
   project recorded` states only that the API returned null — an issue
   closed by hand reads so, and so may one whose closer GitHub withheld
   without saying so — so never turn it into "closed by hand", and never

@@ -19,6 +19,9 @@
 #   skill-one-item-flow    step 1 of each SKILL.md names --toc --only, the
 #                          one-item TOC that analyze.py prices, and the
 #                          question table names --item
+#   skill-closed-line-actor every doc that says whose name is who closed
+#                          an issue names the `closed` line's brackets, so
+#                          the name cannot be read as an xref line's
 #   bench-tables-match-run analyze.py over the newest filed run, with the
 #                          run before it as baseline, reproduces its
 #                          committed tables.md byte for byte
@@ -169,6 +172,19 @@ skill_one_item_flow() {
   report "$name" "one-item flow"
 }
 skill_one_item_flow
+
+skill_closed_line_actor() {
+  local name=skill-closed-line-actor f text
+  for f in "$root"/skills/issue-comments/SKILL.md "$root"/skills/issue-comments/references/output.md "$root"/README.md; do
+    text=$(tr '\n' ' ' <"$f" | tr -s ' ')
+    [[ $text == *'brackets is who closed it'* ]] \
+      || problems+=("${f#$root/}: does not say whose name is who closed the issue")
+    [[ $text != *'brackets is who closed it'* || $text == *'the `closed` line'"'"'s brackets is who closed it'* ]] \
+      || problems+=("${f#$root/}: says whose name is who closed it without naming the closed line")
+  done
+  report "$name" "the closed line's actor"
+}
+skill_closed_line_actor
 
 recipes_name_the_repo() {
   local name=recipes-name-the-repo f kind

@@ -150,7 +150,8 @@ project recorded` when the API returned null (closed by hand, or a closer
 GitHub withheld without saying so), or `closing PR, commit or project not
 visible to this token` when GitHub answered that one field with an access
 error: the issue still renders, and only the closer itself is withheld. The
-name in the line's brackets is who closed it, whichever of these follows.
+name in the `closed` line's brackets is who closed it, whichever of these
+follows.
 `--closure` is that answer on its own, the header and the
 `closed`/`reopened`/PR `xref` lines and nothing else:
 
