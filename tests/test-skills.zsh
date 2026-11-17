@@ -198,7 +198,7 @@ skill_closed_line_actor
 skill_prose_wraps() {
   local name=skill-prose-wraps f line
   for f in "$root"/skills/*/SKILL.md "$root"/skills/*/references/*.md; do
-    for line in ${(f)"$(awk '/^ *```/ { c = !c; next } !c && length > 80 && !/^\|/ { print FNR }' "$f")"}; do
+    for line in ${(f)"$(awk '/^ *```/ { c = !c; next } !c && length > 80 && !/^ *\|/ { print FNR }' "$f")"}; do
       problems+=("${f#$root/}:$line: a prose line over 80 characters")
     done
   done
