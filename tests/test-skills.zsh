@@ -44,8 +44,8 @@
 #                          run's, its Summary quotes the run's loss range and
 #                          one-comment and read-all costs, and its Method
 #                          names the Task 4 flow that adds recipes.md
-#   benchmarks-closer-wording BENCHMARKS.md quotes the closed line's
-#                          null-closer suffix as the script prints it today
+#   benchmarks-closer-wording BENCHMARKS.md says the closed line now
+#                          prints the null-closer suffix the script prints
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -369,8 +369,8 @@ benchmarks_closer_wording() {
   suffix=$(sed -n 's/.*elif \$c == null then ", \([^"]*\)".*/\1/p' "$root/gh-comments")
   [[ -n $suffix ]] || problems+=("gh-comments: no null-closer suffix found in r_closer")
   text=$(tr '\n' ' ' <"$root/BENCHMARKS.md" | tr -s ' ')
-  [[ -z $suffix || $text == *"\`$suffix\`"* ]] \
-    || problems+=("BENCHMARKS.md: does not quote the null-closer suffix the script prints ($suffix)")
+  [[ -z $suffix || $text == *"it now says \`$suffix\`"* ]] \
+    || problems+=("BENCHMARKS.md: does not say the closed line now says the null-closer suffix the script prints ($suffix)")
   report "$name" "the null-closer wording"
 }
 benchmarks_closer_wording
