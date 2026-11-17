@@ -121,7 +121,8 @@ Flags:
   --closure                     Why it was closed, and by what: the header
                                 line, then every closed / reopened event with
                                 what closed it (a PR, a commit, "a project",
-                                "no closer recorded", or "closer not visible
+                                "no closing PR, commit or project recorded",
+                                or "closing PR, commit or project not visible
                                 to this token") and every
                                 cross-referenced PR with its state. No body,
                                 no comments. Refused on an issue that was
@@ -716,11 +717,11 @@ target_state() {
 # the payload has no closer field at all. Every page is read, since a close
 # can sit on any of them. What the caller does with it: refuse a closer type
 # the renderer does not know (every member of the `Closer` union is handled
-# today; this is for one GitHub adds), rather than render it as "no closer
-# recorded"; refuse a payload captured before the closer was fetched, since
-# "no closer recorded" is a claim about the API's answer and that payload
-# never asked; and refuse --closure on an issue that was never closed, which
-# has nothing to show.
+# today; this is for one GitHub adds), rather than render it as "no closing
+# PR, commit or project recorded"; refuse a payload captured before the
+# closer was fetched, since "no closing PR, commit or project recorded" is a
+# claim about the API's answer and that payload never asked; and refuse
+# --closure on an issue that was never closed, which has nothing to show.
 closer_types() {
   jq -r '(.data.repository // {}) | (.issueOrPullRequest // .issue // {})
          | (.timelineItems.nodes // [])[] | select(.__typename == "ClosedEvent")
@@ -742,9 +743,9 @@ CLOSER_DENIED_JQ='(.type == "FORBIDDEN" and ((.path // []) as $p | ($p | index("
 # such a refusal. A closer the token cannot see comes back that way, as the
 # node with a null closer and the entry, and gh then exits non-zero although
 # the issue itself was answered. The render goes on, with that closed line
-# saying the closer is not visible (never "no closer recorded", which is the
-# API's null). Any other entry, or one beside such a refusal, is the hard
-# failure.
+# saying the closer is not visible (never "no closing PR, commit or project
+# recorded", which is the API's null). Any other entry, or one beside such a
+# refusal, is the hard failure.
 closer_errors_only() {
   jq -es '[.[] | .errors[]?] | length > 0 and all(.[]; '"$CLOSER_DENIED_JQ"')' "$1" >/dev/null 2>&1
 }
@@ -1233,8 +1234,8 @@ def r_xref($repo):
 # last branch is unreachable belt.
 def r_closer($repo):
   (.closer // null) as $c
-  | if (.closerHidden // false) then ", closer not visible to this token"
-    elif $c == null then ", no closer recorded"
+  | if (.closerHidden // false) then ", closing PR, commit or project not visible to this token"
+    elif $c == null then ", no closing PR, commit or project recorded"
     elif $c.__typename == "PullRequest" then
       " by \($c | refnum($repo)) PR \($c.state // "?")" + ($c | quoted_title)
     elif $c.__typename == "Commit" then

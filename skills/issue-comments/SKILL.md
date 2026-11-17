@@ -50,8 +50,9 @@ renames) that `gh issue view` does not.
 
 3. **Before concluding:** a `… [+N chars]` preview is a cut, never a
    summary. The `closed` line is the record of what closed it; an `xref`
-   marked `(closes)` is only a PR's claim. `no closer recorded` means the
-   API returned null, never "closed by hand" on its own.
+   marked `(closes)` is only a PR's claim. The name in its brackets is who
+   closed it, whatever follows. `no closing PR, commit or project recorded`
+   means the API returned null, never "closed by hand" on its own.
 
 ## Load when needed
 

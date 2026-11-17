@@ -64,9 +64,10 @@
 #                 live fetch refuses, a capture cut short with no error
 #                 included (fixtures-errors-refused)
 #   issue-closer-unknown  closer is an invented `Closer` member the query
-#                 does not select: refused by name, never "no closer
-#                 recorded" (non-golden); so is a payload whose closed event
-#                 has no closer field at all, generated from issue-closed
+#                 does not select: refused by name, never "no closing
+#                 PR, commit or project recorded" (non-golden); so is a
+#                 payload whose closed event has no closer field at all,
+#                 generated from issue-closed
 #   The other closed fixtures (issue-basic, issue-closed, issue-bot-closed,
 #   issue-hidden) carry `closer: null`, the shape the API returns when it
 #   recorded none, and their closed lines say so.
@@ -463,8 +464,9 @@ closure_no_event() {
 }
 closure_no_event
 
-# A closer the query does not select would otherwise read as "no closer
-# recorded", which is the one claim the line must never make by accident.
+# A closer the query does not select would otherwise read as "no closing
+# PR, commit or project recorded", which is the one claim the line must
+# never make by accident.
 # Every view refuses it, since every view prints the closed line.
 refuse closer-type-unselected "#47 was closed by a FutureCloser" \
   47 --fixtures "$fx/issue-closer-unknown.tl.json"
@@ -514,7 +516,7 @@ closer_absent() {
     out=$(zsh "$script" 5 ${=view} --fixtures "$tmp/nocloser.tl.json" 2>&1) || rc=$?
     (( rc == 1 )) || problems+=("exit $rc (want 1) with ${view:-the default view}")
     [[ "$out" == *"has no closer field"* ]] || problems+=("output lacks the no-closer-field refusal with ${view:-the default view}")
-    [[ "$out" != *"no closer recorded"* ]] || problems+=("an unfetched closer was reported as recorded-none with ${view:-the default view}")
+    [[ "$out" != *"no closing PR, commit or project recorded"* ]] || problems+=("an unfetched closer was reported as recorded-none with ${view:-the default view}")
   done
   report "$name" "refusals" $rc "$out"
   rm -rf "$tmp"
@@ -528,7 +530,7 @@ closer_absent
 # runs the gate on such a page; --fixtures must answer the same way, in every
 # view: a hidden closer with more pages behind it is a cut timeline, and an
 # error at the closer that is not an access refusal must never render as
-# `no closer recorded`.
+# `no closing PR, commit or project recorded`.
 fixtures_errors() {
   local name=fixtures-errors-refused tmp out view spec
   local -i rc=0
@@ -576,7 +578,7 @@ fixtures_errors() {
       rc=0
       out=$(zsh "$script" ${num[$spec]} ${=view} --fixtures "$tmp/$spec.tl.json" 2>&1) || rc=$?
       (( rc == 1 )) || problems+=("$spec: exit $rc (want 1) with ${view:-the default view}")
-      [[ "$out" != *"no closer recorded"* ]] || problems+=("$spec: a failed closer lookup rendered as recorded-none with ${view:-the default view}")
+      [[ "$out" != *"no closing PR, commit or project recorded"* ]] || problems+=("$spec: a failed closer lookup rendered as recorded-none with ${view:-the default view}")
       [[ "$out" != "issue #"* ]] || problems+=("$spec: rendered with ${view:-the default view}")
     done
     case $spec in
@@ -797,8 +799,8 @@ gh_reset
 gh_case closer-hidden 49 --toc
 (( gh_rc == 0 )) || problems+=("exit $gh_rc (want 0)")
 [[ "$gh_out" == "issue #49 "* ]] || problems+=("the issue did not render")
-[[ "$gh_out" == *"closer not visible to this token"* ]] || problems+=("the closed line does not say the closer is not visible")
-[[ "$gh_out" != *"no closer recorded"* ]] || problems+=("a hidden closer was reported as recorded-none")
+[[ "$gh_out" == *"closing PR, commit or project not visible to this token"* ]] || problems+=("the closed line does not say the closer is not visible")
+[[ "$gh_out" != *"no closing PR, commit or project recorded"* ]] || problems+=("a hidden closer was reported as recorded-none")
 [[ "$gh_out" != *"gh error:"* ]] || problems+=("the fetch was reported as failed")
 report gh-closer-hidden-renders "stubbed gh" $gh_rc "$gh_out"
 
@@ -836,7 +838,7 @@ for spec in closer-transient closer-deep closer-mixed closer-deeper closer-notfo
   (( gh_rc == 1 )) || problems+=("exit $gh_rc (want 1)")
   [[ "$gh_out" == *"gh error:"* ]] || problems+=("output lacks the gh error diagnosis")
   [[ "$gh_out" != "issue #"* ]] || problems+=("rendered through an error the tolerance must not cover")
-  [[ "$gh_out" != *"closer not visible"* ]] || problems+=("blamed the token for an error that is not an access refusal at the closer")
+  [[ "$gh_out" != *"not visible to this token"* ]] || problems+=("blamed the token for an error that is not an access refusal at the closer")
   report "gh-$spec-still-fails" "stubbed gh" $gh_rc "$gh_out"
 done
 

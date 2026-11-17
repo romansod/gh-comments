@@ -18,4 +18,4 @@ xref [alice 2026-09-12 08:40] #60 issue OPEN "umbrella: CI flakes"
 comment [carol 2026-09-15 09:00]
   Root cause was the shared fixture; fixed in the umbrella work.
 
-closed [alice 2026-09-15 09:05] as completed, no closer recorded
+closed [alice 2026-09-15 09:05] as completed, no closing PR, commit or project recorded
