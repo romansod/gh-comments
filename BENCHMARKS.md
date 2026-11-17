@@ -32,12 +32,13 @@ timings and a per-output delta against the 2026-10-22 run, is
   line with what closed the issue, and the PR cross-references, in 58 to
   405 tokens. Only GraphQL's `closer` field records the closer, and
   `gh-comments` now reads it: on cli/cli#13898 the closed line names
-  #13927, and on cli/cli#14411 that run's said `no closer recorded` between
-  the fix and its revert (it now says `no closing PR, commit or project
-  recorded`). `gh issue view --json closedByPullRequestsReferences` is
-  cheaper still but names no PR when an issue was closed by hand, and the
-  full REST timeline costs 23,000 to 44,000 tokens and cannot name the closer
-  at all: its `closed` event carries no PR.
+  #13927, and on cli/cli#14411 that run's closed line said `no closer
+  recorded` between the fix and its revert (it now says `no closing PR,
+  commit or project recorded`). `gh issue view --json
+  closedByPullRequestsReferences` is cheaper still but names no PR when an
+  issue was closed by hand, and the full REST timeline costs 23,000 to
+  44,000 tokens and cannot name the closer at all: its `closed` event
+  carries no PR.
 - **Where it does not pay.** On small discussions the plain `gh` command is
   still cheaper once the skill's own instructions are counted, but by much
   less. Trimming each SKILL.md to about 1,000 tokens (from 2,074 and 1,804)
