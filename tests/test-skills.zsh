@@ -177,11 +177,13 @@ skill_one_item_flow
 
 skill_closed_line_actor() {
   local name=skill-closed-line-actor f text
+  local -i said named
   for f in "$root"/skills/issue-comments/SKILL.md "$root"/skills/issue-comments/references/output.md "$root"/README.md; do
     text=$(tr '\n' ' ' <"$f" | tr -s ' ')
-    [[ $text == *'brackets is who closed it'* ]] \
-      || problems+=("${f#$root/}: does not say whose name is who closed the issue")
-    [[ $text != *'brackets is who closed it'* || $text == *'the `closed` line'"'"'s brackets is who closed it'* ]] \
+    said=$(print -r -- "$text" | grep -o 'brackets is who closed it' | wc -l)
+    named=$(print -r -- "$text" | grep -o 'the `closed` line'"'"'s brackets is who closed it' | wc -l)
+    (( said > 0 )) || problems+=("${f#$root/}: does not say whose name is who closed the issue")
+    (( said == named )) \
       || problems+=("${f#$root/}: says whose name is who closed it without naming the closed line")
   done
   report "$name" "the closed line's actor"
