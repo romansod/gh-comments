@@ -45,7 +45,10 @@
 #                          one-comment and read-all costs, and its Method
 #                          names the Task 4 flow that adds recipes.md
 #   benchmarks-closer-wording BENCHMARKS.md says the closed line now
-#                          prints the null-closer suffix the script prints
+#                          prints the null-closer suffix the script prints,
+#                          and Results, which quotes the run's notes, says
+#                          they show the output as it was when the run was
+#                          filed
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -365,12 +368,15 @@ benchmarks_prose_match_run() {
 benchmarks_prose_match_run
 
 benchmarks_closer_wording() {
-  local name=benchmarks-closer-wording suffix text
+  local name=benchmarks-closer-wording suffix text results
   suffix=$(sed -n 's/.*elif \$c == null then ", \([^"]*\)".*/\1/p' "$root/gh-comments")
   [[ -n $suffix ]] || problems+=("gh-comments: no null-closer suffix found in r_closer")
   text=$(tr '\n' ' ' <"$root/BENCHMARKS.md" | tr -s ' ')
   [[ -z $suffix || $text == *"it now says \`$suffix\`"* ]] \
     || problems+=("BENCHMARKS.md: does not say the closed line now says the null-closer suffix the script prints ($suffix)")
+  results=$(awk '/^## Results/ { p = 1; next } /^## / { p = 0 } p' "$root/BENCHMARKS.md" | tr '\n' ' ' | tr -s ' ')
+  [[ -z $suffix || $results != *'`no closer recorded`'* || $results == *"as it was when the run was filed"*"\`$suffix\`"* ]] \
+    || problems+=("BENCHMARKS.md: Results quotes the old null-closer suffix without saying it quotes the run's output")
   report "$name" "the null-closer wording"
 }
 benchmarks_closer_wording

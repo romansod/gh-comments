@@ -87,6 +87,11 @@ The targets are labelled by the shape of their discussion:
 
 ## Results
 
+The tables and notes below are the run's as filed, so they quote
+`gh-comments`' output as it was when the run was filed. The closed line's
+`no closer recorded` in them now reads `no closing PR, commit or project
+recorded`.
+
 ### Fixed costs of the skills
 
 | Item | Paid | Bytes | Tokens |
