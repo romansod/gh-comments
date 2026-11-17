@@ -375,7 +375,7 @@ benchmarks_closer_wording() {
   [[ -z $suffix || $text == *"it now says \`$suffix\`"* ]] \
     || problems+=("BENCHMARKS.md: does not say the closed line now says the null-closer suffix the script prints ($suffix)")
   results=$(awk '/^## Results/ { p = 1; next } /^## / { p = 0 } p' "$root/BENCHMARKS.md" | tr '\n' ' ' | tr -s ' ')
-  [[ -z $suffix || $results != *'`no closer recorded`'* || $results == *"as it was when the run was filed"*"\`$suffix\`"* ]] \
+  [[ -z $suffix || $results != *'`no closer recorded`'* || $results == *"as it was when the run was filed"*"now reads \`$suffix\`"* ]] \
     || problems+=("BENCHMARKS.md: Results quotes the old null-closer suffix without saying it quotes the run's output")
   report "$name" "the null-closer wording"
 }
