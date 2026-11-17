@@ -19,6 +19,8 @@
 #   skill-one-item-flow    step 1 of each SKILL.md names --toc --only, the
 #                          one-item TOC that analyze.py prices, and the
 #                          question table names --item
+#   skill-prose-wraps      no prose line of a skill file (outside code
+#                          fences and tables) is over 80 characters
 #   skill-closed-line-actor every doc that says whose name is who closed
 #                          an issue names the `closed` line's brackets, so
 #                          the name cannot be read as an xref line's
@@ -192,6 +194,17 @@ skill_closed_line_actor() {
   report "$name" "the closed line's actor"
 }
 skill_closed_line_actor
+
+skill_prose_wraps() {
+  local name=skill-prose-wraps f line
+  for f in "$root"/skills/*/SKILL.md "$root"/skills/*/references/*.md; do
+    for line in ${(f)"$(awk '/^ *```/ { c = !c; next } !c && length > 80 && !/^\|/ { print FNR }' "$f")"}; do
+      problems+=("${f#$root/}:$line: a prose line over 80 characters")
+    done
+  done
+  report "$name" "skill prose wraps"
+}
+skill_prose_wraps
 
 recipes_name_the_repo() {
   local name=recipes-name-the-repo f kind
