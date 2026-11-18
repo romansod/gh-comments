@@ -166,7 +166,7 @@ closed [BagToad 2026-07-23 02:20] as completed by #13927 PR MERGED "docs(project
 ## How it compares
 
 Measured in exact Claude tokens on the same PR, cli/cli#14104, in the
-2026-11-03 benchmark run:
+2026-11-18 benchmark run:
 
 | Approach | Read the whole discussion | Which threads are still open |
 |---|--:|--:|
