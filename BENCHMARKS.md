@@ -6,17 +6,16 @@ How many tokens it costs an agent to read a GitHub discussion with
 is an exact Claude token count of what the command printed, so it is what an
 agent actually pays to read the output.
 
-Run 2026-11-03 against `gh-comments` at the commit that trimmed both
-SKILL.md files (#7), which carries every change since v1.0.0: the closer and
-`--closure` (#5), hidden reviews (#9), and `--only`/`--item` with the thread
-opener on each thread's `--toc` line (#6). The targets are nine public PRs
+Run 2026-11-18 against `gh-comments` 1.1.0, which carries every change
+since v1.0.0: the closer and `--closure` (#5), hidden reviews (#9),
+`--only`/`--item` with the thread opener on each thread's `--toc` line (#6),
+both SKILL.md files trimmed (#7), and a closed line that names what is
+missing when no closer is recorded (#12). The targets are nine public PRs
 and issues in [cli/cli](https://github.com/cli/cli), and tokens were counted
-with `claude-opus-5-5`. The skill files were re-measured after the review
-fixes that followed changed them, so their fixed costs are the branch's
-final ones; every other output is as captured. The harness, the targets and the raw run are in
+with `claude-opus-5-5`. The harness, the targets and the raw run are in
 [`bench/`](bench/README.md); the full generated report, with a heatmap,
-timings and a per-output delta against the 2026-10-22 run, is
-[`bench/runs/2026-11-03/tables.md`](bench/runs/2026-11-03/tables.md).
+timings and a per-output delta against the 2026-11-03 run, is
+[`bench/runs/2026-11-18/tables.md`](bench/runs/2026-11-18/tables.md).
 
 ## Summary
 
@@ -29,22 +28,21 @@ timings and a per-output delta against the 2026-10-22 run, is
   REST review comments to `gh pr view` costs 68,324 tokens, the raw REST reads
   79,297, and both still lack the resolved state.
 - **Why an issue closed.** `--closure` prints the header, the `closed`
-  line with what closed the issue, and the PR cross-references, in 58 to
+  line with what closed the issue, and the PR cross-references, in 125 to
   405 tokens. Only GraphQL's `closer` field records the closer, and
   `gh-comments` now reads it: on cli/cli#13898 the closed line names
-  #13927, and on cli/cli#14411 that run's closed line said `no closer
-  recorded` between the fix and its revert (it now says `no closing PR,
-  commit or project recorded`). `gh issue view --json
+  #13927, and on cli/cli#14411 it says `no closing PR, commit or project
+  recorded` between the fix and its revert. `gh issue view --json
   closedByPullRequestsReferences` is cheaper still but names no PR when an
-  issue was closed by hand, and the full REST timeline costs 23,000 to
-  44,000 tokens and cannot name the closer at all: its `closed` event
+  issue was closed by hand, and the full REST timeline costs 30,000 to
+  49,000 tokens and cannot name the closer at all: its `closed` event
   carries no PR.
 - **Where it does not pay.** On small discussions the plain `gh` command is
   still cheaper once the skill's own instructions are counted, but by much
   less. Trimming each SKILL.md to about 1,000 tokens (from 2,074 and 1,804)
   and the `--only`/`--item` flow cut the four losses from 1,481–2,773 tokens
-  to 204–1,351. Reading one top-level comment on cli/cli#13946 now costs
-  1,369 tokens with `gh pr view --comments` and 1,573 through the skill,
+  to 240–1,521. Reading one top-level comment on cli/cli#13946 now costs
+  1,333 tokens with `gh pr view --comments` and 1,573 through the skill,
   down from 4,106; reading all of cli/cli#14141 costs 732 with `gh pr view`
   and 1,871 through the skill. The plugin's two skill descriptions also cost
   530 tokens in every session, whether or not they are used.
@@ -63,7 +61,7 @@ Every output is also graded by hand: ✓ answers the task completely, ◐
 answers part of it, ✗ is wrong or missing, and – is not an answer by itself,
 such as a table of contents. A cheap answer that is wrong is not a saving, so
 the grade matters as much as the count. The grades and their reasons are in
-the run's [`grades.json`](bench/runs/2026-11-03/grades.json).
+the run's [`grades.json`](bench/runs/2026-11-18/grades.json).
 
 The skill rows add the cost of loading the skill. A Claude Code session pays
 for both skill descriptions every time, and invoking a skill adds its
@@ -88,11 +86,6 @@ The targets are labelled by the shape of their discussion:
 
 ## Results
 
-The tables and notes below are the run's as filed, so they quote
-`gh-comments`' output as it was when the run was filed. The closed line's
-`no closer recorded` in them now reads `no closing PR, commit or project
-recorded`.
-
 ### Fixed costs of the skills
 
 | Item | Paid | Bytes | Tokens |
@@ -100,13 +93,13 @@ recorded`.
 | `pr-comments` description | every session, used or not | 752 | 278 |
 | `issue-comments` description | every session, used or not | 676 | 252 |
 | `pr-comments` SKILL.md | each invocation | 2,834 | 1,096 |
-| `issue-comments` SKILL.md | each invocation | 2,671 | 1,007 |
+| `issue-comments` SKILL.md | each invocation | 2,777 | 1,043 |
 | `pr-comments` references/flags.md | for a flag beyond the skill's table | 2,825 | 1,017 |
 | `issue-comments` references/flags.md | for a flag beyond the skill's table | 1,785 | 675 |
 | `pr-comments` references/recipes.md | for a dump read in slices, or a finding to re-check | 1,408 | 641 |
 | `issue-comments` references/recipes.md | for a dump read in slices, or before acting | 1,310 | 567 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,537 | 1,561 |
-| `issue-comments` references/output.md | when a marker needs interpreting | 3,896 | 1,394 |
+| `issue-comments` references/output.md | when a marker needs interpreting | 4,058 | 1,448 |
 
 ### Task 1 — read a PR's whole discussion
 
@@ -114,12 +107,12 @@ Tokens per approach; ✓ complete, ◐ partial, ✗ wrong or missing, – not an
 
 | Approach | E1 | E2 | R1 | R2 | O1 |
 |---|--:|--:|--:|--:|--:|
-| `gh pr view --comments` | 0 ✗ | 0 ✗ | 1,369 ✗ | 1,024 ✗ | 6,105 ✗ |
-| `gh pr view` + `gh pr view --comments` | 277 ✓ | 732 ✓ | 3,439 ✗ | 1,584 ✗ | 7,941 ✗ |
-| … + REST `pulls/N/comments` | 280 ✓ | 735 ✓ | 44,232 ◐ | 6,669 ◐ | 68,324 ◐ |
-| REST comments + reviews + inline (raw JSON) | 9 ✗ | 9 ✗ | 53,656 ◐ | 12,146 ◐ | 79,297 ◐ |
-| **`gh-comments`** | 245 ✓ | 622 ✓ | 8,191 ✓ | 1,153 ✓ | 8,502 ✓ |
-| **`gh-comments --toc`** (orientation only) | 161 – | 153 – | 1,941 – | 511 – | 2,387 – |
+| `gh pr view --comments` | 0 ✗ | 0 ✗ | 1,333 ✗ | 1,024 ✗ | 6,105 ✗ |
+| `gh pr view` + `gh pr view --comments` | 277 ✓ | 732 ✓ | 3,393 ✗ | 1,584 ✗ | 7,941 ✗ |
+| … + REST `pulls/N/comments` | 280 ✓ | 735 ✓ | 44,186 ◐ | 6,669 ◐ | 68,324 ◐ |
+| REST comments + reviews + inline (raw JSON) | 9 ✗ | 9 ✗ | 52,929 ◐ | 12,146 ◐ | 79,297 ◐ |
+| **`gh-comments`** | 245 ✓ | 622 ✓ | 8,147 ✓ | 1,153 ✓ | 8,502 ✓ |
+| **`gh-comments --toc`** (orientation only) | 161 – | 153 – | 1,899 – | 511 – | 2,387 – |
 
 ```
 cli#14104 — read everything
@@ -137,11 +130,11 @@ REST review comments carry no resolution field, so REST cannot answer this at an
 
 | Approach | R1 | R2 | O1 |
 |---|--:|--:|--:|
-| `gh pr view --comments` | 1,369 ✗ | 1,024 ✗ | 6,105 ✗ |
+| `gh pr view --comments` | 1,333 ✗ | 1,024 ✗ | 6,105 ✗ |
 | REST `pulls/N/comments` | 40,793 ✗ | 5,085 ✗ | 60,383 ✗ |
 | hand-written GraphQL (metadata) | 781 ✓ | 226 ✓ | 930 ✓ |
 | **`gh-comments --toc --unresolved`** | 85 ✓ | 94 ✓ | 614 ✓ |
-| **`gh-comments --toc`** | 1,941 ✓ | 511 ✓ | 2,387 ✓ |
+| **`gh-comments --toc`** | 1,899 ✓ | 511 ✓ | 2,387 ✓ |
 
 ```
 cli#14104 — which threads are open
@@ -169,10 +162,10 @@ The skill's documented flow for one item needs no dump: a TOC narrowed to the it
 
 | Target | `gh … view --comments` | naive complete | `gh-comments` full | TOC + slice | + SKILL.md | **`--only` + `--item`** | + SKILL.md | expert list → fetch | payload |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| cli#13946 top-level comment | 1,369 ✓ | 42,162 | 8,191 | 2,288 | 4,025 | **477** | 1,573 | 372 | 347 |
-| cli#13946 inline thread | 1,369 ✗ | 42,162 | 8,191 | 2,123 | 3,860 | **977** | 2,073 | 816 | 182 |
+| cli#13946 top-level comment | 1,333 ✓ | 42,126 | 8,147 | 2,246 | 3,983 | **477** | 1,573 | 372 | 347 |
+| cli#13946 inline thread | 1,333 ✗ | 42,126 | 8,147 | 2,081 | 3,818 | **977** | 2,073 | 816 | 182 |
 | cli#14104 open thread | 6,105 ✗ | 66,488 | 8,502 | 2,721 | 4,458 | **1,249** | 2,345 | 1,104 | 334 |
-| cli#14483 last comment | 772 ✓ | 772 | 907 | 451 | 2,025 | **182** | 1,189 | 158 | 37 |
+| cli#14483 last comment | 772 ✓ | 772 | 975 | 519 | 2,129 | **182** | 1,225 | 158 | 37 |
 
 ### Task 5 — address the most recent review
 
@@ -180,10 +173,10 @@ On `R2` and `O1` the most recent review is an approval with a short body. `--sin
 
 | Approach | R1 | R2 | O1 | E1 | E2 |
 |---|--:|--:|--:|--:|--:|
-| `gh pr view --comments` | 1,369 ✓ | 1,024 ✓ | 6,105 ✗ | 0 ✗ | 0 ✗ |
-| `gh-comments` full | 8,191 ✓ | 1,153 ✓ | 8,502 ✓ | 245 ✓ | 622 ✓ |
-| **`gh-comments --since-last-review`** | 2,108 ✓ | 588 ✓ | 1,576 ✓ | 180 ✓ | 172 ✓ |
-| **`gh-comments --latest`** | 2,108 ✓ | 553 ✓ | 1,576 ✓ | 180 ✓ | 172 ✓ |
+| `gh pr view --comments` | 1,333 ✓ | 1,024 ✓ | 6,105 ✗ | 0 ✗ | 0 ✗ |
+| `gh-comments` full | 8,147 ✓ | 1,153 ✓ | 8,502 ✓ | 245 ✓ | 622 ✓ |
+| **`gh-comments --since-last-review`** | 2,105 ✓ | 588 ✓ | 1,576 ✓ | 180 ✓ | 172 ✓ |
+| **`gh-comments --latest`** | 2,105 ✓ | 553 ✓ | 1,576 ✓ | 180 ✓ | 172 ✓ |
 
 ### Task 6 — read an issue in full
 
@@ -193,21 +186,21 @@ On `R2` and `O1` the most recent review is an approval with a short body. `--sin
 |---|--:|--:|--:|--:|
 | `gh issue view` + `gh issue view --comments` | 1,384 ✓ | 622 ◐ | 1,146 ◐ | 1,133 ◐ |
 | REST issue + comments (raw JSON) | 5,441 ✓ | 1,954 ◐ | 5,840 ◐ | 4,741 ◐ |
-| REST issue + timeline (raw JSON) | 24,555 ✓ | 8,354 ✓ | 46,379 ✓ | 46,413 ✓ |
-| **`gh-comments`** | 907 ✓ | 747 ✓ | 868 ✓ | 870 ✓ |
-| **`gh-comments --toc`** (orientation only) | 414 – | 279 – | 564 – | 607 – |
+| REST issue + timeline (raw JSON) | 31,571 ✓ | 8,354 ✓ | 46,421 ✓ | 52,043 ✓ |
+| **`gh-comments`** | 975 ✓ | 747 ✓ | 868 ✓ | 937 ✓ |
+| **`gh-comments --toc`** (orientation only) | 482 – | 279 – | 564 – | 674 – |
 
 ### Task 7 — why was the issue closed, and by what
 
-`closedByPullRequestsReferences` is filled only when a PR's closing keyword closed the issue. `I4` was closed by hand after its fix merged, so the cheap JSON names no PR, and only the timeline shows that the fix was reverted after the issue closed. `I3` lists the PR that closed it but not the earlier PR whose review the issue came out of. `I1` was closed by its author after a comment explaining the cause, which only the comments carry. `gh-comments` now reads the closed event's `closer`, which only GraphQL records: on `I3` the closed line names #13927 as the closer beside the two PR xrefs, and on `I4` it says `no closer recorded` between the fix and its revert, which is the answer, so both the TOC and `--closure` are ✓ there. The REST timeline still cannot tell the two apart, hence ◐. `--closure` prints the header, the closed/reopened lines and the PR xrefs and nothing else; on `I1` that says no PR closed it but not why, which only the comments carry, hence ◐ there against the TOC's ✓.
+`closedByPullRequestsReferences` is filled only when a PR's closing keyword closed the issue. `I4` was closed by hand after its fix merged, so the cheap JSON names no PR, and only the timeline shows that the fix was reverted after the issue closed. `I3` lists the PR that closed it but not the earlier PR whose review the issue came out of. `I1` was closed by its author after a comment explaining the cause, which only the comments carry. `gh-comments` now reads the closed event's `closer`, which only GraphQL records: on `I3` the closed line names #13927 as the closer beside the two PR xrefs, and on `I4` it says `no closing PR, commit or project recorded` between the fix and its revert, which is the answer, so both the TOC and `--closure` are ✓ there. The REST timeline still cannot tell the two apart, hence ◐. `--closure` prints the header, the closed/reopened lines and the PR xrefs and nothing else; on `I1` that says no PR closed it but not why, which only the comments carry, hence ◐ there against the TOC's ✓.
 
 | Approach | I1 | I3 | I4 |
 |---|--:|--:|--:|
 | `gh issue view` | 612 ✗ | 475 ✗ | 434 ✗ |
 | `gh issue view --json state,stateReason,closedAt,closedByPullRequestsReferences` | 63 ✗ | 211 ◐ | 63 ✗ |
-| REST timeline (raw JSON) | 22,633 ✓ | 44,277 ◐ | 43,789 ◐ |
-| **`gh-comments --toc`** | 414 ✓ | 564 ✓ | 607 ✓ |
-| **`gh-comments --closure`** | 58 ◐ | 405 ✓ | 314 ✓ |
+| REST timeline (raw JSON) | 29,649 ✓ | 44,319 ◐ | 49,419 ◐ |
+| **`gh-comments --toc`** | 482 ✓ | 564 ✓ | 674 ✓ |
+| **`gh-comments --closure`** | 125 ◐ | 405 ✓ | 379 ✓ |
 
 ### The multiplier, revisited
 
@@ -215,36 +208,36 @@ How many times more tokens the alternative costs than the script's narrowest cor
 
 ```
 open threads, cli#13946: REST inline vs --toc --unresolved                 │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓»  479.9×  REST can't answer
-why closed, cli#14411: REST timeline vs --closure                          │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓    139.5×  REST names no closer (◐); --closure says none was recorded (✓)
+why closed, cli#14411: REST timeline vs --closure                          │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓    130.4×  REST names no closer (◐); --closure says none was recorded (✓)
 open threads, cli#14104: REST inline vs --toc --unresolved                 │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓       98.3×  REST can't answer
-one inline thread, cli#13946: naive vs TOC+slice                           │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓               19.9×  
+one inline thread, cli#13946: naive vs TOC+slice                           │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓               20.2×  
 read all, cli#14104: REST trio vs full                                     │▓▓▓▓▓▓▓▓▓▓▓▓                    9.3×  
 read all, cli#13946: gh view + REST inline vs full                         │▓▓▓▓▓▓▓▓▓                       5.4×  
-one comment, cli#13946: gh pr view --comments vs --only+--item             │▓▓▓▓▓▓                          2.9×  
+one comment, cli#13946: gh pr view --comments vs --only+--item             │▓▓▓▓▓▓                          2.8×  
 open threads, cli#14104: hand GraphQL vs --toc --unresolved                │▓▓                              1.5×  
 read all, cli#14141: gh pr view vs full                                    │▓                               1.2×  
 one comment, cli#14483: expert vs --only+--item                           ░│                                0.9×  
 open bodies, cli#14104: hand GraphQL vs --unresolved                      ░│                                0.8×  --unresolved adds the review body, with 2 prose blockers
 one comment, cli#13946: gh pr view --comments vs TOC+slice              ░░░│                                0.6×  
-one comment, cli#14483: expert vs TOC+slice                           ░░░░░│                                0.4×  the TOC carries 3 xrefs from this repo's own issues
+one comment, cli#14483: expert vs TOC+slice                          ░░░░░░│                                0.3×  the TOC carries 4 xrefs from this repo's own issues and PRs
                                                                0.1         1           10          100  
                                                                ░ alternative cheaper    ▓ script cheaper (log scale)
 ```
 
 ### Break-even: does loading the skill pay for itself?
 
-The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (1,096 for `pr-comments`, 1,007 for `issue-comments`). Against the realistic naive path for the same task, with each one-item task taking the skill's `--toc --only` then `--item` flow:
+The two descriptions cost **530 tokens in every session**, whether or not either skill is used. Invoking a skill then adds its SKILL.md (1,096 for `pr-comments`, 1,043 for `issue-comments`). Against the realistic naive path for the same task, with each one-item task taking the skill's `--toc --only` then `--item` flow:
 
 | Task | naive tokens | skill flow + SKILL.md | net per invocation |
 |---|--:|--:|--:|
 | cli#14104 read all (naive: gh view + REST inline) | 68,324 | 11,985 | saves 56,339 |
 | cli#14104 which threads open (naive: REST inline) | 60,383 | 1,710 | saves 58,673 |
-| cli#13946 read all (naive: gh view + REST inline) | 44,232 | 11,228 | saves 33,004 |
-| cli#13946 one inline thread (naive: gh view --comments + REST inline) | 42,162 | 2,073 | saves 40,089 |
-| cli#13946 one top-level comment (naive: gh pr view --comments) | 1,369 | 1,573 | costs 204 |
+| cli#13946 read all (naive: gh view + REST inline) | 44,186 | 11,142 | saves 33,044 |
+| cli#13946 one inline thread (naive: gh view --comments + REST inline) | 42,126 | 2,073 | saves 40,053 |
+| cli#13946 one top-level comment (naive: gh pr view --comments) | 1,333 | 1,573 | costs 240 |
 | cli#14141 read all (naive: gh pr view) | 732 | 1,871 | costs 1,139 |
-| cli#14411 read all (naive: gh issue view ×2) | 1,133 | 2,484 | costs 1,351 |
-| cli#14483 one comment (naive: gh issue view --comments) | 772 | 1,189 | costs 417 |
+| cli#14411 read all (naive: gh issue view ×2) | 1,133 | 2,654 | costs 1,521 |
+| cli#14483 one comment (naive: gh issue view --comments) | 772 | 1,225 | costs 453 |
 
 ## Caveats
 
@@ -255,12 +248,15 @@ The two descriptions cost **530 tokens in every session**, whether or not either
 - **This repository moved the issue targets.** Since the 2026-10-09 run,
   this repository's own issues and pull requests have linked three of the
   issue targets, which now carry `xref` lines from romansod/gh-comments and
-  romansod/agent-evals (three on cli/cli#14483 and cli/cli#13898, five on
-  cli/cli#14411). The REST timelines embed those issues' full bodies, so
-  they grew again in this run, by about 7,000 tokens each on cli/cli#13898
-  and cli/cli#14411. On cli/cli#13946 a new review arrived after the
-  approval, which moved where `--latest` and `--since-last-review` anchor.
-  The delta table in the run's `tables.md` lists every output that changed.
+  romansod/agent-evals (four on cli/cli#14483, three on cli/cli#13898, six
+  on cli/cli#14411). The REST timelines embed those issues' full bodies, so
+  they grew again in this run, by about 7,000 tokens on cli/cli#14483 and
+  5,600 on cli/cli#14411, and the skill's issue flows grew by about 70
+  tokens each: most of the larger losses on the issue rows of the break-even
+  table are those lines. cli/cli#13946's outputs are about 40 tokens
+  shorter than in the 2026-11-03 run on every approach, so the discussion
+  itself changed. The delta table in the run's `tables.md` lists every
+  output that changed.
 - **One run each.** Timings vary between runs, so the generated report's
   wall-clock section is only indicative. Token counts do not vary for the same
   output.

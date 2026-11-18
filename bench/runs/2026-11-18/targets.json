@@ -1,0 +1,30 @@
+{
+  "prs": [
+    {"label": "E1", "repo": "cli/cli", "number": 6775, "since": "2022-12-22", "name": "cli#6775",
+     "shape": "merged, no comments and no reviews, short description"},
+    {"label": "E2", "repo": "cli/cli", "number": 14141, "since": "2026-08-13", "name": "cli#14141",
+     "shape": "merged, no comments and no reviews, longer description"},
+    {"label": "R1", "repo": "cli/cli", "number": 13946, "since": "2026-07-29", "name": "cli#13946",
+     "shape": "merged, 12 review threads from human reviews, all resolved; one top-level comment"},
+    {"label": "R2", "repo": "cli/cli", "number": 14056, "since": "2026-08-10", "name": "cli#14056",
+     "shape": "merged, a dismissed review and an approval, one human and one bot thread, both resolved; one top-level comment and a bot one"},
+    {"label": "O1", "repo": "cli/cli", "number": 14104, "since": "2026-08-20", "name": "cli#14104",
+     "shape": "merged, 17 review threads, 7 still open, one of them in a bot review"}
+  ],
+  "issues": [
+    {"label": "I1", "repo": "cli/cli", "number": 14483, "name": "cli#14483",
+     "shape": "closed by hand, two comments, no linked PR"},
+    {"label": "I2", "repo": "cli/cli", "number": 13727, "name": "cli#13727",
+     "shape": "closed through a PR, no comments"},
+    {"label": "I3", "repo": "cli/cli", "number": 13898, "name": "cli#13898",
+     "shape": "closed by one PR's closing keyword; another merged PR referenced it too"},
+    {"label": "I4", "repo": "cli/cli", "number": 14411, "name": "cli#14411",
+     "shape": "closed by hand after the fixing PR merged, so nothing records a closing PR"}
+  ],
+  "slices": {
+    "TA": {"from": "R1", "created": "2026-08-04T10:37"},
+    "TB": {"from": "R1", "path": "pkg/cmd/pr/checkout/checkout.go", "line": 197},
+    "TC": {"from": "O1", "path": "api/client.go", "line": 229, "open": true},
+    "TD": {"from": "I1"}
+  }
+}
