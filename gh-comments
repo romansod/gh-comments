@@ -4,7 +4,7 @@ set -euo pipefail
 
 # The release version. .claude-plugin/plugin.json and the release tag carry
 # the same string; `make lint` checks that they agree.
-VERSION=1.0.0
+VERSION=1.1.0
 
 # The name this was invoked as prefixes every diagnostic, so a symlink named
 # r-gh-comments reports as r-gh-comments. `:t` deliberately, not `:A` — `:A`
