@@ -50,7 +50,9 @@
 #                          r_closer prints, and never the pre-#12 ones: the
 #                          null-closer one in BENCHMARKS.md and the
 #                          issue-comments SKILL.md, it and the hidden-closer
-#                          one in output.md and README.md
+#                          one in output.md and README.md; each agent-facing
+#                          doc as many times as it has quotes of that
+#                          ending, so a partial rewording fails
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -381,12 +383,18 @@ benchmarks_prose_match_run() {
 benchmarks_prose_match_run
 
 docs_closer_wording() {
-  local name=docs-closer-wording f text kind s
+  local name=docs-closer-wording f text want kind s q pat rest
+  local -i n count
+  # <kind>=<n>: the doc quotes that ending exactly n times, so a rewording
+  # that updates one copy and leaves another stale falls short; a doc that
+  # gains or loses a quote updates its n. BENCHMARKS.md is held to at least
+  # once (0): one of its quotes is a filed bench run's note, which keeps the
+  # wording that run saw.
   local -A suffix wants=(
-    BENCHMARKS.md null
-    skills/issue-comments/SKILL.md null
-    skills/issue-comments/references/output.md 'null hidden'
-    README.md 'null hidden'
+    BENCHMARKS.md null=0
+    skills/issue-comments/SKILL.md null=1
+    skills/issue-comments/references/output.md 'null=2 hidden=1'
+    README.md 'null=2 hidden=2'
   )
   suffix[null]=$(sed -n 's/.*elif \$c == null then ", \([^"]*\)".*/\1/p' "$root/gh-comments")
   suffix[hidden]=$(sed -n 's/.*(\.closerHidden \/\/ false) then ", \([^"]*\)".*/\1/p' "$root/gh-comments")
@@ -395,12 +403,28 @@ docs_closer_wording() {
   done
   for f in ${(ok)wants}; do
     text=$(tr '\n' ' ' <"$root/$f" | tr -s ' ')
-    # Quoted in backticks or double quotes, with or without the ", " the
-    # script prints before it.
-    for kind in ${=wants[$f]}; do
-      s=${suffix[$kind]}
-      [[ -z $s || $text == *[\`\"]${s}[\`\"]* || $text == *[\`\"]", $s"[\`\"]* ]] \
-        || problems+=("$f: does not quote the $kind-closer suffix the script prints ($s)")
+    for want in ${=wants[$f]}; do
+      kind=${want%=*} n=${want#*=} s=${suffix[$kind]}
+      [[ -n $s ]] || continue
+      # Quoted in backticks or double quotes, with or without the ", " the
+      # script prints before it.
+      count=0
+      for q in '`' '"'; do
+        for pat in "$q$s$q" "$q, $s$q"; do
+          rest=$text
+          while [[ $rest == *"$pat"* ]]; do
+            rest=${rest#*"$pat"}
+            count+=1
+          done
+        done
+      done
+      if (( n == 0 )); then
+        (( count > 0 )) \
+          || problems+=("$f: does not quote the $kind-closer suffix the script prints ($s)")
+      else
+        (( count == n )) \
+          || problems+=("$f: quotes the $kind-closer suffix the script prints $count times, not $n ($s)")
+      fi
     done
     for s in 'no closer recorded' 'closer not visible to this token'; do
       [[ $text != *"$s"* ]] || problems+=("$f: quotes the old suffix ($s)")
