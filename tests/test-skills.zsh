@@ -393,12 +393,12 @@ docs_closer_wording() {
   # <kind>=<n>: the doc quotes that ending exactly n times, so a rewording
   # that updates one copy and leaves another stale falls short; a doc that
   # gains or loses a quote updates its n, and a doc that quotes one ending
-  # only pins the other at 0, so a quote it gains is counted. BENCHMARKS.md is counted without
-  # the lines it copies from the newest filed run's tables.md: those keep
-  # the wording that run saw, and counting them would let one stand in for
-  # the doc's own quote. "gh-comments --help" is the script's own usage
-  # text, which README.md copies: checking the copy alone would let the
-  # source drift.
+  # only pins the other at 0, so a quote it gains is counted. BENCHMARKS.md
+  # is counted without the lines it copies from the newest filed run's
+  # tables.md: those keep the wording that run saw, and counting them
+  # would let one stand in for the doc's own quote. "gh-comments --help"
+  # is the script's own usage text, which README.md copies: checking the
+  # copy alone would let the source drift.
   local -A suffix wants=(
     BENCHMARKS.md 'null=1 hidden=0'
     skills/issue-comments/SKILL.md 'null=1 hidden=0'
