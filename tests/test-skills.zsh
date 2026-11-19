@@ -55,7 +55,8 @@
 #                          that ending, so a partial rewording fails, and
 #                          BENCHMARKS.md without the lines it copies from
 #                          the newest filed run, which keep that run's
-#                          wording
+#                          wording; and every quoted span that starts like
+#                          an ending is one of them
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -386,8 +387,8 @@ benchmarks_prose_match_run() {
 benchmarks_prose_match_run
 
 docs_closer_wording() {
-  local name=docs-closer-wording f text want kind s q pat rest tables
-  local -i n count
+  local name=docs-closer-wording f text want kind s q pat rest tables stem span
+  local -i n count i
   local -a runs
   # <kind>=<n>: the doc quotes that ending exactly n times, so a rewording
   # that updates one copy and leaves another stale falls short; a doc that
@@ -413,6 +414,15 @@ docs_closer_wording() {
   runs=("$root"/bench/runs/*(/N:t))
   tables=$root/bench/runs/${runs[-1]}/tables.md
   [[ -f $tables ]] || problems+=("bench/runs: no tables.md in the newest run (${runs[-1]:-none})")
+  # The endings' shared stem ("closing PR, commit or project "): a quoted
+  # span that starts with it, after an optional "no ", is meant as an
+  # ending, so it must be one r_closer prints. The counts see only the
+  # current wording; this catches a quote left in any other.
+  stem=${suffix[null]#no } s=${suffix[hidden]}
+  for (( i = 1; i <= $#stem; i++ )); do [[ ${stem[i]} == ${s[i]} ]] || break; done
+  stem=${stem[1,i-1]}
+  [[ -n ${suffix[null]} && -n $s && -z $stem ]] \
+    && problems+=("gh-comments: r_closer's two endings share no stem")
   for f in ${(ok)wants}; do
     if [[ $f == 'gh-comments --help' ]]; then
       text=$(zsh "$root/gh-comments" --help | tr '\n' ' ' | tr -s ' ')
@@ -438,6 +448,16 @@ docs_closer_wording() {
       done
       (( count == n )) \
         || problems+=("$f: quotes the $kind-closer suffix the script prints $count times, not $n ($s)")
+    done
+    for q in '`' '"'; do
+      [[ -n $stem ]] || break
+      rest=$text
+      while [[ $rest == *"$q"*"$q"* ]]; do
+        rest=${rest#*"$q"} span=${rest%%"$q"*} rest=${rest#*"$q"}
+        span=${span#, }
+        [[ $span == (no |)"$stem"* && $span != "${suffix[null]}" && $span != "${suffix[hidden]}" ]] \
+          && problems+=("$f: quotes a closed-line ending the script does not print ($span)")
+      done
     done
     for s in 'no closer recorded' 'closer not visible to this token'; do
       [[ $text != *"$s"* ]] || problems+=("$f: quotes the old suffix ($s)")
