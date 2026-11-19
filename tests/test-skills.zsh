@@ -51,9 +51,11 @@
 #                          null-closer one in BENCHMARKS.md and the
 #                          issue-comments SKILL.md, it and the hidden-closer
 #                          one in output.md, README.md and the script's own
-#                          --help; each agent-facing doc as many times as
-#                          it has quotes of that ending, so a partial
-#                          rewording fails
+#                          --help; each as many times as it has quotes of
+#                          that ending, so a partial rewording fails, and
+#                          BENCHMARKS.md without the lines it copies from
+#                          the newest filed run, which keep that run's
+#                          wording
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -384,17 +386,19 @@ benchmarks_prose_match_run() {
 benchmarks_prose_match_run
 
 docs_closer_wording() {
-  local name=docs-closer-wording f text want kind s q pat rest
+  local name=docs-closer-wording f text want kind s q pat rest tables
   local -i n count
+  local -a runs
   # <kind>=<n>: the doc quotes that ending exactly n times, so a rewording
   # that updates one copy and leaves another stale falls short; a doc that
-  # gains or loses a quote updates its n. BENCHMARKS.md is held to at least
-  # once (0): one of its quotes is a filed bench run's note, which keeps the
-  # wording that run saw. "gh-comments --help" is the script's own usage
+  # gains or loses a quote updates its n. BENCHMARKS.md is counted without
+  # the lines it copies from the newest filed run's tables.md: those keep
+  # the wording that run saw, and counting them would let one stand in for
+  # the doc's own quote. "gh-comments --help" is the script's own usage
   # text, which README.md copies: checking the copy alone would let the
   # source drift.
   local -A suffix wants=(
-    BENCHMARKS.md null=0
+    BENCHMARKS.md null=1
     skills/issue-comments/SKILL.md null=1
     skills/issue-comments/references/output.md 'null=2 hidden=1'
     README.md 'null=2 hidden=2'
@@ -405,9 +409,14 @@ docs_closer_wording() {
   for kind in null hidden; do
     [[ -n ${suffix[$kind]} ]] || problems+=("gh-comments: no $kind-closer suffix found in r_closer")
   done
+  runs=("$root"/bench/runs/*(/N:t))
+  tables=$root/bench/runs/${runs[-1]}/tables.md
+  [[ -f $tables ]] || problems+=("bench/runs: no tables.md in the newest run (${runs[-1]:-none})")
   for f in ${(ok)wants}; do
     if [[ $f == 'gh-comments --help' ]]; then
       text=$(zsh "$root/gh-comments" --help | tr '\n' ' ' | tr -s ' ')
+    elif [[ $f == BENCHMARKS.md && -f $tables ]]; then
+      text=$(grep -vxF -f "$tables" "$root/$f" | tr '\n' ' ' | tr -s ' ')
     else
       text=$(tr '\n' ' ' <"$root/$f" | tr -s ' ')
     fi
@@ -426,13 +435,8 @@ docs_closer_wording() {
           done
         done
       done
-      if (( n == 0 )); then
-        (( count > 0 )) \
-          || problems+=("$f: does not quote the $kind-closer suffix the script prints ($s)")
-      else
-        (( count == n )) \
-          || problems+=("$f: quotes the $kind-closer suffix the script prints $count times, not $n ($s)")
-      fi
+      (( count == n )) \
+        || problems+=("$f: quotes the $kind-closer suffix the script prints $count times, not $n ($s)")
     done
     for s in 'no closer recorded' 'closer not visible to this token'; do
       [[ $text != *"$s"* ]] || problems+=("$f: quotes the old suffix ($s)")
