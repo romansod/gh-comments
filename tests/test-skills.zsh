@@ -400,7 +400,7 @@ docs_closer_wording() {
   local -A suffix wants=(
     BENCHMARKS.md null=1
     skills/issue-comments/SKILL.md null=1
-    skills/issue-comments/references/output.md 'null=2 hidden=1'
+    skills/issue-comments/references/output.md 'null=2 hidden=2'
     README.md 'null=2 hidden=2'
     'gh-comments --help' 'null=1 hidden=1'
   )
