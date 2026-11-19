@@ -46,8 +46,11 @@
 #                          run's, its Summary quotes the run's loss range and
 #                          one-comment and read-all costs, and its Method
 #                          names the Task 4 flow that adds recipes.md
-#   benchmarks-closer-wording BENCHMARKS.md quotes the null-closer suffix
-#                          the script prints, and never the old one
+#   docs-closer-wording    the docs quote the closed line's endings that
+#                          r_closer prints, and never the pre-#12 ones: the
+#                          null-closer one in BENCHMARKS.md and the
+#                          issue-comments SKILL.md, it and the hidden-closer
+#                          one in output.md and README.md
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -377,18 +380,35 @@ benchmarks_prose_match_run() {
 }
 benchmarks_prose_match_run
 
-benchmarks_closer_wording() {
-  local name=benchmarks-closer-wording suffix text
-  suffix=$(sed -n 's/.*elif \$c == null then ", \([^"]*\)".*/\1/p' "$root/gh-comments")
-  [[ -n $suffix ]] || problems+=("gh-comments: no null-closer suffix found in r_closer")
-  text=$(tr '\n' ' ' <"$root/BENCHMARKS.md" | tr -s ' ')
-  [[ -z $suffix || $text == *"\`$suffix\`"* ]] \
-    || problems+=("BENCHMARKS.md: does not quote the null-closer suffix the script prints ($suffix)")
-  [[ $text != *'`no closer recorded`'* ]] \
-    || problems+=("BENCHMARKS.md: quotes the old null-closer suffix")
-  report "$name" "the null-closer wording"
+docs_closer_wording() {
+  local name=docs-closer-wording f text kind s
+  local -A suffix wants=(
+    BENCHMARKS.md null
+    skills/issue-comments/SKILL.md null
+    skills/issue-comments/references/output.md 'null hidden'
+    README.md 'null hidden'
+  )
+  suffix[null]=$(sed -n 's/.*elif \$c == null then ", \([^"]*\)".*/\1/p' "$root/gh-comments")
+  suffix[hidden]=$(sed -n 's/.*(\.closerHidden \/\/ false) then ", \([^"]*\)".*/\1/p' "$root/gh-comments")
+  for kind in null hidden; do
+    [[ -n ${suffix[$kind]} ]] || problems+=("gh-comments: no $kind-closer suffix found in r_closer")
+  done
+  for f in ${(ok)wants}; do
+    text=$(tr '\n' ' ' <"$root/$f" | tr -s ' ')
+    # Quoted in backticks or double quotes, with or without the ", " the
+    # script prints before it.
+    for kind in ${=wants[$f]}; do
+      s=${suffix[$kind]}
+      [[ -z $s || $text == *[\`\"]${s}[\`\"]* || $text == *[\`\"]", $s"[\`\"]* ]] \
+        || problems+=("$f: does not quote the $kind-closer suffix the script prints ($s)")
+    done
+    for s in 'no closer recorded' 'closer not visible to this token'; do
+      [[ $text != *"$s"* ]] || problems+=("$f: quotes the old suffix ($s)")
+    done
+  done
+  report "$name" "the closed line's wording"
 }
-benchmarks_closer_wording
+docs_closer_wording
 
 readme_figures_match_run() {
   local name=readme-figures-match-run run readme section id lo hi n
