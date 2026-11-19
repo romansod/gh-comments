@@ -56,7 +56,9 @@
 #                          BENCHMARKS.md without the lines it copies from
 #                          the newest filed run, which keep that run's
 #                          wording; and every quoted span that starts like
-#                          an ending is one of them
+#                          an ending is one of them (a rewording that
+#                          changes the endings' stem adds the old pair to
+#                          the retired list)
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -461,6 +463,9 @@ docs_closer_wording() {
       [[ $span == "${suffix[null]}" || $span == "${suffix[hidden]}" ]] \
         || problems+=("$f: quotes a closed-line ending the script does not print ($span)")
     done
+    # Retired endings. The scan above knows only the current stem, so a
+    # rewording of r_closer that changes the stem appends the two endings
+    # it replaces here, as #12 left its own.
     for s in 'no closer recorded' 'closer not visible to this token'; do
       [[ $text != *"$s"* ]] || problems+=("$f: quotes the old suffix ($s)")
     done
