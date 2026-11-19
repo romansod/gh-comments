@@ -51,10 +51,11 @@ ones change what you should do.
   returned null — an issue closed by hand reads so, and so may one whose
   closer GitHub withheld without saying so — so never turn it into "closed
   by hand", and never infer the closer from an `xref (closes)` line: that is
-  the PR's claim, not the record. `not visible` is the case where GitHub did
-  say so: it answered that one field with an access error for this token (a
-  closer in a repository it cannot read, or a project it cannot see) and the
-  rest of the issue rendered; a token with access would see the closer.
+  the PR's claim, not the record. `closing PR, commit or project not visible
+  to this token` is the case where GitHub did say so: it answered that one
+  field with an access error (a closer in a repository the token cannot
+  read, or a project it cannot see) and the rest of the issue rendered; a
+  token with access would see the closer.
   Under `--closure` those lines, the `reopened` lines and the PR `xref`
   lines are the whole output.
 - `renamed` shows both titles — useful when the scope drifted and the early

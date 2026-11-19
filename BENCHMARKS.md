@@ -99,7 +99,7 @@ The targets are labelled by the shape of their discussion:
 | `pr-comments` references/recipes.md | for a dump read in slices, or a finding to re-check | 1,408 | 641 |
 | `issue-comments` references/recipes.md | for a dump read in slices, or before acting | 1,310 | 567 |
 | `pr-comments` references/output.md | when a marker needs interpreting | 4,537 | 1,561 |
-| `issue-comments` references/output.md | when a marker needs interpreting | 4,058 | 1,448 |
+| `issue-comments` references/output.md | when a marker needs interpreting | 4,096 | 1,460 |
 
 ### Task 1 — read a PR's whole discussion
 

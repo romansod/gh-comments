@@ -46,8 +46,19 @@
 #                          run's, its Summary quotes the run's loss range and
 #                          one-comment and read-all costs, and its Method
 #                          names the Task 4 flow that adds recipes.md
-#   benchmarks-closer-wording BENCHMARKS.md quotes the null-closer suffix
-#                          the script prints, and never the old one
+#   docs-closer-wording    the docs quote the closed line's endings that
+#                          r_closer prints, and never the pre-#12 ones: the
+#                          null-closer one alone in BENCHMARKS.md and the
+#                          issue-comments SKILL.md, it and the hidden-closer
+#                          one in output.md, README.md and the script's own
+#                          --help; each as many times as it has quotes of
+#                          that ending, so a partial rewording fails, and
+#                          BENCHMARKS.md without the lines it copies from
+#                          the newest filed run, which keep that run's
+#                          wording; and every quoted span that starts like
+#                          an ending is one of them (a rewording that
+#                          changes the endings' stem adds the old pair to
+#                          the retired list)
 #   readme-figures-match-run every arrow and summary row of README's
 #                          diagram and every cell of How it compares quote
 #                          the newest run's cli/cli#14104 figures, the
@@ -377,18 +388,91 @@ benchmarks_prose_match_run() {
 }
 benchmarks_prose_match_run
 
-benchmarks_closer_wording() {
-  local name=benchmarks-closer-wording suffix text
-  suffix=$(sed -n 's/.*elif \$c == null then ", \([^"]*\)".*/\1/p' "$root/gh-comments")
-  [[ -n $suffix ]] || problems+=("gh-comments: no null-closer suffix found in r_closer")
-  text=$(tr '\n' ' ' <"$root/BENCHMARKS.md" | tr -s ' ')
-  [[ -z $suffix || $text == *"\`$suffix\`"* ]] \
-    || problems+=("BENCHMARKS.md: does not quote the null-closer suffix the script prints ($suffix)")
-  [[ $text != *'`no closer recorded`'* ]] \
-    || problems+=("BENCHMARKS.md: quotes the old null-closer suffix")
-  report "$name" "the null-closer wording"
+docs_closer_wording() {
+  local name=docs-closer-wording f text want kind s q pat rest tables stem span before
+  local -i n count i
+  local -a runs
+  # <kind>=<n>: the doc quotes that ending exactly n times, so a rewording
+  # that updates one copy and leaves another stale falls short; a doc that
+  # gains or loses a quote updates its n, and a doc that quotes one ending
+  # only pins the other at 0, so a quote it gains is counted. BENCHMARKS.md
+  # is counted without the lines it copies from the newest filed run's
+  # tables.md: those keep the wording that run saw, and counting them
+  # would let one stand in for the doc's own quote. "gh-comments --help"
+  # is the script's own usage text, which README.md copies: checking the
+  # copy alone would let the source drift.
+  local -A suffix wants=(
+    BENCHMARKS.md 'null=1 hidden=0'
+    skills/issue-comments/SKILL.md 'null=1 hidden=0'
+    skills/issue-comments/references/output.md 'null=2 hidden=2'
+    README.md 'null=2 hidden=2'
+    'gh-comments --help' 'null=1 hidden=1'
+  )
+  suffix[null]=$(sed -n 's/.*elif \$c == null then ", \([^"]*\)".*/\1/p' "$root/gh-comments")
+  suffix[hidden]=$(sed -n 's/.*(\.closerHidden \/\/ false) then ", \([^"]*\)".*/\1/p' "$root/gh-comments")
+  for kind in null hidden; do
+    [[ -n ${suffix[$kind]} ]] || problems+=("gh-comments: no $kind-closer suffix found in r_closer")
+  done
+  runs=("$root"/bench/runs/*(/N:t))
+  tables=$root/bench/runs/${runs[-1]}/tables.md
+  [[ -f $tables ]] || problems+=("bench/runs: no tables.md in the newest run (${runs[-1]:-none})")
+  # The endings' shared stem ("closing PR, commit or project "): a quote
+  # that opens on it, after an optional ", " and "no ", is meant as an
+  # ending, so it must be one r_closer prints. The counts see only the
+  # current wording; this catches a quote left in any other. Each quote is
+  # found where the stem occurs, not by pairing quote characters, which a
+  # code fence or a stray inch mark would shift.
+  stem=${suffix[null]#no } s=${suffix[hidden]}
+  for (( i = 1; i <= $#stem; i++ )); do [[ ${stem[i]} == ${s[i]} ]] || break; done
+  stem=${stem[1,i-1]}
+  [[ -n ${suffix[null]} && -n $s && -z $stem ]] \
+    && problems+=("gh-comments: r_closer's two endings share no stem")
+  for f in ${(ok)wants}; do
+    if [[ $f == 'gh-comments --help' ]]; then
+      text=$(zsh "$root/gh-comments" --help | tr '\n' ' ' | tr -s ' ')
+    elif [[ $f == BENCHMARKS.md && -f $tables ]]; then
+      text=$(grep -vxF -f "$tables" "$root/$f" | tr '\n' ' ' | tr -s ' ')
+    else
+      text=$(tr '\n' ' ' <"$root/$f" | tr -s ' ')
+    fi
+    for want in ${=wants[$f]}; do
+      kind=${want%=*} n=${want#*=} s=${suffix[$kind]}
+      [[ -n $s ]] || continue
+      # Quoted in backticks or double quotes, with or without the ", " the
+      # script prints before it.
+      count=0
+      for q in '`' '"'; do
+        for pat in "$q$s$q" "$q, $s$q"; do
+          rest=$text
+          while [[ $rest == *"$pat"* ]]; do
+            rest=${rest#*"$pat"}
+            count+=1
+          done
+        done
+      done
+      (( count == n )) \
+        || problems+=("$f: quotes the $kind-closer suffix the script prints $count times, not $n ($s)")
+    done
+    rest=$text
+    while [[ -n $stem && $rest == *"$stem"* ]]; do
+      before=${rest%%"$stem"*} rest=${rest#*"$stem"} span=$stem
+      [[ $before == *'no ' ]] && before=${before%no } span="no $stem"
+      before=${before%, } q=${before[-1]}
+      [[ $q == ['`"'] ]] || continue
+      span+=${rest%%"$q"*}
+      [[ $span == "${suffix[null]}" || $span == "${suffix[hidden]}" ]] \
+        || problems+=("$f: quotes a closed-line ending the script does not print ($span)")
+    done
+    # Retired endings. The scan above knows only the current stem, so a
+    # rewording of r_closer that changes the stem appends the two endings
+    # it replaces here, as #12 left its own.
+    for s in 'no closer recorded' 'closer not visible to this token'; do
+      [[ $text != *"$s"* ]] || problems+=("$f: quotes the old suffix ($s)")
+    done
+  done
+  report "$name" "the closed line's wording"
 }
-benchmarks_closer_wording
+docs_closer_wording
 
 readme_figures_match_run() {
   local name=readme-figures-match-run run readme section id lo hi n
