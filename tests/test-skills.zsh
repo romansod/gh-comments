@@ -20,7 +20,9 @@
 #                          one-item TOC that analyze.py prices, and the
 #                          question table names --item
 #   skill-prose-wraps      no prose line of a skill file (outside code
-#                          fences and tables) is over 80 characters
+#                          fences and tables) is over 80 characters,
+#                          counted in characters, not bytes, whatever
+#                          the locale (an em dash is one)
 #   skill-closed-line-actor every doc that says whose name is who closed
 #                          an issue names the `closed` line's brackets, so
 #                          the name cannot be read as an xref line's
@@ -204,12 +206,51 @@ skill_closed_line_actor() {
 skill_closed_line_actor
 
 skill_prose_wraps() {
-  local name=skill-prose-wraps f line
-  for f in "$root"/skills/*/SKILL.md "$root"/skills/*/references/*.md; do
-    for line in ${(f)"$(awk '/^ *```/ { c = !c; next } !c && length > 80 && !/^ *\|/ { print FNR }' "$f")"}; do
-      problems+=("${f#$root/}:$line: a prose line over 80 characters")
+  local name=skill-prose-wraps out hit
+  # Characters, not bytes: awk's length counts bytes in macOS awk and mawk
+  # whatever the locale, and zsh's ${#} follows the locale, so python counts,
+  # decoding each file as UTF-8. Two canaries go through the same function
+  # first, so every run checks the unit it counts in; a canary that comes out
+  # wrong or a missing python3 fails the case, and an undecodable file is a
+  # problem naming it, with the other files still checked. -u keeps the
+  # output in the order it was written, so a traceback's last line is the
+  # last line captured.
+  if out=$(python3 -I -u - "$root" "$root"/skills/*/SKILL.md "$root"/skills/*/references/*.md 2>&1 <<'PY'
+import re, sys
+
+def over(data):
+    # Split on \n alone and count from 1: the physical lines an editor shows.
+    fence, hits = False, []
+    for n, line in enumerate(data.decode("utf-8").split("\n"), 1):
+        if re.match(r" *```", line):
+            fence = not fence
+            continue
+        if not fence and not re.match(r" *\|", line) and len(line) > 80:
+            hits.append(n)
+    return hits
+
+if over(("x" * 78 + "—y").encode()) or over(b"x" * 81) != [1]:
+    sys.exit("the canaries do not count characters")
+root = sys.argv[1]
+for path in sys.argv[2:]:
+    rel = path[len(root) + 1:]
+    with open(path, "rb") as f:
+        data = f.read()
+    try:
+        hits = over(data)
+    except UnicodeDecodeError as e:
+        print(f"{rel}: not valid UTF-8 ({e.reason} at byte {e.start})")
+        continue
+    for n in hits:
+        print(f"{rel}:{n}: a prose line over 80 characters")
+PY
+  ); then
+    for hit in ${(f)out}; do
+      problems+=("$hit")
     done
-  done
+  else
+    problems+=("python3 exited $?: ${out##*$'\n'}")
+  fi
   report "$name" "skill prose wraps"
 }
 skill_prose_wraps
