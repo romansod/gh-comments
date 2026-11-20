@@ -204,12 +204,41 @@ skill_closed_line_actor() {
 skill_closed_line_actor
 
 skill_prose_wraps() {
-  local name=skill-prose-wraps f line
-  for f in "$root"/skills/*/SKILL.md "$root"/skills/*/references/*.md; do
-    for line in ${(f)"$(awk '/^ *```/ { c = !c; next } !c && length > 80 && !/^ *\|/ { print FNR }' "$f")"}; do
-      problems+=("${f#$root/}:$line: a prose line over 80 characters")
+  local name=skill-prose-wraps out hit
+  # Characters, not bytes: awk's length counts bytes in macOS awk and mawk
+  # whatever the locale, and zsh's ${#} follows the locale, so python counts,
+  # decoding each file as UTF-8. Two canaries go through the same function
+  # first, so every run shows the unit it counted in; a canary that comes out
+  # wrong, an undecodable file or a missing python3 fails the case.
+  if out=$(python3 -I - "$root" "$root"/skills/*/SKILL.md "$root"/skills/*/references/*.md 2>&1 <<'PY'
+import re, sys
+
+def over(data):
+    # Split on \n alone and count from 1: the physical lines an editor shows.
+    fence, hits = False, []
+    for n, line in enumerate(data.decode("utf-8").split("\n"), 1):
+        if re.match(r" *```", line):
+            fence = not fence
+            continue
+        if not fence and not re.match(r" *\|", line) and len(line) > 80:
+            hits.append(n)
+    return hits
+
+if over(("x" * 78 + "—y").encode()) or over(b"x" * 81) != [1]:
+    sys.exit("the canaries do not count characters")
+root = sys.argv[1]
+for path in sys.argv[2:]:
+    with open(path, "rb") as f:
+        for n in over(f.read()):
+            print(f"{path[len(root) + 1:]}:{n}")
+PY
+  ); then
+    for hit in ${(f)out}; do
+      problems+=("$hit: a prose line over 80 characters")
     done
-  done
+  else
+    problems+=("python3 exited $?: ${out##*$'\n'}")
+  fi
   report "$name" "skill prose wraps"
 }
 skill_prose_wraps
