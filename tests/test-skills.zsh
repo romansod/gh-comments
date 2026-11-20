@@ -211,7 +211,8 @@ skill_prose_wraps() {
   # whatever the locale, and zsh's ${#} follows the locale, so python counts,
   # decoding each file as UTF-8. Two canaries go through the same function
   # first, so every run shows the unit it counted in; a canary that comes out
-  # wrong, an undecodable file or a missing python3 fails the case.
+  # wrong or a missing python3 fails the case, and an undecodable file is a
+  # problem naming it, with the other files still checked.
   if out=$(python3 -I - "$root" "$root"/skills/*/SKILL.md "$root"/skills/*/references/*.md 2>&1 <<'PY'
 import re, sys
 
@@ -230,13 +231,20 @@ if over(("x" * 78 + "—y").encode()) or over(b"x" * 81) != [1]:
     sys.exit("the canaries do not count characters")
 root = sys.argv[1]
 for path in sys.argv[2:]:
+    rel = path[len(root) + 1:]
     with open(path, "rb") as f:
-        for n in over(f.read()):
-            print(f"{path[len(root) + 1:]}:{n}")
+        data = f.read()
+    try:
+        hits = over(data)
+    except UnicodeDecodeError as e:
+        print(f"{rel}: not valid UTF-8 ({e.reason} at byte {e.start})")
+        continue
+    for n in hits:
+        print(f"{rel}:{n}: a prose line over 80 characters")
 PY
   ); then
     for hit in ${(f)out}; do
-      problems+=("$hit: a prose line over 80 characters")
+      problems+=("$hit")
     done
   else
     problems+=("python3 exited $?: ${out##*$'\n'}")
