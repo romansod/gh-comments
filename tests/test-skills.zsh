@@ -210,7 +210,7 @@ skill_prose_wraps() {
   # Characters, not bytes: awk's length counts bytes in macOS awk and mawk
   # whatever the locale, and zsh's ${#} follows the locale, so python counts,
   # decoding each file as UTF-8. Two canaries go through the same function
-  # first, so every run shows the unit it counted in; a canary that comes out
+  # first, so every run checks the unit it counts in; a canary that comes out
   # wrong or a missing python3 fails the case, and an undecodable file is a
   # problem naming it, with the other files still checked. -u keeps the
   # output in the order it was written, so a traceback's last line is the
