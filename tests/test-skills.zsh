@@ -20,7 +20,9 @@
 #                          one-item TOC that analyze.py prices, and the
 #                          question table names --item
 #   skill-prose-wraps      no prose line of a skill file (outside code
-#                          fences and tables) is over 80 characters
+#                          fences and tables) is over 80 characters,
+#                          counted as characters whatever the awk or
+#                          locale (an em dash is one)
 #   skill-closed-line-actor every doc that says whose name is who closed
 #                          an issue names the `closed` line's brackets, so
 #                          the name cannot be read as an xref line's
