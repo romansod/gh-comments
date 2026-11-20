@@ -212,8 +212,10 @@ skill_prose_wraps() {
   # decoding each file as UTF-8. Two canaries go through the same function
   # first, so every run shows the unit it counted in; a canary that comes out
   # wrong or a missing python3 fails the case, and an undecodable file is a
-  # problem naming it, with the other files still checked.
-  if out=$(python3 -I - "$root" "$root"/skills/*/SKILL.md "$root"/skills/*/references/*.md 2>&1 <<'PY'
+  # problem naming it, with the other files still checked. -u keeps the
+  # output in the order it was written, so a traceback's last line is the
+  # last line captured.
+  if out=$(python3 -I -u - "$root" "$root"/skills/*/SKILL.md "$root"/skills/*/references/*.md 2>&1 <<'PY'
 import re, sys
 
 def over(data):
